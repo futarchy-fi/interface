@@ -1,0 +1,27 @@
+{
+  "chainId": 1,
+  "amm": "uniswap",
+  "proposalAddress": "0x4912cd9f05DDDC1831CEB605b9E5b31E7631F7d9",
+  "marketName": "Will 'PIP - Liquidity Funding for Futarchy Experimentation in Velora Governance' be approved ('Yes') or rejected ('No') by VeloraDAO? If unresolved by 2025-10-31 23:59 UTC, it resolves to 'No'.",
+  "openingTime": 1758565452,
+  "display_text_1": "What will the impact on VLR price be",
+  "display_text_2": "if 'PIP - Liquidity Funding for Futarchy Experimentation in Velora Governance' is approved?",
+  "companyToken": {
+    "symbol": "VLR",
+    "address": "0x4e107a0000DB66f0E9Fd2039288Bf811dD1f9c74"
+  },
+  "currencyToken": {
+    "symbol": "sDAI",
+    "address": "0x83F20F44975D03b1b09e64809B757c47f942BEeA"
+  },
+  "spotPrice": 0.0126779661,
+  "eventProbability": 0.5,
+  "impact": 0.02,
+  "liquidityAmounts": [0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001],
+  "forceAddLiquidity": [1],
+  "adapterAddress": "0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc",
+  "companyId": "11",
+  "feeTier": 500,
+  "category": "0",
+  "language": "en_US"
+}

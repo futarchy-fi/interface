@@ -1,0 +1,33 @@
+{
+  "chainId": 137,
+  "amm": "uniswap",
+  "feeTier": 500,
+
+  "marketName": "TEST-DAI-XZ2322: AAVE price impact market (Polygon)",
+  "openingTime": 1765278452,
+  "display_text_1": "What will be the impact on AAVE price",
+  "display_text_2": "if the proposal resolves to YES?",
+  "companyToken": {
+    "symbol": "AAVE",
+    "address": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B"
+  },
+  "currencyToken": {
+    "symbol": "DAI",
+    "address": "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063"
+  },
+  "spotPrice": 320,
+  "eventProbability": 0.50,
+  "impact": 1,
+  "liquidityAmounts": [
+    0.001,
+    0.001,
+    0.001,
+    0.001,
+    0.001,
+    0.001
+  ],
+  "tickWidthSteps": 10,
+  "forceAddLiquidity": [],
+  "adapterAddress": "0x11a1EA07a47519d9900242e1b30a529ECD65588a",
+  "companyId": "10"
+}

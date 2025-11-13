@@ -1,0 +1,28 @@
+{
+  "chainId": 1,
+  "amm": "uniswap",
+  "proposalAddress": "0x2A4b52B47625431Fdc6fE58CeD3086E76c1f6bbf",
+  "marketName": "Will Tesla shareholders approve the 2025 CEO Performance Award (the 'Mega Package') at the November 6, 2025 Annual Meeting? Outcomes: 'Yes' (approved) or 'No' (rejected). If unresolved by 2025-11-30 23:59 UTC, it resolves to 'No'.",
+  "description": "Will Tesla shareholders approve the 2025 CEO Performance Award (the 'Mega Package') at the November 6, 2025 Annual Meeting? Outcomes: 'Yes' (approved) or 'No' (rejected). If unresolved by 2025-11-30 23:59 UTC, it resolves to 'No'.",
+  "openingTime": 1758645753,
+  "display_text_1": "What will the impact on TSLA price be",
+  "display_text_2": "if the 2025 CEO Performance Award is approved?",
+  "companyToken": {
+    "symbol": "TSLA",
+    "address": "0xf6b1117ec07684d3958cad8beb1b302bfd21103f"
+  },
+  "currencyToken": {
+    "symbol": "USDS",
+    "address": "0xdC035D45d973E3EC169d2276DDab16f1e407384F"
+  },
+  "spotPrice": 434.1,
+  "eventProbability": 0.5,
+  "impact": 0.01,
+  "liquidityAmounts": [5, 5, 5, 5, 5, 5],
+  "forceAddLiquidity": [],
+  "adapterAddress": "0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc",
+  "companyId": "11",
+  "feeTier": 500,
+  "category": "0",
+  "language": "en_US"
+}

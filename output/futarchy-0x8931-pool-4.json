@@ -1,0 +1,41 @@
+{
+  "curl_command": "curl -X POST \"http://localhost:8000/api/v1/pools/create_pool\" -H \"Content-Type: application/json\" -d",
+  "payload": {
+    "address": "0xf1291CAFB60855BF26950c8F94c51D929649fCb6",
+    "type": "algebrapool",
+    "inverted_slot": 1,
+    "proposal_address": "0x8931595B426B9404CbF1E4804DE3A5897ea9cce4",
+    "metadata": {
+      "description": "Auto-generated pool for GNO prediction market.",
+      "display_title_0": "Will futarchy exist",
+      "display_title_1": "in 2025?",
+      "routerAddress": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+      "factoryAddress": "0xa6cB18FCDC17a2B44E5cAd2d80a6D5942d30a345",
+      "futarchyAdapter": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+      "reality": {
+        "questionText": "Will GnosisDAO TEST formally adopt a governance norm requiring futarchy advisory markets—defaulting to futarchy market outcomes unless explicitly overridden—for all ≥ $5 M treasury allocations or other high‑impact strategic decisions by December 31 2025?"
+      },
+      "proposal": {
+        "creator": "0x645a3d9208523bbfee980f7269ac72c61dd3b552",
+        "creationTimestamp": 1750440930
+      },
+      "marketName": "Will GnosisDAO TEST formally adopt a governance norm requiring futarchy advisory markets—defaulting to futarchy market outcomes unless explicitly overridden—for all ≥ $5 M treasury allocations or other high‑impact strategic decisions by December 31 2025?",
+      "openingTime": 1767139200,
+      "spotPrice": 94,
+      "eventProbability": 0.5,
+      "impact": 6.38,
+      "analytics": { "offChain": { "clicks": 0, "pageViews": 0 } },
+      "name": "NO_GNO / sDAI",
+      "token0": "0xbf0611cecc18421e235e4adf925c9bafa1bea841",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "pools": [{
+        "reserves": {
+          "token0": "21276595744",
+          "token1": "1000000000000"
+        },
+        "volume24h": 1000.0,
+        "volume7d": 7000.0
+      }]
+    }
+  }
+} 

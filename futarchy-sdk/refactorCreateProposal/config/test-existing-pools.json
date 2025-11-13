@@ -1,0 +1,25 @@
+{
+  "proposalAddress": "0x8e67115AF4D66108c8d55d756D53D177CEC7668C",
+  "marketName": "TEST-X8-Will 'GIP-133: Should Gnosis DAO extend the Gnosis Pay Cashback budget (GIP-110) by 2,000 GNO?' be approved ('Yes') or rejected ('No') by GnosisDAO? If unresolved by 2025-09-30 23:59 UTC, it resolves to 'No'.",
+  "companyToken": {
+    "address": "0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb",
+    "symbol": "GNO"
+  },
+  "currencyToken": {
+    "address": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+    "symbol": "sDAI"
+  },
+  "spotPrice": 111.24,
+  "eventProbability": 0.95,
+  "impact": 0.02,
+  "liquidityAmounts": [
+    0.000001,
+    0.000001,
+    0.000001,
+    0.000001,
+    0.000001,
+    0.000001
+  ],
+  "forceAddLiquidity": [],
+  "adapterAddress": "0x7495a583ba85875d59407781b4958ED6e0E1228f"
+}

@@ -1,0 +1,434 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Market Event Hero Demo</title>
+    <style>
+      body { font-family: Inter, system-ui, sans-serif; background:#0f172a; color:#e2e8f0; padding:24px }
+      .card { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px; max-width:780px }
+      .row { display:flex; gap:12px; margin-bottom:12px }
+      input { flex:1; padding:10px 12px; border-radius:8px; border:1px solid #334155; background:#0b1220; color:#e2e8f0 }
+      button { padding:10px 14px; border-radius:8px; border:0; background:#4f46e5; color:#fff; cursor:pointer }
+      a { color:#93c5fd }
+      .muted { color:#94a3b8; font-size:14px }
+      .title { font-weight:700; font-size:22px; margin:8px 0 }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2?bundle"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="card">
+      <div class="row">
+        <input id="supabase-url" placeholder="Supabase URL" value="https://nvhqdqtlsdboctqjcelq.supabase.co" />
+        <input id="supabase-key" placeholder="Supabase anon key" />
+      </div>
+      <div class="row">
+        <input id="event-id" placeholder="market_event id (proposal address)" value="0xA94aB35282118f38b0b4FF89dDA7A5c04aD49371" />
+        <button id="load">Load Hero</button>
+      </div>
+      <div id="out" class="muted">Enter credentials and click Load</div>
+      <div id="hero"></div>
+    </div>
+
+    <script type="module">
+      import { DataLayer } from './DataLayer.js';
+      import { createSupabasePoolFetcher } from './fetchers/SupabasePoolFetcher.js';
+
+      const urlEl = document.getElementById('supabase-url');
+      const keyEl = document.getElementById('supabase-key');
+      const idEl = document.getElementById('event-id');
+      const out = document.getElementById('out');
+      const hero = document.getElementById('hero');
+
+      function short(addr) { return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : '-' }
+      function linkFor(addr, chainId = 100) {
+        if (!addr) return '-';
+        const base = chainId === 100 ? 'https://gnosisscan.io' : 'https://etherscan.io';
+        const url = `${base}/address/${addr}`;
+        return `<a href="${url}" target="_blank">${short(addr)}</a>`;
+      }
+
+      function renderHero(h) {
+        hero.innerHTML = '';
+        if (!h) return;
+        const wrap = document.createElement('div');
+        wrap.style.marginTop = '12px';
+        wrap.innerHTML = `
+          <div class="muted">ID: ${h.id}</div>
+          ${h.endDate ? `<div class="muted">End date: ${new Date(h.endDate).toLocaleString()}</div>` : ''}
+          <div class="title">${h.displayTitle0}</div>
+          <div class="title" style="color:#a78bfa">${h.displayTitle1}</div>
+          ${h.trackProgressLink ? `<div><a href="${h.trackProgressLink}" target="_blank">Track progress</a></div>` : ''}
+          ${h.questionLink ? `<div><a href="${h.questionLink}" target="_blank">Reality question</a></div>` : ''}
+          <div style="margin-top:10px">
+            <div class="muted">Company tokens:</div>
+            <div>Base: ${linkFor(h.tokens?.company?.base, h.chainId)}</div>
+            <div>Yes: ${linkFor(h.tokens?.company?.yes, h.chainId)}</div>
+            <div>No: ${linkFor(h.tokens?.company?.no, h.chainId)}</div>
+          </div>
+          <div style="margin-top:8px">
+            <div class="muted">Currency tokens:</div>
+            <div>Base: ${linkFor(h.tokens?.currency?.base, h.chainId)}</div>
+            <div>Yes: ${linkFor(h.tokens?.currency?.yes, h.chainId)}</div>
+            <div>No: ${linkFor(h.tokens?.currency?.no, h.chainId)}</div>
+          </div>
+        `;
+        hero.appendChild(wrap);
+      }
+
+      document.getElementById('load').addEventListener('click', async () => {
+        hero.innerHTML = '';
+        out.textContent = 'Loading...';
+        try {
+          const dataLayer = new DataLayer();
+          const fetcher = createSupabasePoolFetcher(urlEl.value.trim(), keyEl.value.trim());
+          dataLayer.registerFetcher(fetcher);
+          const res = await dataLayer.fetch('markets.event.hero', { id: idEl.value.trim() });
+          if (res.status === 'success') {
+            renderHero(res.data);
+            out.textContent = 'Loaded.';
+          } else {
+            out.textContent = 'Error: ' + res.reason;
+          }
+        } catch (e) {
+          out.textContent = 'Exception: ' + e.message;
+        }
+      });
+    </script>
+  </body>
+  </html>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏛️ Futarchy SDK - Real Testing (Import Map)</title>
+    
+    <!-- Import Map for module resolution -->
+    <script type="importmap">
+    {
+        "imports": {
+            "viem": "https://esm.sh/viem@1.19.0",
+            "viem/chains": "https://esm.sh/viem@1.19.0/chains"
+        }
+    }
+    </script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            padding: 1rem;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .main-content {
+            padding: 2rem;
+        }
+        
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #e9ecef;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 0.5rem;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .log {
+            background: #1a1a1a;
+            color: #00ff41;
+            font-family: 'Monaco', monospace;
+            font-size: 0.9rem;
+            padding: 1rem;
+            border-radius: 8px;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.4;
+            margin-top: 1rem;
+        }
+        
+        .status {
+            font-weight: 600;
+            margin: 0.5rem 0;
+        }
+        
+        .connected { color: #28a745; }
+        .disconnected { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏛️ Futarchy SDK</h1>
+            <p>Real Testing with Import Maps</p>
+            <div style="margin-top: 1rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.9rem;">
+                <strong>🧪 Testing:</strong> Real proposal 0xDA36a35CA4Fe6214C37a452159C0C9EAd45D5919
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="test-section">
+                <h3>🔗 Connection Status</h3>
+                <div class="status disconnected" id="connection-status">Not connected</div>
+                <button class="btn btn-primary" id="connect-btn">Connect Wallet & Test SDK</button>
+            </div>
+            
+            <div class="test-section">
+                <h3>🧪 SDK Test Results</h3>
+                <div id="test-results">
+                    <p>Click "Connect Wallet & Test SDK" to begin testing...</p>
+                </div>
+            </div>
+            
+            <div class="test-section">
+                <h3>📜 Test Log</h3>
+                <div class="log" id="log"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import from our SDK
+        import { DataLayer } from './DataLayer.js';
+        import { createViemExecutor } from './executors/ViemExecutor.js';
+        import { FutarchyCartridge } from './executors/FutarchyCartridge.js';
+        
+        // Import viem (uses import map)
+        import { createWalletClient, createPublicClient, custom, http, parseEther } from 'viem';
+        import { gnosis } from 'viem/chains';
+
+        // Contract addresses
+        const CONTRACTS = {
+            SDAI: '0xaf204776c7245bF4147c2612BF6e5972Ee483701',
+            FUTARCHY_ROUTER: '0x7495a583ba85875d59407781b4958ED6e0E1228f',
+            REAL_PROPOSAL: '0xDA36a35CA4Fe6214C37a452159C0C9EAd45D5919'
+        };
+
+        class FutarchySDKTest {
+            constructor() {
+                this.dataLayer = null;
+                this.account = null;
+                this.isConnected = false;
+                
+                this.initializeElements();
+                this.initializeSDK();
+                this.attachEventListeners();
+                
+                this.log('🚀 Futarchy SDK Test initialized');
+                this.log('🏗️ DataLayer → ViemExecutor → FutarchyCartridge ready');
+            }
+            
+            initializeElements() {
+                this.connectionStatus = document.getElementById('connection-status');
+                this.connectBtn = document.getElementById('connect-btn');
+                this.testResults = document.getElementById('test-results');
+                this.logElement = document.getElementById('log');
+            }
+            
+            initializeSDK() {
+                try {
+                    // Create DataLayer
+                    this.dataLayer = new DataLayer();
+                    
+                    // Create ViemExecutor with FutarchyCartridge
+                    const executor = createViemExecutor({
+                        rpcUrl: 'https://rpc.gnosischain.com'
+                    });
+                    
+                    // Register FutarchyCartridge
+                    const futarchyCartridge = new FutarchyCartridge(CONTRACTS.FUTARCHY_ROUTER);
+                    executor.registerCartridge(futarchyCartridge);
+                    
+                    // Register executor with DataLayer
+                    this.dataLayer.registerExecutor(executor);
+                    
+                    this.log('✅ SDK initialized successfully');
+                    this.log(`📋 Available operations: ${this.dataLayer.getAvailableOperations().length}`);
+                    
+                } catch (error) {
+                    this.log(`❌ SDK initialization failed: ${error.message}`, 'error');
+                    console.error('SDK Error:', error);
+                }
+            }
+            
+            attachEventListeners() {
+                this.connectBtn.addEventListener('click', () => this.runFullTest());
+            }
+            
+            log(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+                const logMessage = `[${timestamp}] ${prefix} ${message}\n`;
+                
+                this.logElement.textContent += logMessage;
+                this.logElement.scrollTop = this.logElement.scrollHeight;
+            }
+            
+            updateStatus(message, isConnected = false) {
+                this.connectionStatus.textContent = message;
+                this.connectionStatus.className = `status ${isConnected ? 'connected' : 'disconnected'}`;
+            }
+            
+            updateResults(html) {
+                this.testResults.innerHTML = html;
+            }
+            
+            async runFullTest() {
+                try {
+                    this.connectBtn.disabled = true;
+                    this.connectBtn.textContent = 'Testing...';
+                    
+                    this.log('🧪 Starting comprehensive SDK test...');
+                    this.updateResults('<p>🔄 Running tests...</p>');
+                    
+                    // Test 1: Connect wallet
+                    await this.testWalletConnection();
+                    
+                    // Test 2: Check approval
+                    await this.testApprovalCheck();
+                    
+                    // Test 3: Show what split would do
+                    await this.testSplitPreview();
+                    
+                    this.updateResults(`
+                        <h4>🎉 All Tests Completed!</h4>
+                        <p><strong>✅ Wallet Connection:</strong> Working</p>
+                        <p><strong>✅ Approval Check:</strong> Working</p>
+                        <p><strong>✅ Split Preview:</strong> Ready</p>
+                        <p><strong>🏛️ Proposal:</strong> ${CONTRACTS.REAL_PROPOSAL}</p>
+                        <p><strong>💰 Collateral:</strong> sDAI</p>
+                        <br>
+                        <p><strong>🚀 Ready for real futarchy operations!</strong></p>
+                    `);
+                    
+                } catch (error) {
+                    this.log(`❌ Test failed: ${error.message}`, 'error');
+                    this.updateResults(`<p style="color: red;">❌ Test failed: ${error.message}</p>`);
+                } finally {
+                    this.connectBtn.disabled = false;
+                    this.connectBtn.textContent = 'Run Tests Again';
+                }
+            }
+            
+            async testWalletConnection() {
+                this.log('🔗 Testing wallet connection...');
+                
+                for await (const status of this.dataLayer.execute('web3.connect')) {
+                    this.log(`${status.status}: ${status.message}`);
+                    
+                    if (status.status === 'success') {
+                        this.account = status.data.account;
+                        this.isConnected = true;
+                        this.updateStatus(`Connected: ${this.account.slice(0, 6)}...${this.account.slice(-4)}`, true);
+                        this.log(`✅ Connected: ${this.account}`, 'success');
+                        break;
+                    } else if (status.status === 'error') {
+                        throw new Error(status.error || status.message);
+                    }
+                }
+            }
+            
+            async testApprovalCheck() {
+                this.log('🔍 Testing approval check...');
+                
+                for await (const status of this.dataLayer.execute('futarchy.checkApproval', {
+                    collateralToken: CONTRACTS.SDAI
+                })) {
+                    this.log(`${status.status}: ${status.message}`);
+                    
+                    if (status.status === 'success') {
+                        const { isApproved, balanceFormatted, allowanceFormatted } = status.data;
+                        this.log(`📊 Balance: ${balanceFormatted} sDAI`, 'success');
+                        this.log(`📊 Approved: ${isApproved ? 'Yes' : 'No'} (${allowanceFormatted})`, 'success');
+                        break;
+                    } else if (status.status === 'error') {
+                        throw new Error(status.error || status.message);
+                    }
+                }
+            }
+            
+            async testSplitPreview() {
+                this.log('🎯 Previewing split operation...');
+                this.log(`📍 Would split on proposal: ${CONTRACTS.REAL_PROPOSAL}`);
+                this.log(`💰 Using collateral: ${CONTRACTS.SDAI} (sDAI)`);
+                this.log(`🔀 Example: 1 sDAI → 1 YES token + 1 NO token`);
+                this.log(`⛽ Estimated gas: ~200,000 (~$8-20)`);
+                this.log(`✅ Ready for real split operation!`, 'success');
+            }
+        }
+
+        // Initialize the test when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                window.futarchyTest = new FutarchySDKTest();
+            } catch (error) {
+                console.error('Failed to initialize:', error);
+                document.getElementById('log').textContent = `❌ Failed to initialize: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html> 

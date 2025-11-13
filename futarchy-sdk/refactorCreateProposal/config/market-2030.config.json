@@ -1,0 +1,29 @@
+{
+  "marketName": "Will decentralized governance systems achieve >50% adoption in major DAOs by 2032?",
+  "companyToken": {
+    "address": "0x37b60f4e9a31a64ccc0024dce7d0fd07eaa0f7b3",
+    "symbol": "PNK"
+  },
+  "currencyToken": {
+    "address": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+    "symbol": "sDAI"
+  },
+  "spotPrice": 0.02173,
+  "eventProbability": 0.65,
+  "impact": 15,
+  "liquidityAmounts": [
+    0.000000000001,
+    0.000000000001,
+    0.000000000001,
+    0.000000000001,
+    0.000000000001,
+    0.000000000001
+  ],
+  "forceAddLiquidity": [],
+  "adapterAddress": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+  "minBond": "200000000",
+  "category": "governance",
+  "language": "en",
+  "description": "This proposal evaluates whether decentralized governance mechanisms will become the dominant decision-making framework in major DAOs by 2030.",
+  "tags": ["governance", "dao", "futarchy", "2030", "adoption"]
+}

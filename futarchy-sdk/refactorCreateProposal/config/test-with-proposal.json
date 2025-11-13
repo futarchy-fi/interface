@@ -1,0 +1,29 @@
+{
+  "proposalAddress": "0xF96C82cA680b99e3212FA22F51029B72091e1E5E",
+  "marketName": "TEST: Will AI improve governance decisions by 50% before 2026?",
+  "openingTime": 1765278452,
+  "display_text_1": "What will be the impact on PNK price",
+  "display_text_2": "if AI governance tools are adopted?",
+  "companyToken": {
+    "symbol": "PNK",
+    "address": "0x37b60f4e9a31a64ccc0024dce7d0fd07eaa0f7b3"
+  },
+  "currencyToken": {
+    "symbol": "sDAI",
+    "address": "0xaf204776c7245bF4147c2612BF6e5972Ee483701"
+  },
+  "spotPrice": 0.02173,
+  "eventProbability": 0.5,
+  "impact": 10,
+  "liquidityAmounts": [
+    1e-12,
+    1e-12,
+    1e-12,
+    1e-12,
+    1e-12,
+    1e-12
+  ],
+  "forceAddLiquidity": [],
+  "adapterAddress": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+  "companyId": "10"
+}
