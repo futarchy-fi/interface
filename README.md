@@ -4,4 +4,4 @@ This repository is the public place to file **bug reports** related to the Futar
 
 👉 **To report a bug:** click **Issues** → **New Issue** → **Bug report**.
 
-This repo will soon also host our actual interface code.
+This repo now also hosts our actual interface code.
