@@ -1,0 +1,48 @@
+{
+  "curl_command": "curl -X POST \"http://localhost:8000/api/v1/pools/create_pool\" -H \"Content-Type: application/json\" -d",
+  "payload": {
+    "address": "0xB42fDB0658197F7227F56093ABf70af8325b60d4",
+    "type": "algebrapool",
+    "inverted_slot": 0,
+    "proposal_address": "0x8931595B426B9404CbF1E4804DE3A5897ea9cce4",
+    "metadata": {
+      "description": "Auto-generated pool for GNO prediction market.",
+      "display_title_0": "Will futarchy exist",
+      "display_title_1": "in 2025?",
+      "routerAddress": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+      "factoryAddress": "0xa6cB18FCDC17a2B44E5cAd2d80a6D5942d30a345",
+      "futarchyAdapter": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+      "reality": {
+        "questionText": "Will GnosisDAO TEST formally adopt a governance norm requiring futarchy advisory markets—defaulting to futarchy market outcomes unless explicitly overridden—for all ≥ $5 M treasury allocations or other high‑impact strategic decisions by December 31 2025?"
+      },
+      "proposal": {
+        "creator": "0x645a3d9208523bbfee980f7269ac72c61dd3b552",
+        "creationTimestamp": 1750440930
+      },
+      "marketName": "Will GnosisDAO TEST formally adopt a governance norm requiring futarchy advisory markets—defaulting to futarchy market outcomes unless explicitly overridden—for all ≥ $5 M treasury allocations or other high‑impact strategic decisions by December 31 2025?",
+      "openingTime": 1767139200,
+      "spotPrice": 94,
+      "eventProbability": 0.5,
+      "impact": 6.38,
+      "analytics": {
+        "offChain": {
+          "clicks": 0,
+          "pageViews": 0
+        }
+      },
+      "name": "YES_sDAI / sDAI",
+      "token0": "0xa8eba0c13d48303fcf4f8cf886bdd7e1d9c38e6c",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "pools": [
+        {
+          "reserves": {
+            "token0": "2000000000000",
+            "token1": "1000000000000"
+          },
+          "volume24h": 1000,
+          "volume7d": 7000
+        }
+      ]
+    }
+  }
+}

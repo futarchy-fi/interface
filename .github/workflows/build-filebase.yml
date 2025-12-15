@@ -1,0 +1,42 @@
+name: Deploy to Filebase
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Filebase
+    steps:
+      - name: checkout
+        uses: actions/checkout@master
+
+      - name: setup node
+        uses: actions/setup-node@v1
+        with:
+          node-version: "20"
+
+      - name: cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+   
+      - name: install dependencies
+        run: npm install
+
+      - name: build application
+        run: npm run build
+
+      - name: deploy to filebase
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --follow-symlinks --delete
+        env:
+          AWS_S3_BUCKET: ${{ secrets.FILEBASE_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.FILEBASE_REGION }}
+          AWS_S3_ENDPOINT: ${{ secrets.FILEBASE_ENDPOINT }}
+          SOURCE_DIR: "out" 

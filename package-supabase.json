@@ -1,0 +1,17 @@
+{
+  "name": "supabase-pool-sender",
+  "version": "1.0.0",
+  "description": "Node.js script to send pool data to Supabase edge functions",
+  "main": "send-to-supabase.js",
+  "scripts": {
+    "start": "node send-to-supabase.js",
+    "send-pool": "node send-to-supabase.js pool-request.json",
+    "send-request": "node send-to-supabase.js request.json"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "keywords": ["supabase", "edge-functions", "futarchy", "pools"],
+  "author": "",
+  "license": "MIT"
+} 

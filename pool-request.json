@@ -1,0 +1,38 @@
+{
+  "address": "0xF38771776ecCA6a906DaeCC9033E60c0acEBc579",
+  "type": "algebrapool",
+  "inverted_slot": 0,
+  "proposal_address": "0x3e2176000a869FDDD5A4D58A66513fa834955570",
+  "metadata": {
+    "description": "Auto-generated pool for GNO prediction market.",
+    "display_title_0": "Expansion Vote: YES",
+    "display_title_1": "Expansion Vote: NO",
+    "routerAddress": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+    "factoryAddress": "0xa6cB18FCDC17a2B44E5cAd2d80a6D5942d30a345",
+    "futarchyAdapter": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+    "reality": {
+      "questionText": "Will Gnosis Chain’s total value locked (TVL) reach $400 million or more on or before December 31 2025 (DefiLlama end‑of‑day snapshots)?"
+    },
+    "proposal": {
+      "creator": "0x645a3d9208523bbfee980f7269ac72c61dd3b552",
+      "creationTimestamp": 1750440930
+    },
+    "marketName": "Will Gnosis Chain’s total value locked (TVL) reach $400 million or more on or before December 31 2025 (DefiLlama end‑of‑day snapshots)?",
+    "openingTime": 1767139200,
+    "spotPrice": 94,
+    "eventProbability": 0.5,
+    "impact": 6.38,
+    "analytics": { "offChain": { "clicks": 0, "pageViews": 0 } },
+    "name": "YES_GNO / YES_sDAI",
+    "token0": "0x143349a057bedaa3a5fd6c242cb49a451a3f6f93",
+    "token1": "0xc58c2647377a7829721c35e6a14966018522ee93",
+    "pools": [{
+      "reserves": {
+        "token0": "500000000000000000",
+        "token1": "50000000000000000000"
+      },
+      "volume24h": 1000.0,
+      "volume7d": 7000.0
+    }]
+  }
+}
