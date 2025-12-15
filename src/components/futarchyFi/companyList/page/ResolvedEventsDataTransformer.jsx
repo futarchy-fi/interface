@@ -191,7 +191,7 @@ export const fetchResolvedEventHighlightData = async (companyId = "all", limit =
       // Limit results
       const limitedResults = recentResolvedEvents.slice(0, limit);
 
-      console.log(`[ResolvedEventsDataTransformer] Found ${recentResolvedEvents.length} recent resolved events (<= 15 days old), returning ${limitedResults.length}`);
+      console.log(`[ResolvedEventsDataTransformer] Found ${recentResolvedEvents.length} Recently resolved events (<= 15 days old), returning ${limitedResults.length}`);
       return limitedResults;
     }
 
@@ -238,7 +238,7 @@ export const fetchResolvedEventHighlightData = async (companyId = "all", limit =
     // Limit results
     const limitedResults = recentResolvedEvents.slice(0, limit);
 
-    console.log(`Found ${recentResolvedEvents.length} recent resolved events for company ${companyId}, returning ${limitedResults.length}`);
+    console.log(`Found ${recentResolvedEvents.length} Recently resolved events for company ${companyId}, returning ${limitedResults.length}`);
     return limitedResults;
 
   } catch (error) {

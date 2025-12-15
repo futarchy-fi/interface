@@ -81,11 +81,11 @@ const CompaniesPage = ({ useStorybookUrl = false }) => {
               )}
             </div>
 
-            {/* Recent Resolved Section */}
+            {/* Recently resolved Section */}
             {!HIDE_RECENTLY_RESOLVED && (
               <div className="mb-12 mt-8 md:mt-10">
                 <h2 className="text-2xl font-semibold text-futarchyGray12 dark:text-white mb-6">
-                  Recent Resolved
+                  Recently resolved
                 </h2>
                 {isResolvedCarouselLoading ? (
                   <div className="flex justify-center items-center h-[200px]">
