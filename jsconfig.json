@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "baseUrl": "src",
+    "paths": {
+      "@components/*": [
+        "components/*"
+      ],
+      "@styles/*": [
+        "styles/*"
+      ],
+      "@pages/*": [
+        "pages/*"
+      ],
+      "@contexts/*": [
+        "../contexts/*"
+      ],
+      "futarchy-sdk/*": [
+        "../futarchy-sdk/*"
+      ]
+    }
+  }
+}

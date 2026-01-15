@@ -1,0 +1,51 @@
+{
+  "removeSettings": {
+    "percentage": 100,
+    "confirmBeforeEach": false,
+    "stopOnError": false
+  },
+  "poolsToRemove": [
+    {
+      "name": "YES_GNO / YES_sDAI",
+      "type": "Price-Correlated Conditional",
+      "address": "0xabC492c842DE65afCB1325796F0D9F5FbF42F079",
+      "enabled": false,
+      "collect": false
+    },
+    {
+      "name": "NO_GNO / NO_sDAI", 
+      "type": "Price-Correlated Conditional",
+      "address": "0x1aeFc9B8eC6bD5BEdA6cf3fb33483Ae86F11383D",
+      "enabled": false,
+      "collect": false
+    },
+    {
+      "name": "YES_GNO / sDAI",
+      "type": "YES Expected Value",
+      "address": "0xc7f83cE09207c5cF67f13be22a5c417a69246E6C",
+      "enabled": false,
+      "collect": false
+    },
+    {
+      "name": "NO_GNO / sDAI",
+      "type": "NO Expected Value", 
+      "address": "0x40728af5d1f1Be25b0de9E3dB5f27934Ac795b7e",
+      "enabled": false,
+      "collect": false
+    },
+    {
+      "name": "YES_sDAI / sDAI",
+      "type": "Prediction Market (Currency vs Base)",
+      "address": "0x83B0CB95AC5Dfa57fe38498Fdc57B4910DD5026C",
+      "enabled": false,
+      "collect": false
+    },
+    {
+      "name": "NO_sDAI / sDAI",
+      "type": "Prediction Market (Currency vs Base)",
+      "address": "0xB460eFC630917695567D1746704b17A85FAD834E",
+      "enabled": false,
+      "collect": false
+    }
+  ]
+} 
