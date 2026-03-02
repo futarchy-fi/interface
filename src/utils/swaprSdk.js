@@ -13,7 +13,7 @@ const ALGEBRA_SUBGRAPH =
 const DEFAULT_GNOSIS_RPC = "https://rpc.gnosischain.com";
 
 // 🔍 DEBUG FLAG - Set to true to enable detailed call tracking
-const DEBUG_SWAPR_CALLS = true;
+const DEBUG_SWAPR_CALLS = process.env.NEXT_PUBLIC_DEBUG_MODE === 'true';
 
 // Call tracking
 let callCounter = 0;
