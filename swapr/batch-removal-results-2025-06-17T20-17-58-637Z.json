@@ -1,0 +1,51 @@
+{
+  "totalPools": 6,
+  "successful": 3,
+  "failed": 2,
+  "skipped": 1,
+  "poolResults": [
+    {
+      "poolName": "YES_GNO / YES_sDAI",
+      "poolAddress": "0x57a9C7d2b515CFa7c39036dC5af48e2b56fd7B22",
+      "status": "skipped",
+      "mode": "collect-only",
+      "error": "No positions found"
+    },
+    {
+      "poolName": "NO_GNO / NO_sDAI",
+      "poolAddress": "0x39991F6e6D692F6c93C6AC17049c1Ab814E7217b",
+      "status": "failed",
+      "error": "Processing failed"
+    },
+    {
+      "poolName": "YES_GNO / sDAI",
+      "poolAddress": "0x3aB62B25aD733752C59a535C2a628fDca44E14BC",
+      "status": "failed",
+      "error": "Processing failed"
+    },
+    {
+      "poolName": "NO_GNO / sDAI",
+      "poolAddress": "0x6F18a02a9BFd9346A673CBF2895c2F5f7a117Dcb",
+      "status": "success",
+      "positionsProcessed": 1,
+      "positionsSuccessful": 1,
+      "positionsFailed": 0
+    },
+    {
+      "poolName": "YES_sDAI / sDAI",
+      "poolAddress": "0x90e129943163F611C218CD56557D0e408609E588",
+      "status": "success",
+      "positionsProcessed": 2,
+      "positionsSuccessful": 2,
+      "positionsFailed": 0
+    },
+    {
+      "poolName": "NO_sDAI / sDAI",
+      "poolAddress": "0x987F2808054d32beEDce242E0268d33Ed337Ab4A",
+      "status": "success",
+      "positionsProcessed": 1,
+      "positionsSuccessful": 1,
+      "positionsFailed": 0
+    }
+  ]
+}

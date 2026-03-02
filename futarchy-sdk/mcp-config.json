@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "futarchy": {
+      "command": "node",
+      "args": ["mcp-futarchy-server.js"],
+      "env": {
+        "RPC_URL": "https://rpc.gnosischain.com"
+      }
+    }
+  }
+}

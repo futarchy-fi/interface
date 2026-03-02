@@ -1,0 +1,113 @@
+{
+  "proposalId": "0x3d076d5d12341226527241f8a489d4a8863b73e5",
+  "marketName": "Will 'GIP-145: Should Gnosis DAO run a 9‑month advisory futarchy pilot with $100k temporary liquidity?' be approved by GnosisDAO? If neither happens, this question should remain open until January 15th, 2026 at 23:59 UTC, and then resolve to 'No'.",
+  "chainId": 100,
+  "baseTokens": {
+    "company": {
+      "address": "0x9c58bacc331c9aa871afd802db6379a98e80cedb",
+      "symbol": "GNO",
+      "decimals": "18"
+    },
+    "currency": {
+      "address": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "symbol": "sDAI",
+      "decimals": "18"
+    }
+  },
+  "outcomeTokens": {
+    "YES_COMPANY": {
+      "address": "0xfa759356d99abb2c1b6a14badaf2f15c4bdc3e76",
+      "symbol": "YES_GNO",
+      "decimals": "18"
+    },
+    "NO_COMPANY": {
+      "address": "0x2c840672e893ab0575159a4aa98e5071d5ed1103",
+      "symbol": "NO_GNO",
+      "decimals": "18"
+    },
+    "YES_CURRENCY": {
+      "address": "0xf1dc38488ec2760c0d4b291966e37595321dd0fa",
+      "symbol": "YES_sDAI",
+      "decimals": "18"
+    },
+    "NO_CURRENCY": {
+      "address": "0x240c966ce7170ee5dba30490a317a6bad25d5878",
+      "symbol": "NO_sDAI",
+      "decimals": "18"
+    }
+  },
+  "pools": {
+    "conditional": {
+      "yes": {
+        "address": "0xf738ad8c0b45a962f9ccfbead7cc9ae734fc4869",
+        "token0": {
+          "id": "0xf1dc38488ec2760c0d4b291966e37595321dd0fa",
+          "symbol": "YES_sDAI"
+        },
+        "token1": {
+          "id": "0xfa759356d99abb2c1b6a14badaf2f15c4bdc3e76",
+          "symbol": "YES_GNO"
+        }
+      },
+      "no": {
+        "address": "0xfeabbe389fc3610ab709e2ff020db19717ea20b9",
+        "token0": {
+          "id": "0x240c966ce7170ee5dba30490a317a6bad25d5878",
+          "symbol": "NO_sDAI"
+        },
+        "token1": {
+          "id": "0x2c840672e893ab0575159a4aa98e5071d5ed1103",
+          "symbol": "NO_GNO"
+        }
+      }
+    },
+    "prediction": {
+      "yes": {
+        "address": "0x94c85eda9cf11c34f794605bc969bb5fbfc0631a",
+        "token0": {
+          "id": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+          "symbol": "sDAI"
+        },
+        "token1": {
+          "id": "0xf1dc38488ec2760c0d4b291966e37595321dd0fa",
+          "symbol": "YES_sDAI"
+        }
+      },
+      "no": {
+        "address": "0xc16f5c1e28a5af89c8d12588d17418e8ab03a9a9",
+        "token0": {
+          "id": "0x240c966ce7170ee5dba30490a317a6bad25d5878",
+          "symbol": "NO_sDAI"
+        },
+        "token1": {
+          "id": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+          "symbol": "sDAI"
+        }
+      }
+    },
+    "expectedValue": {
+      "yes": {
+        "address": "0x27f14942741e910aae022cc2fefe04b8b747ce65",
+        "token0": {
+          "id": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+          "symbol": "sDAI"
+        },
+        "token1": {
+          "id": "0xfa759356d99abb2c1b6a14badaf2f15c4bdc3e76",
+          "symbol": "YES_GNO"
+        }
+      },
+      "no": {
+        "address": "0xd56131d32b00d386a9b93d72ec99667c32f72e8a",
+        "token0": {
+          "id": "0x2c840672e893ab0575159a4aa98e5071d5ed1103",
+          "symbol": "NO_GNO"
+        },
+        "token1": {
+          "id": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+          "symbol": "sDAI"
+        }
+      }
+    }
+  }
+}

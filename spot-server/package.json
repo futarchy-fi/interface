@@ -1,0 +1,18 @@
+{
+    "name": "spot-server",
+    "version": "1.0.0",
+    "description": "Express server for fetching GNO/sDAI spot prices with SQLite caching",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "node --watch server.js",
+        "sync": "node sync/syncCandles.js"
+    },
+    "dependencies": {
+        "express": "^4.18.2",
+        "node-fetch": "^2.7.0",
+        "cors": "^2.8.5",
+        "better-sqlite3": "^9.4.3",
+        "node-cron": "^3.0.3"
+    }
+}

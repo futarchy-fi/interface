@@ -1,0 +1,42 @@
+[
+  {
+    "msg": "Debugging ID: 0x3c109ec3c7eb7da835dd3b64f575efae7abfdf4e"
+  },
+  {
+    "type": "specific",
+    "data": {
+      "data": {
+        "proposal": null
+      }
+    }
+  },
+  {
+    "type": "generic",
+    "data": {
+      "data": {
+        "proposals": [
+          {
+            "id": "0x01a863c7fedd7ca99355a017ea1eda219c4c7c48",
+            "marketName": "Will Circle deploy native USDC on Gnosis Chain on or before December 31 2025?"
+          },
+          {
+            "id": "0x026b7e9473bcd860fa5c3e11a98f9312fe4b1859",
+            "marketName": "TEST4-Will 'GIP-133: Should Gnosis DAO extend the Gnosis Pay Cashback budget (GIP-110) by 2,000 GNO?' be approved ('Yes') or rejected ('No') by GnosisDAO? If unresolved by 2025-09-30 23:59 UTC, it resolves to 'No'."
+          },
+          {
+            "id": "0x02dc7f8b11b6f6f9fff6fad45f57eb53a6bd566f",
+            "marketName": "TEST2: GIP-140: Revamp Snapshot voting strategies"
+          },
+          {
+            "id": "0x02e0f980adff48309f0746672d4f80d4fe770571",
+            "marketName": "TEST: Will AI improve governance decisions by 50% before 2026?"
+          },
+          {
+            "id": "0x034c7da33d3248fa4dd6ccdaf4a9e60a6947290d",
+            "marketName": "What will be the impact on GNO price if GnosisPay reaches $5mil weekly volume by December 31 2025, 00:00 UTC?"
+          }
+        ]
+      }
+    }
+  }
+]

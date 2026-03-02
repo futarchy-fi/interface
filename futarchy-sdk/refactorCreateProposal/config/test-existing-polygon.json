@@ -1,0 +1,32 @@
+{
+  "chainId": 137,
+  "amm": "uniswap",
+  "feeTier": 3000,
+
+  "marketName": "TEST: Use existing FutarchyProposal on Polygon",
+  "openingTime": 1765278452,
+  "display_text_1": "Existing proposal test",
+  "display_text_2": "Adds minimal liquidity across pools",
+  "companyToken": {
+    "symbol": "WETH",
+    "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"
+  },
+  "currencyToken": {
+    "symbol": "USDC",
+    "address": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
+  },
+  "spotPrice": 314,
+  "eventProbability": 0.50,
+  "impact": 1,
+  "liquidityAmounts": [
+    0.000000000001,
+    0.000000000001,
+    0.000000000001,
+    0.000000000001,
+    0.000000000001,
+    0.000000000001
+  ],
+  "forceAddLiquidity": [],
+  "adapterAddress": "0x11a1EA07a47519d9900242e1b30a529ECD65588a",
+  "companyId": "10"
+}

@@ -1,0 +1,284 @@
+﻿
+­ƒöì Testing Subgraph Contract Config Fetcher
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+
+­ƒôí Querying subgraph for chain 100...
+   Endpoint: https://api.studio.thegraph.com/query/1718249/algebra-proposals-candles/version/latest
+   Proposal: 0x45e1064348fd8a407d6d1f59fc64b05f633b28fc
+
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+  SUBGRAPH CONTRACT CONFIG
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+
+­ƒôï PROPOSAL INFO
+   ID:          0x45e1064348fD8A407D6D1F59Fc64B05F633b28FC
+   Chain:       100
+   Market Name: Will GIP-145 (Advisory Futarchy Pilot with $100k temp liquidity) be approved ('Yes') or rejected ('No') by GnosisDAO? If proposal is not approved by the end of February 2026, results as ('No').
+
+­ƒ¬Ö BASE TOKENS
+   Company:     Not identified (N/A)
+   Currency:    sDAI (0xaf204776c7245bf4147c2612bf6e5972ee483701)
+
+­ƒÄ» CONDITIONAL POOLS (Wrapped tokens trade)
+   YES Pool:    0xf8346e622557763a62cc981187d084695ee296c3
+                YES_GNO / YES_sDAI
+                Price: 119.4952843864157208736625501547361
+   NO Pool:     0x76f78ec457c1b14bcf972f16eae44c7aa21d578f
+                NO_GNO / NO_sDAI
+                Price: 108.0931616146832547635799880643642
+
+­ƒôè PREDICTION POOLS (Probability markets)
+   YES Pool:    0xfa8d15f6dc51890b9cd91d4dac44c3fe7dddefd0
+                YES_sDAI / sDAI
+                Price: 0.4999999999999999316419134233807776
+   NO Pool:     0x3b99a763e073b72539eaff4d5d5c1c7d64e2d66c
+                NO_sDAI / sDAI
+                Price: 0.4999999999999999316419134233807776
+
+­ƒÆÄ EXPECTED VALUE POOLS
+   YES Pool:    0x8f5d5a43a8950d92a65e12c3a15ea10dc30b4e26
+                YES_GNO / sDAI
+   NO Pool:     0x79ed63944c1d692cb7c12fe0c4817b4065adfeef
+                NO_GNO / sDAI
+
+­ƒöù ALL TOKENS FOUND (5):
+   sDAI            0xaf204776c7245bf4147c2612bf6e5972ee483701
+   NO_sDAI         0xc1e894e6423d20791ded8a3f292557564ce8d24b
+   NO_GNO          0xf44d9b29516b27f8d7e7525754bc41096ceeab16
+   YES_GNO         0x79832bef85287634fd4a910d6cb4a092e76bdda2
+   YES_sDAI        0xe014caacdf6ba9f3793af6b356872faf02371208
+
+­ƒÅè ALL POOLS FOUND (6):
+   [PREDICTION    ] [NO ] NO_sDAI / sDAI
+                           0x3b99a763e073b72539eaff4d5d5c1c7d64e2d66c
+   [CONDITIONAL   ] [NO ] NO_GNO / NO_sDAI
+                           0x76f78ec457c1b14bcf972f16eae44c7aa21d578f
+   [EXPECTED_VALUE] [NO ] NO_GNO / sDAI
+                           0x79ed63944c1d692cb7c12fe0c4817b4065adfeef
+   [EXPECTED_VALUE] [YES] YES_GNO / sDAI
+                           0x8f5d5a43a8950d92a65e12c3a15ea10dc30b4e26
+   [CONDITIONAL   ] [YES] YES_GNO / YES_sDAI
+                           0xf8346e622557763a62cc981187d084695ee296c3
+   [PREDICTION    ] [YES] YES_sDAI / sDAI
+                           0xfa8d15f6dc51890b9cd91d4dac44c3fe7dddefd0
+
+ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+
+­ƒôª JSON Output (for integration):
+{
+  "found": true,
+  "proposalId": "0x45e1064348fD8A407D6D1F59Fc64B05F633b28FC",
+  "chainId": 100,
+  "market_name": "Will GIP-145 (Advisory Futarchy Pilot with $100k temp liquidity) be approved ('Yes') or rejected ('No') by GnosisDAO? If proposal is not approved by the end of February 2026, results as ('No').",
+  "company_token": null,
+  "company_symbol": null,
+  "currency_token": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+  "currency_symbol": "sDAI",
+  "conditional_tokens": {
+    "yes_company": "0x79832bef85287634fd4a910d6cb4a092e76bdda2",
+    "yes_currency": "0xe014caacdf6ba9f3793af6b356872faf02371208",
+    "no_company": "0xf44d9b29516b27f8d7e7525754bc41096ceeab16",
+    "no_currency": "0xc1e894e6423d20791ded8a3f292557564ce8d24b"
+  },
+  "conditional_pools": {
+    "yes": {
+      "address": "0xf8346e622557763a62cc981187d084695ee296c3",
+      "name": "YES_GNO / YES_sDAI",
+      "price": "119.4952843864157208736625501547361",
+      "token0": "0x79832bef85287634fd4a910d6cb4a092e76bdda2",
+      "token1": "0xe014caacdf6ba9f3793af6b356872faf02371208"
+    },
+    "no": {
+      "address": "0x76f78ec457c1b14bcf972f16eae44c7aa21d578f",
+      "name": "NO_GNO / NO_sDAI",
+      "price": "108.0931616146832547635799880643642",
+      "token0": "0xc1e894e6423d20791ded8a3f292557564ce8d24b",
+      "token1": "0xf44d9b29516b27f8d7e7525754bc41096ceeab16"
+    }
+  },
+  "prediction_pools": {
+    "yes": {
+      "address": "0xfa8d15f6dc51890b9cd91d4dac44c3fe7dddefd0",
+      "name": "YES_sDAI / sDAI",
+      "price": "0.4999999999999999316419134233807776"
+    },
+    "no": {
+      "address": "0x3b99a763e073b72539eaff4d5d5c1c7d64e2d66c",
+      "name": "NO_sDAI / sDAI",
+      "price": "0.4999999999999999316419134233807776"
+    }
+  },
+  "expected_value_pools": {
+    "yes": {
+      "address": "0x8f5d5a43a8950d92a65e12c3a15ea10dc30b4e26",
+      "name": "YES_GNO / sDAI",
+      "price": "56.89000000000481015316028208610754"
+    },
+    "no": {
+      "address": "0x79ed63944c1d692cb7c12fe0c4817b4065adfeef",
+      "name": "NO_GNO / sDAI",
+      "price": "56.8900000000048063676761873504748"
+    }
+  },
+  "_raw_pools": [
+    {
+      "id": "0x3b99a763e073b72539eaff4d5d5c1c7d64e2d66c",
+      "name": "NO_sDAI / sDAI",
+      "type": "PREDICTION",
+      "outcomeSide": "NO",
+      "price": "0.4999999999999999316419134233807776",
+      "isInverted": true,
+      "token0": {
+        "id": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+        "symbol": "sDAI",
+        "decimals": "18"
+      },
+      "token1": {
+        "id": "0xc1e894e6423d20791ded8a3f292557564ce8d24b",
+        "symbol": "NO_sDAI",
+        "decimals": "18"
+      },
+      "proposal": {
+        "id": "0x45e1064348fd8a407d6d1f59fc64b05f633b28fc",
+        "marketName": "Will GIP-145 (Advisory Futarchy Pilot with $100k temp liquidity) be approved ('Yes') or rejected ('No') by GnosisDAO? If proposal is not approved by the end of February 2026, results as ('No')."
+      }
+    },
+    {
+      "id": "0x76f78ec457c1b14bcf972f16eae44c7aa21d578f",
+      "name": "NO_GNO / NO_sDAI",
+      "type": "CONDITIONAL",
+      "outcomeSide": "NO",
+      "price": "108.0931616146832547635799880643642",
+      "isInverted": true,
+      "token0": {
+        "id": "0xc1e894e6423d20791ded8a3f292557564ce8d24b",
+        "symbol": "NO_sDAI",
+        "decimals": "18"
+      },
+      "token1": {
+        "id": "0xf44d9b29516b27f8d7e7525754bc41096ceeab16",
+        "symbol": "NO_GNO",
+        "decimals": "18"
+      },
+      "proposal": {
+        "id": "0x45e1064348fd8a407d6d1f59fc64b05f633b28fc",
+        "marketName": "Will GIP-145 (Advisory Futarchy Pilot with $100k temp liquidity) be approved ('Yes') or rejected ('No') by GnosisDAO? If proposal is not approved by the end of February 2026, results as ('No')."
+      }
+    },
+    {
+      "id": "0x79ed63944c1d692cb7c12fe0c4817b4065adfeef",
+      "name": "NO_GNO / sDAI",
+      "type": "EXPECTED_VALUE",
+      "outcomeSide": "NO",
+      "price": "56.8900000000048063676761873504748",
+      "isInverted": true,
+      "token0": {
+        "id": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+        "symbol": "sDAI",
+        "decimals": "18"
+      },
+      "token1": {
+        "id": "0xf44d9b29516b27f8d7e7525754bc41096ceeab16",
+        "symbol": "NO_GNO",
+        "decimals": "18"
+      },
+      "proposal": {
+        "id": "0x45e1064348fd8a407d6d1f59fc64b05f633b28fc",
+        "marketName": "Will GIP-145 (Advisory Futarchy Pilot with $100k temp liquidity) be approved ('Yes') or rejected ('No') by GnosisDAO? If proposal is not approved by the end of February 2026, results as ('No')."
+      }
+    },
+    {
+      "id": "0x8f5d5a43a8950d92a65e12c3a15ea10dc30b4e26",
+      "name": "YES_GNO / sDAI",
+      "type": "EXPECTED_VALUE",
+      "outcomeSide": "YES",
+      "price": "56.89000000000481015316028208610754",
+      "isInverted": false,
+      "token0": {
+        "id": "0x79832bef85287634fd4a910d6cb4a092e76bdda2",
+        "symbol": "YES_GNO",
+        "decimals": "18"
+      },
+      "token1": {
+        "id": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+        "symbol": "sDAI",
+        "decimals": "18"
+      },
+      "proposal": {
+        "id": "0x45e1064348fd8a407d6d1f59fc64b05f633b28fc",
+        "marketName": "Will GIP-145 (Advisory Futarchy Pilot with $100k temp liquidity) be approved ('Yes') or rejected ('No') by GnosisDAO? If proposal is not approved by the end of February 2026, results as ('No')."
+      }
+    },
+    {
+      "id": "0xf8346e622557763a62cc981187d084695ee296c3",
+      "name": "YES_GNO / YES_sDAI",
+      "type": "CONDITIONAL",
+      "outcomeSide": "YES",
+      "price": "119.4952843864157208736625501547361",
+      "isInverted": false,
+      "token0": {
+        "id": "0x79832bef85287634fd4a910d6cb4a092e76bdda2",
+        "symbol": "YES_GNO",
+        "decimals": "18"
+      },
+      "token1": {
+        "id": "0xe014caacdf6ba9f3793af6b356872faf02371208",
+        "symbol": "YES_sDAI",
+        "decimals": "18"
+      },
+      "proposal": {
+        "id": "0x45e1064348fd8a407d6d1f59fc64b05f633b28fc",
+        "marketName": "Will GIP-145 (Advisory Futarchy Pilot with $100k temp liquidity) be approved ('Yes') or rejected ('No') by GnosisDAO? If proposal is not approved by the end of February 2026, results as ('No')."
+      }
+    },
+    {
+      "id": "0xfa8d15f6dc51890b9cd91d4dac44c3fe7dddefd0",
+      "name": "YES_sDAI / sDAI",
+      "type": "PREDICTION",
+      "outcomeSide": "YES",
+      "price": "0.4999999999999999316419134233807776",
+      "isInverted": true,
+      "token0": {
+        "id": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+        "symbol": "sDAI",
+        "decimals": "18"
+      },
+      "token1": {
+        "id": "0xe014caacdf6ba9f3793af6b356872faf02371208",
+        "symbol": "YES_sDAI",
+        "decimals": "18"
+      },
+      "proposal": {
+        "id": "0x45e1064348fd8a407d6d1f59fc64b05f633b28fc",
+        "marketName": "Will GIP-145 (Advisory Futarchy Pilot with $100k temp liquidity) be approved ('Yes') or rejected ('No') by GnosisDAO? If proposal is not approved by the end of February 2026, results as ('No')."
+      }
+    }
+  ],
+  "_raw_tokens": [
+    {
+      "id": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "symbol": "sDAI",
+      "decimals": "18"
+    },
+    {
+      "id": "0xc1e894e6423d20791ded8a3f292557564ce8d24b",
+      "symbol": "NO_sDAI",
+      "decimals": "18"
+    },
+    {
+      "id": "0xf44d9b29516b27f8d7e7525754bc41096ceeab16",
+      "symbol": "NO_GNO",
+      "decimals": "18"
+    },
+    {
+      "id": "0x79832bef85287634fd4a910d6cb4a092e76bdda2",
+      "symbol": "YES_GNO",
+      "decimals": "18"
+    },
+    {
+      "id": "0xe014caacdf6ba9f3793af6b356872faf02371208",
+      "symbol": "YES_sDAI",
+      "decimals": "18"
+    }
+  ]
+}

@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Supabase Trade History Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .trade-card {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+        }
+        .trade-new {
+            border-left: 4px solid #28a745;
+            background-color: #d4edda;
+        }
+        .logs {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .wallet-info {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .config-info {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid #ffc107;
+        }
+        .library-info {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Simple Supabase Trade History Realtime Test</h1>
+        <p>A minimal Node.js setup to test trade history realtime functionality</p>
+        
+        <!-- Library Info -->
+        <div class="library-info">
+            <h4>📚 Libraries</h4>
+            <div><strong>Supabase JS:</strong> <span id="supabase-version">Loading...</span></div>
+            <div><strong>Ethers.js:</strong> <span id="ethers-version">Loading...</span></div>
+            <div><strong>Source:</strong> node_modules (local)</div>
+        </div>
+        
+        <!-- Configuration Info -->
+        <div class="config-info">
+            <h4>📋 Configuration</h4>
+            <div><strong>Event:</strong> postgres_changes</div>
+            <div><strong>Schema:</strong> public</div>
+            <div><strong>Table:</strong> trade_history</div>
+            <div><strong>Filter:</strong> user_address=eq.{connected_wallet} <strong id="proposal-filter-info"></strong></div>
+        </div>
+        
+        <!-- Wallet Connection -->
+        <div class="wallet-info">
+            <h3>👛 Wallet Connection</h3>
+            <div id="wallet-status">Not connected</div>
+            <button id="connect-wallet">Connect MetaMask</button>
+            <button id="disconnect-wallet" disabled>Disconnect</button>
+        </div>
+        
+        <!-- Realtime Status -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="connection-status">❌</div>
+                <div class="stat-label">Realtime Status</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-trades">0</div>
+                <div class="stat-label">Total Trades</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="new-trades">0</div>
+                <div class="stat-label">New Trades (Session)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="last-update">Never</div>
+                <div class="stat-label">Last Update</div>
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="container">
+            <h3>🎮 Controls</h3>
+            <button id="start-realtime">🚀 Start Realtime</button>
+            <button id="stop-realtime">⏸️ Stop Realtime</button>
+            <button id="fetch-trades">📊 Fetch Trades</button>
+            <button id="clear-logs">🧹 Clear Logs</button>
+            <button id="test-insert">🧪 Test Insert</button>
+            <button id="test-simple-realtime">🔧 Test Simple Realtime (No Filter)</button>
+        </div>
+        
+        <!-- Status Messages -->
+        <div id="status-messages"></div>
+        
+        <!-- Trade History -->
+        <div class="container">
+            <h3>📈 Trade History (<span id="trade-count">0</span> trades)</h3>
+            <div id="trade-list">No trades loaded</div>
+        </div>
+        
+        <!-- Debug Logs -->
+        <div class="container">
+            <h3>🔍 Debug Logs</h3>
+            <div id="logs" class="logs">Logs will appear here...</div>
+        </div>
+    </div>
+
+    <!-- Load libraries from node_modules -->
+    <script src="/node_modules/@supabase/supabase-js/dist/umd/supabase.js"></script>
+    <script src="/node_modules/ethers/dist/ethers.umd.min.js"></script>
+    
+    <script>
+        // Check if libraries loaded correctly
+        function checkLibraries() {
+            const supabaseVersion = window.supabase ? 'Loaded ✅' : 'Failed ❌';
+            const ethersVersion = window.ethers ? `v${window.ethers.version} ✅` : 'Failed ❌';
+            
+            document.getElementById('supabase-version').textContent = supabaseVersion;
+            document.getElementById('ethers-version').textContent = ethersVersion;
+            
+            if (!window.supabase) {
+                log('❌ Supabase library failed to load', 'error');
+                showStatus('Supabase library failed to load', 'error');
+                return false;
+            }
+            
+            if (!window.ethers) {
+                log('❌ Ethers library failed to load', 'error');
+                showStatus('Ethers library failed to load', 'error');
+                return false;
+            }
+            
+            log(`✅ Libraries loaded: Supabase ✅, Ethers ${window.ethers.version} ✅`, 'success');
+            return true;
+        }
+        
+        // Configuration
+        const SUPABASE_URL = 'https://nvhqdqtlsdboctqjcelq.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52aHFkcXRsc2Rib2N0cWpjZWxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIxNDU3ODEsImV4cCI6MjA1NzcyMTc4MX0.6kjpxGVqSQNMz3DqycuNPv_ug8sdBNKeJsN0Z3X7oLg';
+        const PROPOSAL_ID = '0xDA36a35CA4Fe6214C37a452159C0C9EAd45D5919';
+        
+        // Initialize Supabase (will be done after library check)
+        let supabase = null;
+        
+        // State
+        let walletAddress = null;
+        let realtimeChannel = null;
+        let trades = [];
+        let newTradesCount = 0;
+        
+        // DOM Elements
+        const walletStatus = document.getElementById('wallet-status');
+        const connectBtn = document.getElementById('connect-wallet');
+        const disconnectBtn = document.getElementById('disconnect-wallet');
+        const startRealtimeBtn = document.getElementById('start-realtime');
+        const stopRealtimeBtn = document.getElementById('stop-realtime');
+        const fetchTradesBtn = document.getElementById('fetch-trades');
+        const clearLogsBtn = document.getElementById('clear-logs');
+        const testInsertBtn = document.getElementById('test-insert');
+        const testSimpleRealtimeBtn = document.getElementById('test-simple-realtime');
+        const statusMessages = document.getElementById('status-messages');
+        const tradeList = document.getElementById('trade-list');
+        const logs = document.getElementById('logs');
+        const connectionStatus = document.getElementById('connection-status');
+        const totalTrades = document.getElementById('total-trades');
+        const newTradesEl = document.getElementById('new-trades');
+        const lastUpdate = document.getElementById('last-update');
+        const tradeCount = document.getElementById('trade-count');
+        const proposalFilterInfo = document.getElementById('proposal-filter-info');
+        
+        // Logging function
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            console.log(logEntry);
+            logs.innerHTML += `<div style="color: ${type === 'error' ? 'red' : type === 'success' ? 'green' : 'black'}">${logEntry}</div>`;
+            logs.scrollTop = logs.scrollHeight;
+        }
+        
+        // Status message function
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            statusMessages.appendChild(statusDiv);
+            setTimeout(() => statusDiv.remove(), 5000);
+        }
+        
+        // Update stats
+        function updateStats() {
+            totalTrades.textContent = trades.length;
+            newTradesEl.textContent = newTradesCount;
+            lastUpdate.textContent = new Date().toLocaleTimeString();
+            tradeCount.textContent = trades.length;
+        }
+        
+        // Connect Wallet using ethers from node_modules
+        async function connectWallet() {
+            try {
+                log('🔗 Connecting to MetaMask using ethers.js...');
+                
+                if (!window.ethereum) {
+                    throw new Error('MetaMask not found');
+                }
+                
+                if (!window.ethers) {
+                    throw new Error('Ethers.js library not loaded');
+                }
+                
+                // Use ethers from node_modules
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                
+                // Request account access
+                await provider.send("eth_requestAccounts", []);
+                
+                const signer = provider.getSigner();
+                walletAddress = await signer.getAddress();
+                
+                // Get balance
+                const balance = await provider.getBalance(walletAddress);
+                const formattedBalance = ethers.utils.formatEther(balance);
+                
+                // Get network
+                const network = await provider.getNetwork();
+                
+                walletStatus.innerHTML = `
+                    Connected: <code>${walletAddress}</code><br>
+                    Balance: ${formattedBalance} ETH<br>
+                    Network: ${network.name} (${network.chainId})
+                `;
+                
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                startRealtimeBtn.disabled = false;
+                fetchTradesBtn.disabled = false;
+                testInsertBtn.disabled = false;
+                testSimpleRealtimeBtn.disabled = false;
+                
+                log(`✅ Wallet connected: ${walletAddress}`, 'success');
+                log(`💰 Balance: ${formattedBalance} ETH`, 'info');
+                log(`🌐 Network: ${network.name} (${network.chainId})`, 'info');
+                showStatus(`Wallet connected: ${walletAddress}`, 'success');
+                
+                // Auto-fetch trades and start realtime
+                await fetchTrades();
+                startRealtime();
+                
+            } catch (error) {
+                log(`❌ Wallet connection failed: ${error.message}`, 'error');
+                showStatus(`Wallet connection failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Disconnect Wallet
+        function disconnectWallet() {
+            walletAddress = null;
+            walletStatus.textContent = 'Not connected';
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            startRealtimeBtn.disabled = true;
+            fetchTradesBtn.disabled = true;
+            testInsertBtn.disabled = true;
+            testSimpleRealtimeBtn.disabled = true;
+            
+            if (realtimeChannel) {
+                stopRealtime();
+            }
+            
+            log('👛 Wallet disconnected', 'info');
+            showStatus('Wallet disconnected', 'info');
+        }
+        
+        // Fetch Trades
+        async function fetchTrades() {
+            if (!walletAddress) {
+                showStatus('Please connect wallet first', 'warning');
+                return;
+            }
+            
+            try {
+                log(`📊 Fetching trades for ${walletAddress}...`);
+                log(`🔍 Query: SELECT * FROM trade_history WHERE user_address = '${walletAddress.toLowerCase()}' AND proposal_id = '${PROPOSAL_ID}'`);
+                
+                const { data, error, count } = await supabase
+                    .from('trade_history')
+                    .select('*', { count: 'exact' })
+                    .eq('user_address', walletAddress.toLowerCase())
+                    .eq('proposal_id', PROPOSAL_ID)
+                    .order('evt_block_time', { ascending: false });
+                
+                if (error) throw error;
+                
+                trades = data;
+                updateStats();
+                renderTrades();
+                
+                log(`✅ Fetched ${data.length} trades (total: ${count})`, 'success');
+                showStatus(`Fetched ${data.length} trades`, 'success');
+                
+            } catch (error) {
+                log(`❌ Fetch failed: ${error.message}`, 'error');
+                showStatus(`Fetch failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Start Realtime with proper postgres_changes
+        function startRealtime() {
+            if (!walletAddress) {
+                showStatus('Please connect wallet first', 'warning');
+                return;
+            }
+            
+            if (realtimeChannel) {
+                log('⚠️ Realtime already active');
+                return;
+            }
+            
+            log(`🚀 Starting realtime for ${walletAddress}...`);
+            log(`📡 Setting up postgres_changes listener:`);
+            log(`   - event: '*' (all events)`);
+            log(`   - schema: 'public'`);
+            log(`   - table: 'trade_history'`);
+            log(`   - filter: 'user_address=eq.${walletAddress.toLowerCase()}' (proposal_id filtered client-side)`);
+            
+            realtimeChannel = supabase
+                .channel(`trade-history-${walletAddress.slice(-6)}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'trade_history',
+                        filter: `user_address=eq.${walletAddress.toLowerCase()}`
+                    },
+                    (payload) => {
+                        log(`🔥 === POSTGRES_CHANGES EVENT (Client-side proposal_id filter) ===`, 'success');
+                        log(`📋 Event Type: ${payload.eventType}`);
+                        log(`📋 Schema: ${payload.schema}`);
+                        log(`📋 Table: ${payload.table}`);
+                        log(`📋 Timestamp: ${new Date().toISOString()}`);
+                        log(`📋 Raw Payload (before client filter): ${JSON.stringify(payload, null, 2)}`);
+
+                        const relevantProposalId = payload.new?.proposal_id || payload.old?.proposal_id;
+                        if (relevantProposalId !== PROPOSAL_ID) {
+                            log(`ℹ️ Skipping event: proposal_id (${relevantProposalId}) does not match target ${PROPOSAL_ID}`);
+                            return;
+                        }
+                        log(`✅ Event matches PROPOSAL_ID: ${PROPOSAL_ID}`);
+                        
+                        if (payload.eventType === 'INSERT' && payload.new) {
+                            log(`➕ Processing INSERT event for trade: ${payload.new.evt_tx_hash}`, 'success');
+                            trades.unshift(payload.new);
+                            newTradesCount++;
+                            updateStats();
+                            renderTrades();
+                            showStatus(`🆕 New trade received! TX: ${payload.new.evt_tx_hash}`, 'success');
+                        } else if (payload.eventType === 'UPDATE' && payload.new) {
+                            log(`✏️ Processing UPDATE event for trade ID: ${payload.new.id}`, 'success');
+                            const index = trades.findIndex(t => t.id === payload.new.id);
+                            if (index !== -1) {
+                                trades[index] = payload.new;
+                                renderTrades();
+                                showStatus(`🔄 Trade updated! ID: ${payload.new.id}`, 'info');
+                            }
+                        } else if (payload.eventType === 'DELETE' && payload.old) {
+                            log(`🗑️ Processing DELETE event for trade ID: ${payload.old.id}`, 'success');
+                            trades = trades.filter(t => t.id !== payload.old.id);
+                            updateStats();
+                            renderTrades();
+                            showStatus(`🗑️ Trade deleted! ID: ${payload.old.id}`, 'warning');
+                        }
+                        log(`🔥 === EVENT PROCESSING COMPLETE ===`);
+                    }
+                )
+                .on('presence', { event: 'sync' }, () => {
+                    log('✅ Realtime presence synced', 'success');
+                    connectionStatus.textContent = '✅';
+                    connectionStatus.style.color = 'green';
+                })
+                .on('error', (err) => {
+                    log(`❌ Realtime error: ${err.message}`, 'error');
+                    log(`❌ Error details: ${JSON.stringify(err, null, 2)}`, 'error');
+                    connectionStatus.textContent = '❌';
+                    connectionStatus.style.color = 'red';
+                    showStatus(`Realtime error: ${err.message}`, 'error');
+                })
+                .subscribe((status, err) => {
+                    log(`📡 === SUBSCRIPTION STATUS UPDATE ===`);
+                    log(`📋 Status: ${status}`);
+                    log(`📋 Timestamp: ${new Date().toISOString()}`);
+                    if (err) {
+                        log(`❌ Subscription error: ${JSON.stringify(err, null, 2)}`, 'error');
+                        showStatus(`Subscription error: ${err.message}`, 'error');
+                    }
+                    
+                    if (status === 'SUBSCRIBED') {
+                        log('🎉 === REALTIME FULLY CONNECTED ===', 'success');
+                        log('🔍 Now listening for postgres_changes on trade_history table', 'success');
+                        showStatus('🎉 Realtime connected! Listening for trade changes...', 'success');
+                        connectionStatus.textContent = '🟢';
+                        connectionStatus.style.color = 'green';
+                        startRealtimeBtn.disabled = true;
+                        stopRealtimeBtn.disabled = false;
+                    } else if (status === 'CHANNEL_ERROR') {
+                        log('❌ Channel error occurred', 'error');
+                        connectionStatus.textContent = '❌';
+                        connectionStatus.style.color = 'red';
+                    } else if (status === 'TIMED_OUT') {
+                        log('⏰ Connection timed out', 'error');
+                        connectionStatus.textContent = '⏰';
+                        connectionStatus.style.color = 'orange';
+                    } else if (status === 'CLOSED') {
+                        log('🔒 Connection closed', 'info');
+                        connectionStatus.textContent = '🔒';
+                        connectionStatus.style.color = 'gray';
+                    }
+                });
+        }
+        
+        // Test Simple Realtime (no filters)
+        function testSimpleRealtime() {
+            if (realtimeChannel) {
+                stopRealtime();
+            }
+            
+            log(`🧪 Testing SIMPLE realtime (no filters)...`);
+            log(`📡 Setting up postgres_changes listener:`);
+            log(`   - event: '*' (all events)`);
+            log(`   - schema: 'public'`);
+            log(`   - table: 'trade_history'`);
+            log(`   - filter: NONE (will receive ALL trade_history changes)`);
+            
+            realtimeChannel = supabase
+                .channel('simple-trade-history-test')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'trade_history'
+                        // NO FILTER - will receive all changes
+                    },
+                    (payload) => {
+                        log(`🔥 === SIMPLE REALTIME EVENT (NO FILTER) ===`, 'success');
+                        log(`📋 Event Type: ${payload.eventType}`);
+                        log(`📋 User Address: ${payload.new?.user_address || payload.old?.user_address || 'N/A'}`);
+                        log(`📋 TX Hash: ${payload.new?.evt_tx_hash || payload.old?.evt_tx_hash || 'N/A'}`);
+                        log(`📋 Full Payload: ${JSON.stringify(payload, null, 2)}`);
+                        showStatus(`🔥 Simple realtime event: ${payload.eventType}`, 'success');
+                    }
+                )
+                .subscribe((status) => {
+                    log(`📡 Simple realtime status: ${status}`);
+                    if (status === 'SUBSCRIBED') {
+                        log('🎉 Simple realtime connected! Will receive ALL trade_history changes.', 'success');
+                        showStatus('🧪 Simple realtime active! Listening to ALL trades...', 'success');
+                        connectionStatus.textContent = '🧪';
+                        connectionStatus.style.color = 'purple';
+                        testSimpleRealtimeBtn.disabled = true;
+                        stopRealtimeBtn.disabled = false;
+                    }
+                });
+        }
+        
+        // Stop Realtime
+        function stopRealtime() {
+            if (realtimeChannel) {
+                log('⏸️ Stopping realtime channel...');
+                supabase.removeChannel(realtimeChannel);
+                realtimeChannel = null;
+                log('⏸️ Realtime stopped', 'info');
+                showStatus('Realtime stopped', 'info');
+                connectionStatus.textContent = '❌';
+                connectionStatus.style.color = 'red';
+                startRealtimeBtn.disabled = false;
+                stopRealtimeBtn.disabled = true;
+                testSimpleRealtimeBtn.disabled = false;
+            }
+        }
+        
+        // Test Insert
+        async function testInsert() {
+            if (!walletAddress) {
+                showStatus('Please connect wallet first', 'warning');
+                return;
+            }
+            
+            try {
+                log('🧪 Testing insert...');
+                
+                const testTrade = {
+                    user_address: walletAddress.toLowerCase(),
+                    amount0: '1000000000000000000',
+                    amount1: '-500000000000000000',
+                    pool_id: '0x67750A4c9E8d4987286DF84d351bAE8fC9EeF865',
+                    evt_block_number: 99999999,
+                    evt_block_time: new Date().toISOString(),
+                    token0: '0x839454be590e3f6f593ebb38179388d19f2e9cb0',
+                    token1: '0xaf204776c7245bf4147c2612bf6e5972ee483701',
+                    proposal_id: '0xDA36a35CA4Fe6214C37a452159C0C9EAd45D5919',
+                    evt_tx_hash: `0xtest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+                };
+                
+                log(`🧪 Inserting test trade: ${JSON.stringify(testTrade, null, 2)}`);
+                
+                const { data, error } = await supabase
+                    .from('trade_history')
+                    .insert([testTrade]);
+                
+                if (error) {
+                    log(`❌ Insert failed: ${error.message}`, 'error');
+                    log(`❌ Error details: ${JSON.stringify(error, null, 2)}`, 'error');
+                    showStatus(`Insert failed: ${error.message}`, 'error');
+                } else {
+                    log('✅ Test trade inserted successfully!', 'success');
+                    log(`✅ Inserted data: ${JSON.stringify(data, null, 2)}`, 'success');
+                    showStatus('✅ Test trade inserted! Check for realtime update.', 'success');
+                }
+                
+            } catch (error) {
+                log(`❌ Insert error: ${error.message}`, 'error');
+                showStatus(`Insert error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Render Trades
+        function renderTrades() {
+            if (trades.length === 0) {
+                tradeList.innerHTML = '<p>No trades found</p>';
+                return;
+            }
+            
+            const tradesHtml = trades.slice(0, 10).map((trade, index) => `
+                <div class="trade-card ${index < newTradesCount ? 'trade-new' : ''}">
+                    ${index < newTradesCount ? '<div style="color: green; font-weight: bold;">🆕 NEW TRADE (REALTIME)</div>' : ''}
+                    <div><strong>TX Hash:</strong> <code>${trade.evt_tx_hash}</code></div>
+                    <div><strong>User Address:</strong> <code>${trade.user_address}</code></div>
+                    <div><strong>Block Time:</strong> ${new Date(trade.evt_block_time).toLocaleString()}</div>
+                    <div><strong>Amount0:</strong> ${trade.amount0}</div>
+                    <div><strong>Amount1:</strong> ${trade.amount1}</div>
+                    <div><strong>Token0:</strong> <code>${trade.token0}</code></div>
+                    <div><strong>Token1:</strong> <code>${trade.token1}</code></div>
+                    ${trade.proposal_id ? `<div><strong>Proposal:</strong> <code>${trade.proposal_id}</code></div>` : ''}
+                    ${trade.id ? `<div><strong>ID:</strong> ${trade.id}</div>` : ''}
+                </div>
+            `).join('');
+            
+            tradeList.innerHTML = tradesHtml;
+            
+            if (trades.length > 10) {
+                tradeList.innerHTML += `<p style="text-align: center; color: #666;">... and ${trades.length - 10} more trades</p>`;
+            }
+        }
+        
+        // Clear Logs
+        function clearLogs() {
+            logs.innerHTML = '';
+            newTradesCount = 0;
+            updateStats();
+            log('🧹 Logs cleared');
+        }
+        
+        // Event Listeners
+        connectBtn.addEventListener('click', connectWallet);
+        disconnectBtn.addEventListener('click', disconnectWallet);
+        startRealtimeBtn.addEventListener('click', startRealtime);
+        stopRealtimeBtn.addEventListener('click', stopRealtime);
+        fetchTradesBtn.addEventListener('click', fetchTrades);
+        clearLogsBtn.addEventListener('click', clearLogs);
+        testInsertBtn.addEventListener('click', testInsert);
+        testSimpleRealtimeBtn.addEventListener('click', testSimpleRealtime);
+        
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            log('🚀 === SIMPLE SUPABASE TRADE HISTORY TEST INITIALIZED ===');
+            
+            // Check if libraries loaded
+            if (!checkLibraries()) {
+                log('❌ Failed to load required libraries', 'error');
+                return;
+            }
+            
+            // Initialize Supabase
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            log(`📡 Supabase client initialized`);
+            log(`📋 Using libraries from node_modules`);
+            log(`📋 Event Type: postgres_changes`);
+            log(`📋 Schema: public`);
+            log(`📋 Table: trade_history`);
+            log('👛 Connect your wallet to start testing');
+            log('🔧 Use "Test Simple Realtime" to test without filters first');
+            proposalFilterInfo.textContent = ` AND proposal_id=eq.${PROPOSAL_ID.slice(0,10)}... (Initial fetch only; Realtime client-filtered)`;
+        });
+        
+        // Handle account changes
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                if (accounts.length === 0) {
+                    disconnectWallet();
+                } else if (walletAddress !== accounts[0]) {
+                    disconnectWallet();
+                    log('👛 Account changed, please reconnect');
+                }
+            });
+        }
+    </script>
+</body>
+</html> 

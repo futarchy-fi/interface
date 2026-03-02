@@ -1,0 +1,32 @@
+﻿=== Introspecting Proposal Schema ===
+
+Proposal Entity Fields:
+  - id: ID
+  - marketName: String
+  - companyToken: WhitelistedToken
+  - currencyToken: WhitelistedToken
+  - pools: NON_NULL
+  - outcomeTokens: NON_NULL
+
+=== Querying Proposal Data ===
+Proposal ID: 0x781df62f78a8636049a644eeedbc490d67c40cff
+
+Proposal Data:
+{
+  "id": "0x781df62f78a8636049a644eeedbc490d67c40cff",
+  "marketName": "Will TEST_GIP pass"
+}
+
+Pools Found: 0
+
+ÔÜá´©Å No pools found - need to check Proposal contract directly for tokens
+
+Full Proposal Query Result:
+{
+  "data": {
+    "proposal": {
+      "id": "0x781df62f78a8636049a644eeedbc490d67c40cff",
+      "marketName": "Will TEST_GIP pass"
+    }
+  }
+}

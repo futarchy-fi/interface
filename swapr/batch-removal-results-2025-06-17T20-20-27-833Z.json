@@ -1,0 +1,16 @@
+{
+  "totalPools": 1,
+  "successful": 1,
+  "failed": 0,
+  "skipped": 0,
+  "poolResults": [
+    {
+      "poolName": "YES_GNO / YES_sDAI",
+      "poolAddress": "0x57a9C7d2b515CFa7c39036dC5af48e2b56fd7B22",
+      "status": "success",
+      "positionsProcessed": 2,
+      "positionsSuccessful": 2,
+      "positionsFailed": 0
+    }
+  ]
+}

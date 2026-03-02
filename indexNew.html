@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Futarchy App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        #connection-status {
+            font-size: 16px;
+        }
+        #connect-wallet {
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        #prices p {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        #prices span {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        #refresh-prices {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #refresh-prices:hover {
+            background-color: #2980b9;
+        }
+        #collateral-actions {
+            margin-top: 20px;
+        }
+        #collateral-actions button {
+            margin-right: 10px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #collateral-actions button:hover {
+            background-color: #45a049;
+        }
+        select, input { margin-right: 10px; padding: 5px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <span id="connection-status">Not connected</span>
+        <button id="connect-wallet">Connect Wallet</button>
+    </div>
+    <div id="prices">
+        <p>YES Company Price: <span id="yes-company-price">Loading...</span> WXDAI</p>
+        <p>NO Company Price: <span id="no-company-price">Loading...</span> WXDAI</p>
+        <p>YES Currency Price: <span id="yes-currency-price">Loading...</span> YES_SDAI/WXDAI</p>
+        <p>NO Currency Price: <span id="no-currency-price">Loading...</span> NO_SDAI/WXDAI</p>
+        <p>SDAI Price: <span id="sdai-price">Loading...</span> WXDAI/SDAI</p>
+        <p>Event Probability: <span id="event-probability">Loading...</span></p>
+        <button id="refresh-prices">Refresh Prices</button>
+    </div>
+    <div id="collateral-actions">
+        <select id="mode" onchange="fetchAmounts()">
+            <option value="add">Add Collateral</option>
+            <option value="remove">Remove Collateral</option>
+        </select>
+        <select id="market-type" onchange="fetchAmounts()">
+            <option value="currency">Currency (SDAI)</option>
+            <option value="company">Company (GNO)</option>
+        </select>
+        <input type="number" id="input-amount" placeholder="Enter amount" min="0" step="0.01">
+        <button onclick="setMaxAmount()">Max</button>
+        <p id="user-amount">Amount: 0</p>
+        <button onclick="addCollateral()">Add Collateral</button>
+        <button onclick="removeCollateral()">Remove Collateral</button>
+    </div>
+
+    <!-- Load ethers.js library from IPFS -->
+    <script src="https://ipfs.io/ipfs/bafybeidyvcc4amuk5cvhyceojezekbocjvi2nfgvcvobj5fayvtfzk42im"></script>
+    <script>
+        // ===== Constants and Addresses =====
+        const provider = new ethers.providers.JsonRpcProvider("https://rpc.gnosischain.com");
+        const WXDAI_ADDRESS = "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d";
+        const YES_SDAI_ADDRESS = "0x493A0D1c776f8797297Aa8B34594fBd0A7F8968a";
+        const NO_SDAI_ADDRESS = "0xE1133Ef862f3441880adADC2096AB67c63f6E102";
+        const YES_GNO_ADDRESS = "0x177304d505eCA60E1aE0dAF1bba4A4c4181dB8Ad";
+        const NO_GNO_ADDRESS = "0xf1B3E5Ffc0219A4F8C0ac69EC98C97709EdfB6c9";
+        const SDAI_ADDRESS = "0xaf204776c7245bF4147c2612BF6e5972Ee483701"; // Example SDAI address on Gnosis
+        const GNO_ADDRESS = "0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb";
+        const COLLATERAL_MANAGER_ADDRESS = "0x..."; // Replace with actual address
+        const SUSHISWAP_V2_FACTORY_ADDRESS = "0xc35DADB65012eC5796536bD9864eD8773aBc74C4";
+        const SDAI_RATE_PROVIDER = "0x89C80A4540A00b5270347E02e2E144c71da2EceD";
+        const YES_POOL_ADDRESS = "0x9a14d28909f42823ee29847f87a15fb3b6e8aed3"; // YES_GNO/WXDAI Uniswap V3
+        const NO_POOL_ADDRESS = "0x6E33153115Ab58dab0e0F1E3a2ccda6e67FA5cD7";  // NO_GNO/WXDAI Uniswap V3
+
+        // ABIs
+        const ERC20_ABI = [
+            "function balanceOf(address) view returns (uint256)",
+            "function approve(address spender, uint256 amount) external returns (bool)"
+        ];
+        const SUSHISWAP_V2_FACTORY_ABI = ["function getPair(address tokenA, address tokenB) external view returns (address pair)"];
+        const UNISWAP_V3_POOL_ABI = [
+            "function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
+            "function token0() external view returns (address)",
+            "function token1() external view returns (address)"
+        ];
+        const SUSHISWAP_V2_PAIR_ABI = [
+            "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+            "function token0() external view returns (address)",
+            "function token1() external view returns (address)"
+        ];
+        const RATE_PROVIDER_ABI = ["function getRate() external view returns (uint256)"];
+        const COLLATERAL_MANAGER_ABI = [
+            "function splitPosition(address baseToken, uint256 amount) external",
+            "function mergePositions(address baseToken, uint256 amount) external"
+        ];
+
+        // Contract instances
+        const factory = new ethers.Contract(SUSHISWAP_V2_FACTORY_ADDRESS, SUSHISWAP_V2_FACTORY_ABI, provider);
+        const yesPool = new ethers.Contract(YES_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, provider);
+        const noPool = new ethers.Contract(NO_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, provider);
+        const rateProvider = new ethers.Contract(SDAI_RATE_PROVIDER, RATE_PROVIDER_ABI, provider);
+
+        // Wallet state
+        let isConnected = false;
+        let currentAddress = null;
+        let signer;
+        let mode = "add"; // Default mode
+        let selectedMarket = "currency"; // Default market
+
+        // Helper to truncate address
+        function truncateAddress(address) {
+            return address.slice(0, 6) + '...' + address.slice(-4);
+        }
+
+        // Connect wallet
+        async function connectWallet() {
+            const button = document.getElementById('connect-wallet');
+            button.disabled = true;
+            button.textContent = "Connecting...";
+            try {
+                if (window.ethereum) {
+                    const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+                    await web3Provider.send("eth_requestAccounts", []);
+                    signer = web3Provider.getSigner();
+                    currentAddress = await signer.getAddress();
+                    document.getElementById('connection-status').textContent = 
+                        `Connected: ${truncateAddress(currentAddress)}`;
+                    button.textContent = "Disconnect";
+                    isConnected = true;
+                    fetchAmounts(); // Fetch balances after connecting
+                    fetchPrices(); // Refresh prices
+                } else {
+                    alert("MetaMask is not installed");
+                }
+            } catch (error) {
+                console.error("Connection failed:", error);
+                document.getElementById('connection-status').textContent = error.code === 4001 ? "Connection rejected" : "Connection failed";
+            } finally {
+                button.textContent = isConnected ? "Disconnect" : "Connect Wallet";
+                button.disabled = false;
+            }
+        }
+
+        // Disconnect wallet
+        function disconnectWallet() {
+            document.getElementById('connection-status').textContent = "Not connected";
+            document.getElementById('connect-wallet').textContent = "Connect Wallet";
+            document.getElementById('connect-wallet').disabled = false;
+            isConnected = false;
+            currentAddress = null;
+            fetchAmounts(); // Update amount display
+        }
+
+        // Toggle connection
+        function toggleConnection() {
+            if (isConnected) {
+                disconnectWallet();
+            } else {
+                connectWallet();
+            }
+        }
+
+        // Check connection on load
+        async function checkConnection() {
+            if (window.ethereum) {
+                const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+                const accounts = await web3Provider.listAccounts();
+                if (accounts.length > 0) {
+                    currentAddress = accounts[0];
+                    signer = web3Provider.getSigner();
+                    document.getElementById('connection-status').textContent = 
+                        `Connected: ${truncateAddress(currentAddress)}`;
+                    document.getElementById('connect-wallet').textContent = "Disconnect";
+                    isConnected = true;
+                    fetchAmounts(); // Fetch balances on load
+                    fetchPrices(); // Fetch prices on load
+                }
+            }
+        }
+
+        // Fetch token balance
+        async function getTokenBalance(tokenAddress) {
+            if (!currentAddress) return "0";
+            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+            const balance = await tokenContract.balanceOf(currentAddress);
+            return ethers.utils.formatUnits(balance, 18); // Assuming 18 decimals
+        }
+
+        // Fetch all balances
+        async function fetchAllBalances() {
+            return {
+                SDAI: await getTokenBalance(SDAI_ADDRESS),
+                YES_SDAI: await getTokenBalance(YES_SDAI_ADDRESS),
+                NO_SDAI: await getTokenBalance(NO_SDAI_ADDRESS),
+                GNO: await getTokenBalance(GNO_ADDRESS),
+                YES_GNO: await getTokenBalance(YES_GNO_ADDRESS),
+                NO_GNO: await getTokenBalance(NO_GNO_ADDRESS)
+            };
+        }
+
+        // Update displayed amount based on mode and market
+        async function fetchAmounts() {
+            const balances = await fetchAllBalances();
+            let displayAmount;
+
+            if (mode === "add") {
+                displayAmount = selectedMarket === "currency" ? balances.SDAI : balances.GNO;
+            } else {
+                displayAmount = selectedMarket === "currency" ? 
+                    Math.min(balances.YES_SDAI, balances.NO_SDAI) : 
+                    Math.min(balances.YES_GNO, balances.NO_GNO);
+            }
+            document.getElementById("user-amount").textContent = `Amount: ${Number(displayAmount).toFixed(6)}`;
+        }
+
+        // Set max amount
+        async function setMaxAmount() {
+            if (!isConnected) {
+                alert("Please connect your wallet first!");
+                return;
+            }
+            const balances = await fetchAllBalances();
+            let maxAmount;
+
+            if (mode === "add") {
+                maxAmount = selectedMarket === "currency" ? balances.SDAI : balances.GNO;
+            } else {
+                maxAmount = selectedMarket === "currency" ? 
+                    Math.min(balances.YES_SDAI, balances.NO_SDAI) : 
+                    Math.min(balances.YES_GNO, balances.NO_GNO);
+            }
+            document.getElementById("input-amount").value = Number(maxAmount).toFixed(6);
+        }
+
+        // Fetch prices with logging
+        async function fetchPrices() {
+            try {
+                console.log("Fetching SushiSwap V2 pair addresses...");
+                const yesPairAddress = await factory.getPair(YES_SDAI_ADDRESS, WXDAI_ADDRESS);
+                const noPairAddress = await factory.getPair(NO_SDAI_ADDRESS, WXDAI_ADDRESS);
+                console.log("YES_SDAI/WXDAI Pair Address:", yesPairAddress);
+                console.log("NO_SDAI/WXDAI Pair Address:", noPairAddress);
+
+                if (yesPairAddress === "0x0000000000000000000000000000000000000000") throw new Error("YES_SDAI/WXDAI pair does not exist");
+                if (noPairAddress === "0x0000000000000000000000000000000000000000") throw new Error("NO_SDAI/WXDAI pair does not exist");
+
+                const yesPair = new ethers.Contract(yesPairAddress, SUSHISWAP_V2_PAIR_ABI, provider);
+                const noPair = new ethers.Contract(noPairAddress, SUSHISWAP_V2_PAIR_ABI, provider);
+
+                console.log("Fetching data from contracts...");
+                const [
+                    yesSlot0, yesToken0, yesToken1,
+                    noSlot0, noToken0, noToken1,
+                    yesReserves, yesPairToken0, yesPairToken1,
+                    noReserves, noPairToken0, noPairToken1,
+                    sdaiRate
+                ] = await Promise.all([
+                    yesPool.slot0(), yesPool.token0(), yesPool.token1(),
+                    noPool.slot0(), noPool.token0(), noPool.token1(),
+                    yesPair.getReserves(), yesPair.token0(), yesPair.token1(),
+                    noPair.getReserves(), noPair.token0(), noPair.token1(),
+                    rateProvider.getRate()
+                ]);
+
+                console.log("YES_GNO/WXDAI Pool (Uniswap V3):", { sqrtPriceX96: yesSlot0.sqrtPriceX96.toString(), token0: yesToken0, token1: yesToken1 });
+                console.log("NO_GNO/WXDAI Pool (Uniswap V3):", { sqrtPriceX96: noSlot0.sqrtPriceX96.toString(), token0: noToken0, token1: noToken1 });
+                console.log("YES_SDAI/WXDAI Pair (SushiSwap V2):", { reserve0: yesReserves.reserve0.toString(), reserve1: yesReserves.reserve1.toString(), token0: yesPairToken0, token1: yesPairToken1 });
+                console.log("NO_SDAI/WXDAI Pair (SushiSwap V2):", { reserve0: noReserves.reserve0.toString(), reserve1: noReserves.reserve1.toString(), token0: noPairToken0, token1: noPairToken1 });
+                console.log("SDAI Rate (WXDAI per SDAI, 1e18 scaled):", sdaiRate.toString());
+
+                // YES Company Price (WXDAI per YES_GNO)
+                console.log("Calculating YES Company Price...");
+                const yesSqrtPriceX96 = BigInt(yesSlot0.sqrtPriceX96);
+                const yesPriceRaw = (Number(yesSqrtPriceX96) / 2**96) ** 2;
+                let yesCompanyPrice = yesToken0.toLowerCase() === WXDAI_ADDRESS.toLowerCase() ? 1 / yesPriceRaw : yesPriceRaw;
+                console.log("YES Company Price (WXDAI per YES_GNO):", yesCompanyPrice.toFixed(6));
+
+                // NO Company Price (WXDAI per NO_GNO)
+                console.log("Calculating NO Company Price...");
+                const noSqrtPriceX96 = BigInt(noSlot0.sqrtPriceX96);
+                const noPriceRaw = (Number(noSqrtPriceX96) / 2**96) ** 2;
+                let noCompanyPrice = noToken0.toLowerCase() === WXDAI_ADDRESS.toLowerCase() ? 1 / noPriceRaw : noPriceRaw;
+                console.log("NO Company Price (WXDAI per NO_GNO):", noCompanyPrice.toFixed(6));
+
+                // YES Currency Price (YES_SDAI per WXDAI)
+                console.log("Calculating YES Currency Price...");
+                let yesCurrencyPrice = yesPairToken0.toLowerCase() === WXDAI_ADDRESS.toLowerCase() ? 
+                    Number(yesReserves.reserve1) / Number(yesReserves.reserve0) : 
+                    Number(yesReserves.reserve0) / Number(yesReserves.reserve1);
+                console.log("YES Currency Price (YES_SDAI per WXDAI):", yesCurrencyPrice.toFixed(6));
+
+                // NO Currency Price (NO_SDAI per WXDAI)
+                console.log("Calculating NO Currency Price...");
+                let noCurrencyPrice = noPairToken0.toLowerCase() === WXDAI_ADDRESS.toLowerCase() ? 
+                    Number(noReserves.reserve1) / Number(noReserves.reserve0) : 
+                    Number(noReserves.reserve0) / Number(noReserves.reserve1);
+                console.log("NO Currency Price (NO_SDAI per WXDAI):", noCurrencyPrice.toFixed(6));
+
+                // SDAI Price (WXDAI per SDAI)
+                console.log("Calculating SDAI Price...");
+                const sdaiPrice = Number(sdaiRate) / 1e18;
+                console.log("SDAI Price (WXDAI per SDAI):", sdaiPrice.toFixed(6));
+
+                // Event Probability
+                console.log("Calculating Event Probability...");
+                const yesPriceWXDAI = 1 / yesCurrencyPrice;
+                const noPriceWXDAI = 1 / noCurrencyPrice;
+                console.log("WXDAI per YES_SDAI:", yesPriceWXDAI.toFixed(6));
+                console.log("WXDAI per NO_SDAI:", noPriceWXDAI.toFixed(6));
+                const totalPrice = yesPriceWXDAI + noPriceWXDAI;
+                const probability = (yesPriceWXDAI / totalPrice) * 100;
+                console.log("Total Price (yesPriceWXDAI + noPriceWXDAI):", totalPrice.toFixed(6));
+                console.log("Probability (%):", probability.toFixed(2));
+
+                // Update UI
+                document.getElementById('yes-company-price').textContent = yesCompanyPrice.toFixed(6);
+                document.getElementById('no-company-price').textContent = noCompanyPrice.toFixed(6);
+                document.getElementById('yes-currency-price').textContent = yesCurrencyPrice.toFixed(6);
+                document.getElementById('no-currency-price').textContent = noCurrencyPrice.toFixed(6);
+                document.getElementById('sdai-price').textContent = sdaiPrice.toFixed(6);
+                document.getElementById('event-probability').textContent = probability.toFixed(2) + '%';
+            } catch (error) {
+                console.error("Error fetching prices:", error);
+            }
+        }
+
+        // Add collateral
+        async function addCollateral() {
+            if (!isConnected) {
+                alert("Please connect your wallet first!");
+                return;
+            }
+            const amount = document.getElementById("input-amount").value;
+            if (!amount || amount <= 0) {
+                alert("Please enter a valid amount");
+                return;
+            }
+
+            const amountWei = ethers.utils.parseUnits(amount, 18);
+            const baseTokenAddress = selectedMarket === "currency" ? SDAI_ADDRESS : GNO_ADDRESS;
+            const tokenContract = new ethers.Contract(baseTokenAddress, ERC20_ABI, signer);
+            const collateralManager = new ethers.Contract(COLLATERAL_MANAGER_ADDRESS, COLLATERAL_MANAGER_ABI, signer);
+
+            try {
+                console.log(`Approving ${amount} ${selectedMarket === "currency" ? "SDAI" : "GNO"} for collateral manager...`);
+                const approveTx = await tokenContract.approve(COLLATERAL_MANAGER_ADDRESS, amountWei);
+                await approveTx.wait();
+                console.log("Approval successful");
+
+                console.log("Adding collateral...");
+                const addTx = await collateralManager.splitPosition(baseTokenAddress, amountWei);
+                await addTx.wait();
+                console.log("Collateral added successfully");
+                fetchAmounts(); // Refresh balances
+                fetchPrices(); // Refresh prices
+            } catch (error) {
+                console.error("Error adding collateral:", error);
+                alert("Failed to add collateral");
+            }
+        }
+
+        // Remove collateral
+        async function removeCollateral() {
+            if (!isConnected) {
+                alert("Please connect your wallet first!");
+                return;
+            }
+            const amount = document.getElementById("input-amount").value;
+            if (!amount || amount <= 0) {
+                alert("Please enter a valid amount");
+                return;
+            }
+
+            const amountWei = ethers.utils.parseUnits(amount, 18);
+            const baseTokenAddress = selectedMarket === "currency" ? SDAI_ADDRESS : GNO_ADDRESS;
+            const yesTokenAddress = selectedMarket === "currency" ? YES_SDAI_ADDRESS : YES_GNO_ADDRESS;
+            const noTokenAddress = selectedMarket === "currency" ? NO_SDAI_ADDRESS : NO_GNO_ADDRESS;
+            const yesToken = new ethers.Contract(yesTokenAddress, ERC20_ABI, signer);
+            const noToken = new ethers.Contract(noTokenAddress, ERC20_ABI, signer);
+            const collateralManager = new ethers.Contract(COLLATERAL_MANAGER_ADDRESS, COLLATERAL_MANAGER_ABI, signer);
+
+            try {
+                console.log(`Approving ${amount} YES_${selectedMarket === "currency" ? "SDAI" : "GNO"}...`);
+                const yesApproveTx = await yesToken.approve(COLLATERAL_MANAGER_ADDRESS, amountWei);
+                await yesApproveTx.wait();
+
+                console.log(`Approving ${amount} NO_${selectedMarket === "currency" ? "SDAI" : "GNO"}...`);
+                const noApproveTx = await noToken.approve(COLLATERAL_MANAGER_ADDRESS, amountWei);
+                await noApproveTx.wait();
+
+                console.log("Removing collateral...");
+                const removeTx = await collateralManager.mergePositions(baseTokenAddress, amountWei);
+                await removeTx.wait();
+                console.log("Collateral removed successfully");
+                fetchAmounts(); // Refresh balances
+                fetchPrices(); // Refresh prices
+            } catch (error) {
+                console.error("Error removing collateral:", error);
+                alert("Failed to remove collateral");
+            }
+        }
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            checkConnection();
+            document.getElementById('connect-wallet').addEventListener('click', toggleConnection);
+            document.getElementById('refresh-prices').addEventListener('click', fetchPrices);
+            document.getElementById('mode').addEventListener('change', (e) => { mode = e.target.value; fetchAmounts(); });
+            document.getElementById('market-type').addEventListener('change', (e) => { selectedMarket = e.target.value; fetchAmounts(); });
+            if (window.ethereum) {
+                window.ethereum.on('accountsChanged', (accounts) => {
+                    if (accounts.length > 0) connectWallet();
+                    else disconnectWallet();
+                });
+            }
+            fetchPrices(); // Initial price fetch
+        });
+    </script>
+</body>
+</html>

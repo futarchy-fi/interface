@@ -1,0 +1,20 @@
+{
+  "totalPools": 2,
+  "successful": 0,
+  "failed": 2,
+  "skipped": 0,
+  "poolResults": [
+    {
+      "poolName": "NO_GNO / NO_sDAI",
+      "poolAddress": "0x39991F6e6D692F6c93C6AC17049c1Ab814E7217b",
+      "status": "failed",
+      "error": "Processing failed"
+    },
+    {
+      "poolName": "YES_GNO / sDAI",
+      "poolAddress": "0x3aB62B25aD733752C59a535C2a628fDca44E14BC",
+      "status": "failed",
+      "error": "Processing failed"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "experimental-sdk-v2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "mocha tests/*.test.js",
+    "start": "node index.js",
+    "interactive": "node index.js interactive",
+    "verify": "node index.js verify",
+    "help": "node index.js --help"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "boxen": "^8.0.1",
+    "chalk": "^5.6.2",
+    "cli-table3": "^0.6.5",
+    "commander": "^14.0.2",
+    "dotenv": "^17.2.3",
+    "ethers": "^6.16.0",
+    "figlet": "^1.9.4",
+    "gradient-string": "^3.0.0",
+    "graphql-request": "^7.4.0",
+    "inquirer": "^13.2.0",
+    "node-fetch": "^3.3.2",
+    "ora": "^9.0.0"
+  },
+  "devDependencies": {
+    "chai": "^6.2.2",
+    "mocha": "^11.7.5"
+  }
+}

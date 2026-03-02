@@ -1,0 +1,28 @@
+{
+  "chainId": 1,
+  "amm": "uniswap",
+  "proposalAddress": "0x1F54f0312E85c5AFACe2bDF15AA2514BeFDB844F",
+  "marketName": "Will Starbucks CEO Brian Niccol be terminated or resign before 2026-01-01 00:00 UTC? Outcomes: 'Yes' (fired/resigned) or 'No' (still CEO). If unresolved by 2026-01-01 23:59 UTC, it resolves to 'No'.",
+  "description": "Will Starbucks CEO Brian Niccol be terminated or resign before 2026-01-01 00:00 UTC? Outcomes: 'Yes' (fired/resigned) or 'No' (still CEO). If unresolved by 2026-01-01 23:59 UTC, it resolves to 'No'.",
+  "openingTime": 1760101712,
+  "display_text_1": "What will the impact on SBUX price be",
+  "display_text_2": "if Brian Niccol is fired?",
+  "companyToken": {
+    "symbol": "SBUX",
+    "address": "0xf15FbC1349ab99ABAd63db3f9A510BF413bE3BeF"
+  },
+  "currencyToken": {
+    "symbol": "USDS",
+    "address": "0xdc035d45d973e3ec169d2276ddab16f1e407384f"
+  },
+  "spotPrice": 79.83,
+  "eventProbability": 0.10,
+  "impact": 0.001,
+  "liquidityAmounts": [0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
+  "forceAddLiquidity": [],
+  "adapterAddress": "0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc",
+  "companyId": "12",
+  "feeTier": 500,
+  "category": "0",
+  "language": "en_US"
+}

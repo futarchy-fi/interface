@@ -1,0 +1,178 @@
+[
+  {
+    "companyName": "Aave DAO",
+    "description": "Earn, borrow, save, and swap.",
+    "metadata": "{\"ticker\":\"\",\"logoUrl\":\"https://nvhqdqtlsdboctqjcelq.supabase.co/storage/v1/object/public/market-images/company-logos/1766411438470_tlj5q.webp\",\"backgroundImage\":\"/assets/gnosis-company-bg.png\",\"website\":\"https://gnosis.io\",\"colors\":{\"primary\":\"#B6509E\"},\"supabaseId\":15}",
+    "metadataURI": "",
+    "_ref": {
+      "supabaseId": 15,
+      "status": "private",
+      "currencyToken": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+      "rawMetadata": {
+        "colors": {
+          "primary": "#B6509E"
+        },
+        "website": "https://gnosis.io",
+        "min_liquidity": {
+          "sdai": 80000
+        },
+        "background_image": "/assets/gnosis-company-bg.png",
+        "currency_token_name": "USDS",
+        "company_token_symbol": "AAVE",
+        "company_token_address": "0x9c58bacc331c9aa871afd802db6379a98e80cedb",
+        "currency_token_symbol": "SDAI",
+        "currency_token_address": "0xaf204776c7245bf4147c2612bf6e5972ee483701"
+      }
+    }
+  },
+  {
+    "companyName": "Futarchy",
+    "description": "Futarchy internal company",
+    "metadata": "{\"ticker\":\"\",\"logoUrl\":\"\",\"backgroundImage\":\"\",\"website\":\"\",\"colors\":{},\"supabaseId\":1000}",
+    "metadataURI": "",
+    "_ref": {
+      "supabaseId": 1000,
+      "status": "private",
+      "currencyToken": "GNO",
+      "rawMetadata": {
+        "min_liquidity": {
+          "sdai": 1000
+        }
+      }
+    }
+  },
+  {
+    "companyName": "Gnosis DAO",
+    "description": "Gnosis builds innovative projects in payments, identity, and internet freedom, driving change and shaping the future of decentralized technology.",
+    "metadata": "{\"ticker\":\"\",\"logoUrl\":\"/assets/gnosis-dao-logo.png\",\"backgroundImage\":\"/assets/gnosis-company-bg.png\",\"website\":\"https://gnosis.io\",\"colors\":{\"primary\":\"#00A89D\"},\"supabaseId\":9}",
+    "metadataURI": "",
+    "_ref": {
+      "supabaseId": 9,
+      "status": "public",
+      "currencyToken": "GNO",
+      "rawMetadata": {
+        "colors": {
+          "primary": "#00A89D"
+        },
+        "website": "https://gnosis.io",
+        "min_liquidity": {
+          "sdai": 80000
+        },
+        "background_image": "/assets/gnosis-company-bg.png",
+        "currency_token_name": "SDAI",
+        "company_token_symbol": "GNO",
+        "company_token_address": "0x9c58bacc331c9aa871afd802db6379a98e80cedb",
+        "currency_token_symbol": "SDAI",
+        "currency_token_address": "0xaf204776c7245bf4147c2612bf6e5972ee483701"
+      }
+    }
+  },
+  {
+    "companyName": "Kleros DAO",
+    "description": "Kleros DAO",
+    "metadata": "{\"ticker\":\"\",\"logoUrl\":\"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQyIR2uIantnjRlVbeUGiDe35Pcg6ku-lgLcw&s\",\"backgroundImage\":\"https://kleros.io/static/open-graph-card-ec90c20e2e4b2b3aa0cd0bce9fc31787.png\",\"website\":\"https://kleros.io\",\"colors\":{\"primary\":\"#9013FE\"},\"supabaseId\":10}",
+    "metadataURI": "",
+    "_ref": {
+      "supabaseId": 10,
+      "status": "public",
+      "currencyToken": "PNK",
+      "rawMetadata": {
+        "colors": {
+          "primary": "#9013FE"
+        },
+        "website": "https://kleros.io",
+        "min_liquidity": {
+          "sdai": 80000
+        },
+        "background_image": "https://kleros.io/static/open-graph-card-ec90c20e2e4b2b3aa0cd0bce9fc31787.png"
+      }
+    }
+  },
+  {
+    "companyName": "Starbucks(Ondo SBUXon)",
+    "description": "Tokenized Starbucks exposure issued by Ondo Global Markets; tracks SBUX performance with dividends reinvested for eligible non-US participants.\n",
+    "metadata": "{\"ticker\":\"\",\"logoUrl\":\"https://futarchy-assets.s3.eu-north-1.amazonaws.com/Starbucks_logo.svg\",\"backgroundImage\":\"https://futarchy-assets.s3.eu-north-1.amazonaws.com/Starbuck_background.png\",\"website\":\"https://starbucks.com\",\"colors\":{\"primary\":\"#00704A\"},\"supabaseId\":12}",
+    "metadataURI": "",
+    "_ref": {
+      "supabaseId": 12,
+      "status": "private",
+      "currencyToken": "SBUX",
+      "rawMetadata": {
+        "colors": {
+          "primary": "#00704A"
+        },
+        "website": "https://starbucks.com",
+        "min_liquidity": {
+          "sdai": 1000
+        },
+        "background_image": "https://futarchy-assets.s3.eu-north-1.amazonaws.com/Starbuck_background.png"
+      }
+    }
+  },
+  {
+    "companyName": "Tesla (Ondo TSLAon)",
+    "description": "Tokenized Tesla exposure issued by Ondo Global Markets; tracks TSLA performance with dividends reinvested for eligible non-US participants.",
+    "metadata": "{\"ticker\":\"\",\"logoUrl\":\"https://futarchy-assets.s3.eu-north-1.amazonaws.com/tesla.svg\",\"backgroundImage\":\"https://worktheater.com/wp-content/uploads/2023/03/Tesla-business-model.png\",\"website\":\"https://tesla.com\",\"colors\":{\"primary\":\"#E31937\"},\"supabaseId\":11}",
+    "metadataURI": "",
+    "_ref": {
+      "supabaseId": 11,
+      "status": "public",
+      "currencyToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "rawMetadata": {
+        "colors": {
+          "primary": "#E31937"
+        },
+        "website": "https://tesla.com",
+        "min_liquidity": {
+          "sdai": 1000
+        },
+        "background_image": "https://worktheater.com/wp-content/uploads/2023/03/Tesla-business-model.png"
+      }
+    }
+  },
+  {
+    "companyName": "Uive",
+    "description": "Auuuuuu",
+    "metadata": "{\"ticker\":\"\",\"logoUrl\":\"\",\"backgroundImage\":\"\",\"website\":\"\",\"colors\":{},\"supabaseId\":14}",
+    "metadataURI": "",
+    "_ref": {
+      "supabaseId": 14,
+      "status": null,
+      "currencyToken": "QVR",
+      "rawMetadata": {
+        "uive": 69,
+        "ligma": 999999999,
+        "auuuuu": 44444,
+        "parent": {
+          "child": {
+            "grandchild": ""
+          }
+        },
+        "min_liquidity": {
+          "sdai": 1000
+        }
+      }
+    }
+  },
+  {
+    "companyName": "VeloraDAO",
+    "description": "VeloraDAO oversees Velora, an intent-based trading protocol for decentralized finance that enables crosschain swaps with one-click gasless trading. Built for high-performance crypto trading and composable finance, Velora uses a decentralized agent-based architecture to provide advanced features such as limit orders, Super Hooks, and real-time execution. The protocol aims to drive DeFi participation by offering secure, intelligent, and optimized trading solutions; the VLR token supports governance and staking.",
+    "metadata": "{\"ticker\":\"\",\"logoUrl\":\"https://s2.coinmarketcap.com/static/img/coins/200x200/36629.png\",\"backgroundImage\":\"https://pbs.twimg.com/media/GzgREDlWMAAa3hz.jpg\",\"website\":\"https://www.velora.xyz\",\"colors\":{\"primary\":\"#FF5A3E\"},\"supabaseId\":13}",
+    "metadataURI": "",
+    "_ref": {
+      "supabaseId": 13,
+      "status": "public",
+      "currencyToken": "VLR",
+      "rawMetadata": {
+        "colors": {
+          "primary": "#FF5A3E"
+        },
+        "website": "https://www.velora.xyz",
+        "min_liquidity": {
+          "sdai": 1000
+        },
+        "background_image": "https://pbs.twimg.com/media/GzgREDlWMAAa3hz.jpg"
+      }
+    }
+  }
+]

@@ -1,0 +1,110 @@
+{
+  "data": {
+    "__type": {
+      "name": "Proposal",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "ID",
+              "kind": "SCALAR"
+            }
+          }
+        },
+        {
+          "name": "marketName",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "companyToken",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "WhitelistedToken",
+              "kind": "OBJECT"
+            }
+          }
+        },
+        {
+          "name": "currencyToken",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "WhitelistedToken",
+              "kind": "OBJECT"
+            }
+          }
+        },
+        {
+          "name": "pools",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": null,
+              "kind": "LIST"
+            }
+          }
+        },
+        {
+          "name": "outcomeTokens",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": null,
+              "kind": "LIST"
+            }
+          }
+        }
+      ]
+    },
+    "OrganizationType": null,
+    "QueryType": {
+      "fields": [
+        {
+          "name": "whitelistedToken"
+        },
+        {
+          "name": "whitelistedTokens"
+        },
+        {
+          "name": "proposal"
+        },
+        {
+          "name": "proposals"
+        },
+        {
+          "name": "pool"
+        },
+        {
+          "name": "pools"
+        },
+        {
+          "name": "candle"
+        },
+        {
+          "name": "candles"
+        },
+        {
+          "name": "swap"
+        },
+        {
+          "name": "swaps"
+        },
+        {
+          "name": "_meta"
+        }
+      ]
+    }
+  }
+}

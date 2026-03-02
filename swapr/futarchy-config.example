@@ -1,0 +1,36 @@
+# Futarchy Pool Setup Configuration
+# Copy this file and modify the values for your specific proposal
+
+# PROPOSAL ADDRESS: Either provide an existing proposal address OR leave empty to create new
+# - To use existing proposal: PROPOSAL_ADDRESS=0x1234567890123456789012345678901234567890
+# - To create new proposal: PROPOSAL_ADDRESS= (leave empty)
+PROPOSAL_ADDRESS=
+
+# MARKET NAME: Used when creating a new proposal (only if PROPOSAL_ADDRESS is empty)
+# Example: "Should we implement feature X?" or "Should we integrate with protocol Y?"
+MARKET_NAME=Should we implement automatic Futarchy pool setup?
+
+# OPENING TIME: Unix timestamp for when the proposal opens for voting (only if PROPOSAL_ADDRESS is empty)
+# Example: 1753027200 = January 1, 2025. Use https://www.unixtimestamp.com/ to convert dates
+# If not specified, defaults to 3 months from now
+OPENING_TIME=1753027200
+
+# The current spot price of the company token in terms of the currency token
+# Example: If 1 GNO = 119.77 sDAI, set this to 119.77
+SPOT_PRICE=119.77
+
+# Initial probability of the 'YES' outcome (0.0 to 1.0)
+# Example: 0.5 means 50% probability
+EVENT_PROBABILITY=0.5
+
+# Expected positive impact percentage on company token price if proposal passes
+# Example: 10 means 10% price impact
+IMPACT=10
+
+# Default amount of liquidity to add to each pool (in the quote token)
+# Example: 1000 means 1000 units of the currency token (e.g., 1000 sDAI)
+LIQUIDITY_DEFAULT=1000
+
+# OPTIONAL: Address of the Futarchy conditional token adapter contract
+# If not specified, uses the default adapter address
+ADAPTER_ADDRESS=0x7495a583ba85875d59407781b4958ED6e0E1228f 

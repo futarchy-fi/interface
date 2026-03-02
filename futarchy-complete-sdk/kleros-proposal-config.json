@@ -1,0 +1,23 @@
+{
+  "chainId": 100,
+  "marketName": "Will KIP-86 (Exclude PNK held by the Kleros Cooperative from KIP-66) be approved?",
+  "companyTokenAddress": "0x37b60f4E9A31A64cCc0024dce7D0fD07eAA0F7B3",
+  "currencyTokenAddress": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+  "category": "governance",
+  "language": "en",
+  "minBond": "1000000000000000000",
+  "openingTime": 1771869136,
+  "metadata": {
+    "displayNameQuestion": "What is the impact on PNK token price if KIP-86 is approved?",
+    "displayNameEvent": "KIP-86",
+    "description": "Will KIP-86 (Exclude PNK held by the Kleros Cooperative from KIP-66) be approved ('Yes') or rejected ('No') by Kleros Governance? If proposal is not approved by the end of March 2026, results as ('No').",
+    "display_main": 1,
+    "display_price": 4,
+    "display_amount": 6,
+    "display_balance": 4,
+    "display_default": 4,
+    "display_swapPrice": 4,
+    "display_percentage": 1,
+    "display_smallNumbers": 8
+  }
+}

@@ -1,0 +1,34 @@
+{
+    "chainId": 1,
+    "proposalAddress": "0x4e018f1D8b93B91a0Ce186874eDb53CB6fFfCa62",
+    "amm": "uniswap",
+    "marketName": "Will VeloraDAO approve and execute PIP-XX: Deploy liquidity into Liquity v2 VLR pool before 2026-02-01 00:00 UTC?",
+    "openingTime": 1769904000,
+    "display_text_1": "What will the impact on VLR price be",
+    "display_text_2": "if 'PIP-XX: Deploy liquidity into Liquity v2 VLR pool' is approved?",
+    "companyToken": {
+        "symbol": "VLR",
+        "address": "0x4e107a0000DB66f0E9Fd2039288Bf811dD1f9c74"
+    },
+    "currencyToken": {
+        "symbol": "USDS",
+        "address": "0xdc035d45d973e3ec169d2276ddab16f1e407384f"
+    },
+    "spotPrice": 0.003869,
+    "eventProbability": 0.5,
+    "impact": 0,
+    "liquidityAmounts": [
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001
+    ],
+    "forceAddLiquidity": [],
+    "adapterAddress": "0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc",
+    "companyId": "11",
+    "feeTier": 500,
+    "category": "0",
+    "language": "en_US"
+}

@@ -1,0 +1,62 @@
+{
+  "id": "0x781df62F78A8636049A644eeedbC490d67C40cFf",
+  "title": "Will TEST_GIP pass",
+  "type": "proposal",
+  "proposal_markdown": "Will TEST_GIP pass",
+  "metadata": {
+    "chain": 100,
+    "title": "Will TEST_GIP pass",
+    "marketName": "Will TEST_GIP pass",
+    "companyTokens": {
+      "base": {
+        "tokenName": "GNO",
+        "tokenSymbol": "GNO",
+        "wrappedCollateralTokenAddress": "0x9c58bacc331c9aa871afd802db6379a98e80cedb"
+      },
+      "yes": {
+        "tokenName": "YES_GNO",
+        "tokenSymbol": "YES_GNO",
+        "wrappedCollateralTokenAddress": "0x10c4c00c290c243dc7058c6ea7011614e98c1af3"
+      },
+      "no": {
+        "tokenName": "NO_GNO",
+        "tokenSymbol": "NO_GNO",
+        "wrappedCollateralTokenAddress": "0x315d52669cbc78080650503c145905fa2d550878"
+      }
+    },
+    "currencyTokens": {
+      "base": {
+        "tokenName": "sDAI",
+        "tokenSymbol": "sDAI",
+        "wrappedCollateralTokenAddress": "0xaf204776c7245bf4147c2612bf6e5972ee483701"
+      },
+      "yes": {
+        "tokenName": "YES_sDAI",
+        "tokenSymbol": "YES_sDAI",
+        "wrappedCollateralTokenAddress": "0x7510a32d03b25380ddf95fe980ef62932bf352fc"
+      },
+      "no": {
+        "tokenName": "NO_sDAI",
+        "tokenSymbol": "NO_sDAI",
+        "wrappedCollateralTokenAddress": "0xd4b343cefba2b9afac4fec54e849c8f46a7de17f"
+      }
+    },
+    "factoryAddress": "0xa6cB18FCDC17a2B44E5cAd2d80a6D5942d30a345",
+    "routerAddress": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+    "futarchyAdapter": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+    "proposalAddress": "0x781df62F78A8636049A644eeedbC490d67C40cFf",
+    "conditional_pools": {
+      "yes": null,
+      "no": null
+    },
+    "prediction_pools": {
+      "yes": null,
+      "no": null
+    }
+  },
+  "event_status": "open",
+  "visibility": "public",
+  "resolution_status": "open",
+  "resolution_outcome": null,
+  "expiration_time": null
+}

@@ -1,0 +1,32 @@
+{
+  "hops": [
+    {
+      "hop": "GNO/WXDAI",
+      "pool": "GNO / WXDAI",
+      "address": "0x0f9d54d9ee044220a3925f9b97509811924fd269",
+      "dex": "sushiswap_xdai",
+      "tvl": "26228.2142",
+      "price": 138.78760524379,
+      "timestamp": "2026-01-24T09:00:00.000Z"
+    },
+    {
+      "hop": "WXDAI/USDC",
+      "pool": "USDC / WXDAI / USDT",
+      "address": "0x7f90122bf0700f9e7e1f688fe926940e8839f353",
+      "dex": "curve-gnosis",
+      "tvl": "1364488.4316",
+      "price": 0.999915439733962,
+      "timestamp": "2026-01-24T09:00:00.000Z"
+    },
+    {
+      "hop": "USDC/sDAI",
+      "pool": "USDC.e / sDAI 0.01%",
+      "address": "0x5a2fb66e66b2af7f1c2f71c6c695492faab2e587",
+      "dex": "oku-trade-gnosis",
+      "tvl": "2072145.0532",
+      "price": 0.817883111604191,
+      "timestamp": "2026-01-24T09:00:00.000Z"
+    }
+  ],
+  "composite": 113.50243982071707
+}

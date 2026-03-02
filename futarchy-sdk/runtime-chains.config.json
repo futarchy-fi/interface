@@ -1,0 +1,88 @@
+{
+  "defaultChain": 100,
+  "chains": {
+    "100": {
+      "name": "Gnosis Chain",
+      "rpcUrl": "https://rpc.gnosischain.com",
+      "amm": "swapr",
+      "futarchyRouter": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+      "conditionalTokens": "0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce",
+      "sdaiRate": { "enabled": true },
+      "algebraFactory": "0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766",
+      "gasConfig": {
+        "minPriorityFeeGwei": "1",
+        "maxFeeGwei": "50",
+        "gasLimits": {
+          "split": 1500000,
+          "merge": 1500000,
+          "swap": 500000,
+          "approve": 100000
+        }
+      },
+      "uniswap": {
+        "router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+        "nfpm": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+        "factory": "0x1F98431c8aD98523631AE4a59F267346ea31F984"
+      }
+    },
+    "137": {
+      "name": "Polygon",
+      "rpcUrl": "https://polygon-rpc.com",
+      "amm": "uniswap",
+      "futarchyRouter": "0x11a1EA07a47519d9900242e1b30a529ECD65588a",
+      "conditionalTokens": null,
+      "sdaiRate": { "enabled": false },
+      "gasConfig": {
+        "minPriorityFeeGwei": "30",
+        "maxFeeGwei": "500",
+        "gasLimits": {
+          "split": 1500000,
+          "merge": 1500000,
+          "swap": 500000,
+          "approve": 100000
+        }
+      },
+      "uniswap": {
+        "nfpm": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+        "factory": "0x1F98431c8aD98523631AE4a59F267346ea31F984",
+        "universalRouter": "0x1095692a6237d83c6a72f3f5efedb9a670c49223",
+        "quoterV4": "0xb3d5c3dfc3a7aebff71895a7191796bffc2c81b9",
+        "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+        "poolManager": "0x67366782805870060151383f4bbff9dab53e5cd6"
+      }
+    },
+    "1": {
+      "name": "Ethereum Mainnet",
+      "rpcUrl": "https://ethereum.publicnode.com",
+      "amm": "uniswap",
+      "futarchyRouter": "0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc",
+      "conditionalTokens": "null",
+      "sdaiRate": { "enabled": false },
+      "gasConfig": {
+        "minPriorityFeeGwei": "0.04",
+        "maxFeeGwei": "150",
+        "gasLimits": {
+          "split": 1000000,
+          "merge": 1500000,
+          "swap": 350000,
+          "approve": 100000
+        }
+      },
+      "uniswap": {
+        "nfpm": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+        "factory": "0x1F98431c8aD98523631AE4a59F267346ea31F984",
+        "universalRouter": "0x66a9893cc07d91d95644aedd05d03f95e1dba8af",
+        "quoterV2": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+        "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+        "poolManager": "0x000000000004444c5dc75cB358380D2e3dE08A90"
+     
+      },
+      "tokens": {
+        "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "DAI": "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+      }
+    }
+  }
+}

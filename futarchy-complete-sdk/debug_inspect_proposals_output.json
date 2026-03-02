@@ -1,0 +1,46 @@
+{
+  "data": {
+    "proposals": [
+      {
+        "id": "0xfd0454ccf8304e7b30e45913da656bd28dd69101",
+        "marketName": "TEST2: GIP-140 via Orchestrator",
+        "companyToken": {
+          "id": "0x9c58bacc331c9aa871afd802db6379a98e80cedb",
+          "symbol": "GNO"
+        }
+      },
+      {
+        "id": "0xfc94f0fbbb798c0f1898e36948ce51f48e0472f4",
+        "marketName": "Will futarchy exist in 2032",
+        "companyToken": {
+          "id": "0x9c58bacc331c9aa871afd802db6379a98e80cedb",
+          "symbol": "GNO"
+        }
+      },
+      {
+        "id": "0xfc57fe22ff6e6465ef36fc89c7f2e1ffe5ed32e0",
+        "marketName": "Will Circle deploy native USDC on Gnosis Chain on or before December 31 2025?",
+        "companyToken": {
+          "id": "0x9c58bacc331c9aa871afd802db6379a98e80cedb",
+          "symbol": "GNO"
+        }
+      },
+      {
+        "id": "0xfb9b967879043cf34b88ef975697c96cc614ba9d",
+        "marketName": "NEW: GIP-140 Revamp Snapshot voting strategies be apporved",
+        "companyToken": {
+          "id": "0x9c58bacc331c9aa871afd802db6379a98e80cedb",
+          "symbol": "GNO"
+        }
+      },
+      {
+        "id": "0xfaff531b1ff214c7cb82b23fb5147f675b8346ba",
+        "marketName": "Will GNO price be at or above 130 sDAI (Savings xDAI) at December 28, 2025 11:59 PM?",
+        "companyToken": {
+          "id": "0x9c58bacc331c9aa871afd802db6379a98e80cedb",
+          "symbol": "GNO"
+        }
+      }
+    ]
+  }
+}

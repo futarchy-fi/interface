@@ -1,0 +1,93 @@
+{
+  "proposalAddress": "0x07bc7d07Bd68002Dacd25Fdb3c904a4f1Ec95290",
+  "futarchyAdapterAddress": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+  "algebraPositionManager": "0x91fd594c46d8b01e62dbdebed2401dde01817834",
+  "settings": {
+    "spotPrice": 100,
+    "initialEventProbability": 0.55,
+    "expectedImpactPercentage": 5
+  },
+  "baseTokens": {
+    "companyToken": {
+      "symbol": "GNO",
+      "address": "0x9c58bacc331c9aa871afd802db6379a98e80cedb"
+    },
+    "currencyToken": {
+      "symbol": "sDAI",
+      "address": "0xaf204776c7245bf4147c2612bf6e5972ee483701"
+    }
+  },
+  "conditionalTokensResolved": {
+    "YES_COMPANY": {
+      "symbol": "YES_GNO",
+      "address": "0x718be32688b615c2eb24560371ef332b892f69d8"
+    },
+    "NO_COMPANY": {
+      "symbol": "NO_GNO",
+      "address": "0x72c185710775f307c9da20424910a1d3d27b8be0"
+    },
+    "YES_CURRENCY": {
+      "symbol": "YES_sDAI",
+      "address": "0x78d2c7da671fd4275836932a3b213b01177c6628"
+    },
+    "NO_CURRENCY": {
+      "symbol": "NO_sDAI",
+      "address": "0x4d67f9302cde3c4640a99f0908fdf6f32d3ddfb6"
+    }
+  },
+  "createdPools": [
+    {
+      "type": "Price-Correlated Conditional",
+      "name": "YES_GNO / YES_sDAI",
+      "address": "0x4fF34E270CA54944955b2F595CeC4CF53BDc9e0c",
+      "token0": "0x718be32688b615c2eb24560371ef332b892f69d8",
+      "token1": "0x78d2c7da671fd4275836932a3b213b01177c6628",
+      "price": 102.25000000255625
+    },
+    {
+      "type": "Price-Correlated Conditional",
+      "name": "NO_GNO / NO_sDAI",
+      "address": "0x817b01261f9d356922f6Ec18dd342a0cB83e3CD7",
+      "token0": "0x72c185710775f307c9da20424910a1d3d27b8be0",
+      "token1": "0x4d67f9302cde3c4640a99f0908fdf6f32d3ddfb6",
+      "price": 97.25000009092876
+    },
+    {
+      "type": "YES Expected Value",
+      "name": "YES_GNO / sDAI",
+      "address": "0x4bB0F6A792960AD1073621b90336F26d18B85f3c",
+      "token0": "0x718be32688b615c2eb24560371ef332b892f69d8",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "price": 55.000000005500006,
+      "probability": 0.550000000055
+    },
+    {
+      "type": "NO Expected Value",
+      "name": "NO_GNO / sDAI",
+      "address": "0xb253Ff2eFAf6c0b6f5b2884F24f997c813840A29",
+      "token0": "0x72c185710775f307c9da20424910a1d3d27b8be0",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "price": 45.0000000045,
+      "probability": 0.450000000045
+    },
+    {
+      "type": "Prediction Market (Currency vs Base)",
+      "name": "YES_sDAI / sDAI",
+      "address": "0x624E023c892BbB4EB09F6DDC89d1F8Cb10C771F2",
+      "token0": "0x78d2c7da671fd4275836932a3b213b01177c6628",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "price": 0.5,
+      "probability": 0.5,
+      "highlight": true
+    },
+    {
+      "type": "Prediction Market (Currency vs Base)",
+      "name": "NO_sDAI / sDAI",
+      "address": "0x4e75fdcF93f8A2Be55c175ff1a7C0a816a77D5C6",
+      "token0": "0x4d67f9302cde3c4640a99f0908fdf6f32d3ddfb6",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "price": 0.5,
+      "probability": 0.5
+    }
+  ]
+}

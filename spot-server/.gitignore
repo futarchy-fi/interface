@@ -1,0 +1,4 @@
+# Database files
+db/data.sqlite
+db/data.sqlite-wal
+db/data.sqlite-shm

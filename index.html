@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Futarchy YES/NO Pools Candlestick Chart</title>
+  <script
+    src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+      min-height: 100vh;
+      color: #e0e0e0;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #00d4aa 0%, #7c3aed 50%, #ec4899 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 12px;
+    }
+
+    .subtitle {
+      color: #8b8b9e;
+      font-size: 0.95rem;
+      max-width: 800px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .proposal-info {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      backdrop-filter: blur(10px);
+    }
+
+    .proposal-info .label {
+      font-size: 0.75rem;
+      color: #6b6b7e;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .proposal-info .market-name {
+      font-size: 0.9rem;
+      color: #b0b0c0;
+      line-height: 1.5;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .toggle-group {
+      display: flex;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .toggle-btn {
+      padding: 10px 20px;
+      border: none;
+      background: transparent;
+      color: #8b8b9e;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toggle-btn:hover {
+      color: #fff;
+    }
+
+    .toggle-btn.active {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .toggle-btn.yes.active {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(16, 185, 129, 0.1));
+      color: #10b981;
+    }
+
+    .toggle-btn.no.active {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.1));
+      color: #ef4444;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .dot.yes {
+      background: #10b981;
+    }
+
+    .dot.no {
+      background: #ef4444;
+    }
+
+    .chart-container {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chart-container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.5), transparent);
+    }
+
+    #chart {
+      width: 100%;
+      height: 500px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .stat-card.yes {
+      border-left: 3px solid #10b981;
+    }
+
+    .stat-card.no {
+      border-left: 3px solid #ef4444;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: #6b6b7e;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .stat-value.yes {
+      color: #10b981;
+    }
+
+    .stat-value.no {
+      color: #ef4444;
+    }
+
+    .stat-subtext {
+      font-size: 0.8rem;
+      color: #6b6b7e;
+      margin-top: 4px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.875rem;
+      color: #8b8b9e;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    .legend-color.yes-up {
+      background: #10b981;
+    }
+
+    .legend-color.yes-down {
+      background: #065f46;
+    }
+
+    .legend-color.no-up {
+      background: #ef4444;
+    }
+
+    .legend-color.no-down {
+      background: #7f1d1d;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 500px;
+      color: #8b8b9e;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #7c3aed;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 16px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: #6b6b7e;
+      font-size: 0.8rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      margin-top: 32px;
+    }
+
+    footer a {
+      color: #7c3aed;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>Futarchy Prediction Market</h1>
+      <p class="subtitle">Real-time candlestick visualization of YES/NO outcome pool prices</p>
+    </header>
+
+    <div class="proposal-info" id="proposalInfo">
+      <div class="label">Proposal</div>
+      <div class="market-name" id="marketName">Loading...</div>
+    </div>
+
+    <div class="controls">
+      <div class="toggle-group">
+        <button class="toggle-btn yes active" onclick="togglePool('YES')">
+          <span class="dot yes"></span>
+          YES Pool
+        </button>
+        <button class="toggle-btn no active" onclick="togglePool('NO')">
+          <span class="dot no"></span>
+          NO Pool
+        </button>
+      </div>
+      <div class="toggle-group">
+        <button class="toggle-btn chart-type active" id="candlesBtn" onclick="setChartType('candles')">
+          📊 Candles
+        </button>
+        <button class="toggle-btn chart-type" id="linesBtn" onclick="setChartType('lines')">
+          📈 Lines (Close)
+        </button>
+      </div>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+      <!-- Stats will be populated dynamically -->
+    </div>
+
+    <div class="chart-container">
+      <div id="chart">
+        <div class="loading">
+          <div class="spinner"></div>
+          Loading chart data...
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-color yes-up"></div>
+        YES Bullish
+      </div>
+      <div class="legend-item">
+        <div class="legend-color yes-down"></div>
+        YES Bearish
+      </div>
+      <div class="legend-item">
+        <div class="legend-color no-up"></div>
+        NO Bullish
+      </div>
+      <div class="legend-item">
+        <div class="legend-color no-down"></div>
+        NO Bearish
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>Powered by <a href="https://futarchy.fi" target="_blank">Futarchy.fi</a> • Data from Algebra DEX Subgraph</p>
+  </footer>
+
+  <script>
+    let chart;
+    let yesSeries;
+    let noSeries;
+    let chartData = null;
+    let showYes = true;
+    let showNo = true;
+
+    // Load and parse the chart data
+    async function loadChartData() {
+      try {
+        const response = await fetch('chart.json');
+        chartData = await response.json();
+        initChart();
+      } catch (error) {
+        console.error('Error loading chart data:', error);
+        document.getElementById('chart').innerHTML = `
+                    <div class="loading" style="color: #ef4444;">
+                        Error loading chart data. Make sure chart.json exists.
+                    </div>
+                `;
+      }
+    }
+
+    function initChart() {
+      const container = document.getElementById('chart');
+      container.innerHTML = '';
+
+      // Create chart
+      chart = LightweightCharts.createChart(container, {
+        layout: {
+          background: { type: 'solid', color: 'transparent' },
+          textColor: '#8b8b9e',
+          fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
+        },
+        grid: {
+          vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
+          horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        },
+        crosshair: {
+          mode: LightweightCharts.CrosshairMode.Normal,
+          vertLine: {
+            color: 'rgba(124, 58, 237, 0.5)',
+            width: 1,
+            style: LightweightCharts.LineStyle.Dashed,
+          },
+          horzLine: {
+            color: 'rgba(124, 58, 237, 0.5)',
+            width: 1,
+            style: LightweightCharts.LineStyle.Dashed,
+          },
+        },
+        timeScale: {
+          borderColor: 'rgba(255, 255, 255, 0.1)',
+          timeVisible: true,
+          secondsVisible: false,
+        },
+        rightPriceScale: {
+          borderColor: 'rgba(255, 255, 255, 0.1)',
+        },
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+        },
+        handleScale: {
+          mouseWheel: true,
+          pinch: true,
+        },
+      });
+
+      // Find YES and NO pools
+      const yesPool = chartData.data.pools.find(p => p.outcomeSide === 'YES');
+      const noPool = chartData.data.pools.find(p => p.outcomeSide === 'NO');
+
+      // Update proposal info
+      if (yesPool && yesPool.proposal) {
+        document.getElementById('marketName').textContent = yesPool.proposal.marketName;
+      }
+
+      // Create YES candlestick series
+      if (yesPool) {
+        yesSeries = chart.addCandlestickSeries({
+          upColor: '#10b981',
+          downColor: '#065f46',
+          borderUpColor: '#10b981',
+          borderDownColor: '#065f46',
+          wickUpColor: '#10b981',
+          wickDownColor: '#065f46',
+          title: 'YES',
+        });
+
+        const yesData = processCandles(yesPool.candles);
+        yesSeries.setData(yesData);
+      }
+
+      // Create NO candlestick series
+      if (noPool) {
+        noSeries = chart.addCandlestickSeries({
+          upColor: '#ef4444',
+          downColor: '#7f1d1d',
+          borderUpColor: '#ef4444',
+          borderDownColor: '#7f1d1d',
+          wickUpColor: '#ef4444',
+          wickDownColor: '#7f1d1d',
+          title: 'NO',
+        });
+
+        const noData = processCandles(noPool.candles);
+        noSeries.setData(noData);
+      }
+
+      // Fit content
+      chart.timeScale().fitContent();
+
+      // Update stats
+      updateStats(yesPool, noPool);
+
+      // Handle resize
+      window.addEventListener('resize', () => {
+        chart.applyOptions({
+          width: container.clientWidth,
+        });
+      });
+    }
+
+    function processCandles(candles) {
+      // Create a map to deduplicate candles by timestamp
+      const candleMap = new Map();
+
+      candles.forEach(candle => {
+        const time = parseInt(candle.periodStartUnix);
+        if (!candleMap.has(time)) {
+          candleMap.set(time, {
+            time: time,
+            open: parseFloat(candle.open),
+            high: parseFloat(candle.high),
+            low: parseFloat(candle.low),
+            close: parseFloat(candle.close),
+          });
+        }
+      });
+
+      // Convert to array and sort by time
+      return Array.from(candleMap.values())
+        .sort((a, b) => a.time - b.time);
+    }
+
+    function togglePool(pool) {
+      const btn = document.querySelector(`.toggle-btn.${pool.toLowerCase()}`);
+
+      if (pool === 'YES') {
+        showYes = !showYes;
+        btn.classList.toggle('active', showYes);
+        if (yesSeries) {
+          yesSeries.applyOptions({
+            visible: showYes,
+          });
+        }
+      } else {
+        showNo = !showNo;
+        btn.classList.toggle('active', showNo);
+        if (noSeries) {
+          noSeries.applyOptions({
+            visible: showNo,
+          });
+        }
+      }
+    }
+
+    function updateStats(yesPool, noPool) {
+      const statsGrid = document.getElementById('statsGrid');
+      let html = '';
+
+      if (yesPool) {
+        const yesCandles = processCandles(yesPool.candles);
+        const yesLatest = yesCandles[yesCandles.length - 1];
+        const yesFirst = yesCandles[0];
+        const yesHigh = Math.max(...yesCandles.map(c => c.high));
+        const yesLow = Math.min(...yesCandles.map(c => c.low));
+        const yesChange = ((yesLatest.close - yesFirst.open) / yesFirst.open * 100).toFixed(2);
+
+        html += `
+                    <div class="stat-card yes">
+                        <div class="stat-label">YES Current Price</div>
+                        <div class="stat-value yes">${yesLatest.close.toFixed(4)}</div>
+                        <div class="stat-subtext">${yesChange >= 0 ? '+' : ''}${yesChange}% all time</div>
+                    </div>
+                    <div class="stat-card yes">
+                        <div class="stat-label">YES High / Low</div>
+                        <div class="stat-value">${yesHigh.toFixed(4)}</div>
+                        <div class="stat-subtext">Low: ${yesLow.toFixed(4)}</div>
+                    </div>
+                `;
+      }
+
+      if (noPool) {
+        const noCandles = processCandles(noPool.candles);
+        const noLatest = noCandles[noCandles.length - 1];
+        const noFirst = noCandles[0];
+        const noHigh = Math.max(...noCandles.map(c => c.high));
+        const noLow = Math.min(...noCandles.map(c => c.low));
+        const noChange = ((noLatest.close - noFirst.open) / noFirst.open * 100).toFixed(2);
+
+        html += `
+                    <div class="stat-card no">
+                        <div class="stat-label">NO Current Price</div>
+                        <div class="stat-value no">${noLatest.close.toFixed(4)}</div>
+                        <div class="stat-subtext">${noChange >= 0 ? '+' : ''}${noChange}% all time</div>
+                    </div>
+                    <div class="stat-card no">
+                        <div class="stat-label">NO High / Low</div>
+                        <div class="stat-value">${noHigh.toFixed(4)}</div>
+                        <div class="stat-subtext">Low: ${noLow.toFixed(4)}</div>
+                    </div>
+                `;
+      }
+
+      statsGrid.innerHTML = html;
+    }
+
+    // Initialize
+    loadChartData();
+  </script>
+</body>
+
+</html>

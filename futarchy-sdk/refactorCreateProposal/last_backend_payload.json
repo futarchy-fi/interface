@@ -1,0 +1,141 @@
+CALL 1
+{
+  "address": "0x4641461cF8562432Ee67004851E0C3f1d17d7e4c",
+  "type": "uniswapv3",
+  "proposal_address": "0xCac65Fd48420e736f963a40313090A693fB3Db68",
+  "metadata": {
+    "name": "YES_VLR / YES_USDS",
+    "chain": 1,
+    "pools": [
+      {
+        "reserves": {
+          "token0": "0",
+          "token1": "0"
+        },
+        "volume7d": 0,
+        "volume24h": 0
+      }
+    ],
+    "title": "Will 'PIP-75 - Fund request from a user claiming losses due to the March 2024 AugustusV6 vulnerability' be approved ('Yes') or rejected ('No') by VeloraDAO?",
+    "impact": 0.0001,
+    "token0": "0xac784024F4A8d1749A45A515b9007b2e39061866",
+    "token1": "0xE6DD9f06262b87A21B73a63062752f6a3c836F48",
+    "reality": {
+      "questionText": "Will 'PIP-75 - Fund request from a user claiming losses due to the March 2024 AugustusV6 vulnerability' be approved ('Yes') or rejected ('No') by VeloraDAO?"
+    },
+    "outcomes": [
+      "Yes",
+      "No"
+    ],
+    "proposal": {
+      "creator": "0x645A3D9208523bbFEE980f7269ac72C61Dd3b552",
+      "creationTimestamp": 1766068880
+    },
+    "routerV2": "0x00",
+    "routerV3": "0x00",
+    "spotPool": "0x00",
+    "analytics": {
+      "offChain": {
+        "clicks": 0,
+        "pageViews": 0
+      }
+    },
+    "companyId": 11,
+    "spotPrice": 0.003897,
+    "marketName": "Will 'PIP-75 - Fund request from a user claiming losses due to the March 2024 AugustusV6 vulnerability' be approved ('Yes') or rejected ('No') by VeloraDAO?",
+    "questionId": "0x00",
+    "conditionId": "0x00",
+    "description": "Will 'PIP-75 - Fund request from a user claiming losses due to the March 2024 AugustusV6 vulnerability' be approved ('Yes') or rejected ('No') by VeloraDAO?",
+    "numOutcomes": 2,
+    "openingTime": 1766494800,
+    "questionLink": "",
+    "companyTokens": {
+      "no": {
+        "tokenName": "NO_VLR",
+        "tokenSymbol": "NO_VLR",
+        "wrappedCollateralTokenAddress": "0xC5F648c5492C7fAF9a4Bd533565E55b5ef48707E"
+      },
+      "yes": {
+        "tokenName": "YES_VLR",
+        "tokenSymbol": "YES_VLR",
+        "wrappedCollateralTokenAddress": "0xac784024F4A8d1749A45A515b9007b2e39061866"
+      },
+      "base": {
+        "tokenName": "VLR",
+        "tokenSymbol": "VLR",
+        "wrappedCollateralTokenAddress": "0x4e107a0000DB66f0E9Fd2039288Bf811dD1f9c74"
+      }
+    },
+    "contractInfos": {
+      "futarchy": {
+        "router": "0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc"
+      }
+    },
+    "routerAddress": "0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc",
+    "currencyTokens": {
+      "no": {
+        "tokenName": "NO_USDS",
+        "tokenSymbol": "NO_USDS",
+        "wrappedCollateralTokenAddress": "0x51d927d04E54a183eD853f2f8b5B4b9a52cb6dFa"
+      },
+      "yes": {
+        "tokenName": "YES_USDS",
+        "tokenSymbol": "YES_USDS",
+        "wrappedCollateralTokenAddress": "0xE6DD9f06262b87A21B73a63062752f6a3c836F48"
+      },
+      "base": {
+        "tokenName": "USDS",
+        "tokenSymbol": "USDS",
+        "wrappedCollateralTokenAddress": "0xdc035d45d973e3ec169d2276ddab16f1e407384f"
+      }
+    },
+    "factoryAddress": "0x...",
+    "display_title_0": "What will the impact on VLR price be",
+    "display_title_1": "if PIP-75 is approved?",
+    "futarchyAdapter": "0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc",
+    "proposalAddress": "0xCac65Fd48420e736f963a40313090A693fB3Db68",
+    "background_image": "",
+    "eventProbability": 0.5,
+    "prediction_pools": {
+      "no": {
+        "address": "0x9C7276f8350CC68d6fFC3920c617c917151539f6",
+        "tokenBaseSlot": 1
+      },
+      "yes": {
+        "address": "0xa9a6FEc22637bC086e8Db37aC03ce827D16FdCE1",
+        "tokenBaseSlot": 0
+      }
+    },
+    "conditional_pools": {
+      "no": {
+        "address": "0x4c6F8FDC7a1191b0E1c4cEacaf77bED6C4014715",
+        "tokenCompanySlot": 1
+      },
+      "yes": {
+        "address": "0x4641461cF8562432Ee67004851E0C3f1d17d7e4c",
+        "tokenCompanySlot": 0
+      }
+    }
+  },
+  "company_id": 11,
+  "chain_id": 1
+}
+CALL 2
+
+{
+  "address": "0x4c6F8FDC7a1191b0E1c4cEacaf77bED6C4014715",
+  "type": "uniswapv3",
+  "proposal_address": "0xCac65Fd48420e736f963a40313090A693fB3Db68",
+  "metadata": null,
+  "company_id": 11,
+  "chain_id": 1
+}
+CALL 3
+{
+  "address": "0x2F39362aab5d8dBaDa08AF59CC575F7fc08230A6",
+  "type": "uniswapv3",
+  "proposal_address": "0xCac65Fd48420e736f963a40313090A693fB3Db68",
+  "metadata": null,
+  "company_id": 11,
+  "chain_id": 1
+}

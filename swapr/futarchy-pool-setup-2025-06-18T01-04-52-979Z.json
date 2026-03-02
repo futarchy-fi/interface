@@ -1,0 +1,237 @@
+{
+  "proposalAddress": "0x89aFA5848a9BCC224B8F00690eAE657886Ff0102",
+  "futarchyAdapterAddress": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
+  "algebraPositionManager": "0x91fd594c46d8b01e62dbdebed2401dde01817834",
+  "settings": {
+    "spotPrice": 94,
+    "initialEventProbability": 0.45,
+    "expectedImpactPercentage": 6
+  },
+  "baseTokens": {
+    "companyToken": {
+      "symbol": "GNO",
+      "address": "0x9c58bacc331c9aa871afd802db6379a98e80cedb"
+    },
+    "currencyToken": {
+      "symbol": "sDAI",
+      "address": "0xaf204776c7245bf4147c2612bf6e5972ee483701"
+    }
+  },
+  "conditionalTokensResolved": {
+    "YES_COMPANY": {
+      "symbol": "YES_GNO",
+      "address": "0x9dfeafa0e74dabbb895d5a4ac7981582f3b4e750"
+    },
+    "NO_COMPANY": {
+      "symbol": "NO_GNO",
+      "address": "0xdaf7fb7268609a320dc27933f49a5b2af3f20133"
+    },
+    "YES_CURRENCY": {
+      "symbol": "YES_sDAI",
+      "address": "0x617d327af140e5827b975eeaa0b7ebe8636030f3"
+    },
+    "NO_CURRENCY": {
+      "symbol": "NO_sDAI",
+      "address": "0xef535c86490fdc82183d9d55813c8d68359eee87"
+    }
+  },
+  "createdPools": [
+    {
+      "type": "Price-Correlated Conditional",
+      "name": "YES_GNO / YES_sDAI",
+      "address": "0xabC492c842DE65afCB1325796F0D9F5FbF42F079",
+      "token0": "0x9dfeafa0e74dabbb895d5a4ac7981582f3b4e750",
+      "token1": "0x617d327af140e5827b975eeaa0b7ebe8636030f3",
+      "price": 97.1020000053983
+    },
+    {
+      "logicalPair": "YES_GNO / YES_sDAI",
+      "type": "Price-Correlated Conditional",
+      "poolAddress": "0xabC492c842DE65afCB1325796F0D9F5FbF42F079",
+      "ammToken0": {
+        "symbol": "YES_GNO",
+        "address": "0x9dfeafa0e74dabbb895d5a4ac7981582f3b4e750"
+      },
+      "ammToken1": {
+        "symbol": "YES_sDAI",
+        "address": "0x617d327af140e5827b975eeaa0b7ebe8636030f3"
+      },
+      "initialPriceSet": "1 YES_GNO = 97.102000 YES_sDAI",
+      "depositedLiquidity": {
+        "token0": {
+          "symbol": "YES_GNO",
+          "amount": "1.029844905299999893"
+        },
+        "token1": {
+          "symbol": "YES_sDAI",
+          "amount": "100.0"
+        }
+      }
+    },
+    {
+      "type": "Price-Correlated Conditional",
+      "name": "NO_GNO / NO_sDAI",
+      "address": "0x1aeFc9B8eC6bD5BEdA6cf3fb33483Ae86F11383D",
+      "token0": "0xdaf7fb7268609a320dc27933f49a5b2af3f20133",
+      "token1": "0xef535c86490fdc82183d9d55813c8d68359eee87",
+      "price": 91.46200000143082
+    },
+    {
+      "logicalPair": "NO_GNO / NO_sDAI",
+      "type": "Price-Correlated Conditional",
+      "poolAddress": "0x1aeFc9B8eC6bD5BEdA6cf3fb33483Ae86F11383D",
+      "ammToken0": {
+        "symbol": "NO_GNO",
+        "address": "0xdaf7fb7268609a320dc27933f49a5b2af3f20133"
+      },
+      "ammToken1": {
+        "symbol": "NO_sDAI",
+        "address": "0xef535c86490fdc82183d9d55813c8d68359eee87"
+      },
+      "initialPriceSet": "1 NO_GNO = 91.462000 NO_sDAI",
+      "depositedLiquidity": {
+        "token0": {
+          "symbol": "NO_GNO",
+          "amount": "1.093350243800000005"
+        },
+        "token1": {
+          "symbol": "NO_sDAI",
+          "amount": "100.0"
+        }
+      }
+    },
+    {
+      "type": "YES Expected Value",
+      "name": "YES_GNO / sDAI",
+      "address": "0xc7f83cE09207c5cF67f13be22a5c417a69246E6C",
+      "token0": "0x9dfeafa0e74dabbb895d5a4ac7981582f3b4e750",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "price": 42.30000000095598,
+      "probability": 0.45000000001017004
+    },
+    {
+      "logicalPair": "YES_GNO / sDAI",
+      "type": "YES Expected Value",
+      "poolAddress": "0xc7f83cE09207c5cF67f13be22a5c417a69246E6C",
+      "ammToken0": {
+        "symbol": "YES_GNO",
+        "address": "0x9dfeafa0e74dabbb895d5a4ac7981582f3b4e750"
+      },
+      "ammToken1": {
+        "symbol": "sDAI",
+        "address": "0xaf204776c7245bf4147c2612bf6e5972ee483701"
+      },
+      "initialPriceSet": "1 YES_GNO = 42.300000 sDAI",
+      "depositedLiquidity": {
+        "token0": {
+          "symbol": "YES_GNO",
+          "amount": "1.182033096899999949"
+        },
+        "token1": {
+          "symbol": "sDAI",
+          "amount": "50.0"
+        }
+      }
+    },
+    {
+      "type": "NO Expected Value",
+      "name": "NO_GNO / sDAI",
+      "address": "0x40728af5d1f1Be25b0de9E3dB5f27934Ac795b7e",
+      "token0": "0xdaf7fb7268609a320dc27933f49a5b2af3f20133",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "price": 0.019342359767,
+      "probability": 0.00020576978475531917
+    },
+    {
+      "logicalPair": "NO_GNO / sDAI",
+      "type": "NO Expected Value",
+      "poolAddress": "0x40728af5d1f1Be25b0de9E3dB5f27934Ac795b7e",
+      "ammToken0": {
+        "symbol": "NO_GNO",
+        "address": "0xdaf7fb7268609a320dc27933f49a5b2af3f20133"
+      },
+      "ammToken1": {
+        "symbol": "sDAI",
+        "address": "0xaf204776c7245bf4147c2612bf6e5972ee483701"
+      },
+      "initialPriceSet": "1 NO_GNO = 0.019342 sDAI",
+      "depositedLiquidity": {
+        "token0": {
+          "symbol": "NO_GNO",
+          "amount": "2585.000000119168500005"
+        },
+        "token1": {
+          "symbol": "sDAI",
+          "amount": "50.0"
+        }
+      }
+    },
+    {
+      "type": "Prediction Market (Currency vs Base)",
+      "name": "YES_sDAI / sDAI",
+      "address": "0x83B0CB95AC5Dfa57fe38498Fdc57B4910DD5026C",
+      "token0": "0x617d327af140e5827b975eeaa0b7ebe8636030f3",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "price": 0.5,
+      "probability": 0.5,
+      "highlight": true
+    },
+    {
+      "logicalPair": "YES_sDAI / sDAI",
+      "type": "Prediction Market (Currency vs Base)",
+      "poolAddress": "0x83B0CB95AC5Dfa57fe38498Fdc57B4910DD5026C",
+      "ammToken0": {
+        "symbol": "YES_sDAI",
+        "address": "0x617d327af140e5827b975eeaa0b7ebe8636030f3"
+      },
+      "ammToken1": {
+        "symbol": "sDAI",
+        "address": "0xaf204776c7245bf4147c2612bf6e5972ee483701"
+      },
+      "initialPriceSet": "1 YES_sDAI = 0.450000 sDAI",
+      "depositedLiquidity": {
+        "token0": {
+          "symbol": "YES_sDAI",
+          "amount": "111.111111111100001975"
+        },
+        "token1": {
+          "symbol": "sDAI",
+          "amount": "50.0"
+        }
+      }
+    },
+    {
+      "type": "Prediction Market (Currency vs Base)",
+      "name": "NO_sDAI / sDAI",
+      "address": "0xB460eFC630917695567D1746704b17A85FAD834E",
+      "token0": "0xef535c86490fdc82183d9d55813c8d68359eee87",
+      "token1": "0xaf204776c7245bf4147c2612bf6e5972ee483701",
+      "price": 0.5,
+      "probability": 0.5
+    },
+    {
+      "logicalPair": "NO_sDAI / sDAI",
+      "type": "Prediction Market (Currency vs Base)",
+      "poolAddress": "0xB460eFC630917695567D1746704b17A85FAD834E",
+      "ammToken0": {
+        "symbol": "NO_sDAI",
+        "address": "0xef535c86490fdc82183d9d55813c8d68359eee87"
+      },
+      "ammToken1": {
+        "symbol": "sDAI",
+        "address": "0xaf204776c7245bf4147c2612bf6e5972ee483701"
+      },
+      "initialPriceSet": "1 NO_sDAI = 0.550000 sDAI",
+      "depositedLiquidity": {
+        "token0": {
+          "symbol": "NO_sDAI",
+          "amount": "90.909090909050001983"
+        },
+        "token1": {
+          "symbol": "sDAI",
+          "amount": "50.0"
+        }
+      }
+    }
+  ]
+}

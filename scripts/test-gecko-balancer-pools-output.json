@@ -1,0 +1,42 @@
+{
+  "pools": [
+    {
+      "hop": "GNO/WXDAI",
+      "balancerPoolId": "0x8189c4c96826d016a99986394103dfa9ae41e7ee0002000000000000000000aa",
+      "address": "0x8189c4c96826d016a99986394103dfa9ae41e7ee",
+      "geckoName": "GNO / WXDAI 0.1%",
+      "dex": "balancer-gnosis",
+      "found": true
+    },
+    {
+      "hop": "WXDAI/USDC",
+      "balancerPoolId": "0x2086f52651837600180de173b09470f54ef7491000000000000000000000004f",
+      "address": "0x2086f52651837600180de173b09470f54ef74910",
+      "geckoName": "staBAL3 / USDT / USDC / WXDAI 0.005%",
+      "dex": "balancer-gnosis",
+      "found": true
+    },
+    {
+      "hop": "USDC/sDAI",
+      "balancerPoolId": "0x7644fa5d0ea14fcf3e813fdf93ca9544f8567655000000000000000000000066",
+      "address": "0x7644fa5d0ea14fcf3e813fdf93ca9544f8567655",
+      "geckoName": "USDT / sBAL3 / sDAI / USDC 0.01%",
+      "dex": "balancer-gnosis",
+      "found": true
+    }
+  ],
+  "tickers": [
+    {
+      "hop": "GNO/WXDAI",
+      "ticker": "0x8189c4c96826d016a99986394103dfa9ae41e7ee-hour-500-xdai"
+    },
+    {
+      "hop": "WXDAI/USDC",
+      "ticker": "0x2086f52651837600180de173b09470f54ef74910-hour-500-xdai"
+    },
+    {
+      "hop": "USDC/sDAI",
+      "ticker": "0x7644fa5d0ea14fcf3e813fdf93ca9544f8567655-hour-500-xdai"
+    }
+  ]
+}

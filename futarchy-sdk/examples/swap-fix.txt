@@ -1,0 +1,1 @@
+            const swapSpinner = ora('Preparing smart swap...').start();

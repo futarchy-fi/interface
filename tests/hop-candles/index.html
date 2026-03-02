@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GNO/sDAI Multi-Hop Price Chart</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h1 {
+            font-size: 1.5rem;
+            background: linear-gradient(90deg, #00d4aa, #00a8ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hop-path {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+        .hop-token {
+            background: rgba(0, 212, 170, 0.2);
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 212, 170, 0.4);
+            font-weight: 600;
+        }
+        .hop-arrow { color: #666; }
+        .chart-container {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        #chart { width: 100%; height: 500px; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat-label { font-size: 0.8rem; color: #888; margin-bottom: 5px; }
+        .stat-value { font-size: 1.4rem; font-weight: 700; color: #00d4aa; }
+        .stat-value.negative { color: #ff4757; }
+        .pools-info {
+            background: rgba(255,255,255,0.03);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .pools-info h3 { margin-bottom: 15px; font-size: 1rem; color: #888; }
+        .pool-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.85rem;
+        }
+        .pool-row:last-child { border-bottom: none; }
+        .pool-name { color: #00a8ff; }
+        .pool-price { font-family: monospace; }
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 500px;
+            font-size: 1.2rem;
+            color: #666;
+        }
+        .loading::after {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid #00d4aa;
+            border-top-color: transparent;
+            border-radius: 50%;
+            margin-left: 10px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error { color: #ff4757; padding: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 GNO/sDAI Multi-Hop Price</h1>
+            <div class="hop-path">
+                <span class="hop-token">GNO</span>
+                <span class="hop-arrow">→</span>
+                <span class="hop-token">WXDAI</span>
+                <span class="hop-arrow">→</span>
+                <span class="hop-token">USDC</span>
+                <span class="hop-arrow">→</span>
+                <span class="hop-token">sDAI</span>
+            </div>
+        </header>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Current Price</div>
+                <div class="stat-value" id="currentPrice">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">24h Change</div>
+                <div class="stat-value" id="priceChange">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">24h High</div>
+                <div class="stat-value" id="highPrice">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">24h Low</div>
+                <div class="stat-value" id="lowPrice">Loading...</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div id="chart"><div class="loading">Fetching swap data from subgraph</div></div>
+        </div>
+
+        <div class="pools-info">
+            <h3>Pool Prices (Live)</h3>
+            <div class="pool-row">
+                <span class="pool-name">GNO/WXDAI</span>
+                <span class="pool-price" id="price-hop1">--</span>
+            </div>
+            <div class="pool-row">
+                <span class="pool-name">WXDAI/USDC</span>
+                <span class="pool-price" id="price-hop2">--</span>
+            </div>
+            <div class="pool-row">
+                <span class="pool-name">USDC/sDAI</span>
+                <span class="pool-price" id="price-hop3">--</span>
+            </div>
+            <div class="pool-row" style="border-top: 2px solid rgba(0,212,170,0.3); margin-top: 10px; padding-top: 15px;">
+                <span class="pool-name" style="font-weight: 700;">Composite GNO/sDAI</span>
+                <span class="pool-price" id="price-composite" style="color: #00d4aa; font-weight: 700;">--</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        
+        const GRAPH_API_KEY = '1f3de4a47d9dfb2a32e1890f63858fff';
+        const SUBGRAPH_URL = `https://gateway-arbitrum.network.thegraph.com/api/${GRAPH_API_KEY}/subgraphs/id/EJezH1Cp31QkKPaBDerhVPRWsKVZLrDfzjrLqpmv6cGg`;
+        
+        // Multi-hop pools (same as in GnosisFlashArbitrageV3.sol)
+        const HOPS = [
+            {
+                name: 'GNO/WXDAI',
+                poolId: '0x8189c4c96826d016a99986394103dfa9ae41e7ee0002000000000000000000aa',
+                tokenIn: '0x9c58bacc331c9aa871afd802db6379a98e80cedb', // GNO
+                tokenOut: '0xe91d153e0b41518a2ce8dd3d7944fa863463a97d' // WXDAI
+            },
+            {
+                name: 'WXDAI/USDC',
+                poolId: '0x2086f52651837600180de173b09470f54ef7491000000000000000000000004f',
+                tokenIn: '0xe91d153e0b41518a2ce8dd3d7944fa863463a97d', // WXDAI
+                tokenOut: '0xddafbb505ad214d7b80b1f830fccc89b60fb7a83' // USDC
+            },
+            {
+                name: 'USDC/sDAI',
+                poolId: '0x7644fa5d0ea14fcf3e813fdf93ca9544f8567655000000000000000000000066',
+                tokenIn: '0xddafbb505ad214d7b80b1f830fccc89b60fb7a83', // USDC
+                tokenOut: '0xaf204776c7245bf4147c2612bf6e5972ee483701' // sDAI
+            }
+        ];
+
+        // ============================================
+        // SUBGRAPH QUERIES
+        // ============================================
+
+        async function querySubgraph(query, variables = {}) {
+            const response = await fetch(SUBGRAPH_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, variables })
+            });
+            const result = await response.json();
+            if (result.errors) throw new Error(result.errors[0].message);
+            return result.data;
+        }
+
+        async function getPoolSwaps(poolId, fromTimestamp) {
+            const query = `
+                query getSwaps($poolId: String!, $from: Int!) {
+                    swaps(
+                        where: { poolId: $poolId, timestamp_gte: $from }
+                        orderBy: timestamp
+                        orderDirection: asc
+                        first: 1000
+                    ) {
+                        timestamp
+                        tokenIn
+                        tokenOut
+                        tokenAmountIn
+                        tokenAmountOut
+                    }
+                }
+            `;
+            return querySubgraph(query, { poolId, from: fromTimestamp });
+        }
+
+        async function getPoolInfo(poolId) {
+            const query = `
+                query getPool($poolId: ID!) {
+                    pool(id: $poolId) {
+                        tokens { address balance }
+                    }
+                }
+            `;
+            return querySubgraph(query, { poolId });
+        }
+
+        // ============================================
+        // PRICE CALCULATION
+        // ============================================
+
+        function calculateHopPrice(swaps, tokenIn, tokenOut) {
+            // Group swaps by hour and calculate price for each
+            const hourlyPrices = {};
+            
+            for (const swap of swaps) {
+                const hourTs = Math.floor(swap.timestamp / 3600) * 3600;
+                const amtIn = parseFloat(swap.tokenAmountIn);
+                const amtOut = parseFloat(swap.tokenAmountOut);
+                
+                if (amtIn === 0 || amtOut === 0) continue;
+                
+                // Calculate price based on swap direction
+                let price;
+                if (swap.tokenIn.toLowerCase() === tokenIn.toLowerCase()) {
+                    price = amtOut / amtIn; // tokenIn → tokenOut
+                } else if (swap.tokenIn.toLowerCase() === tokenOut.toLowerCase()) {
+                    price = amtIn / amtOut; // tokenOut → tokenIn (inverse)
+                } else {
+                    continue;
+                }
+                
+                if (!hourlyPrices[hourTs]) {
+                    hourlyPrices[hourTs] = { prices: [], first: null, last: null };
+                }
+                hourlyPrices[hourTs].prices.push(price);
+                if (!hourlyPrices[hourTs].first) hourlyPrices[hourTs].first = price;
+                hourlyPrices[hourTs].last = price;
+            }
+            
+            // Build OHLC for each hour
+            const ohlc = {};
+            for (const [ts, data] of Object.entries(hourlyPrices)) {
+                if (data.prices.length === 0) continue;
+                ohlc[ts] = {
+                    open: data.first,
+                    high: Math.max(...data.prices),
+                    low: Math.min(...data.prices),
+                    close: data.last
+                };
+            }
+            return ohlc;
+        }
+
+        function combineHopPrices(hop1, hop2, hop3) {
+            // Get all unique timestamps
+            const allTimestamps = new Set([
+                ...Object.keys(hop1),
+                ...Object.keys(hop2),
+                ...Object.keys(hop3)
+            ]);
+            
+            const combined = [];
+            let prevPrices = { h1: 136, h2: 1, h3: 1.02 }; // Default fallbacks
+            
+            for (const ts of [...allTimestamps].sort()) {
+                const h1 = hop1[ts] || null;
+                const h2 = hop2[ts] || null;
+                const h3 = hop3[ts] || null;
+                
+                // Use previous close if no data for this hour
+                const p1 = h1 ? h1.close : prevPrices.h1;
+                const p2 = h2 ? h2.close : prevPrices.h2;
+                const p3 = h3 ? h3.close : prevPrices.h3;
+                
+                // Calculate composite OHLC
+                const open = (h1?.open || p1) * (h2?.open || p2) * (h3?.open || p3);
+                const high = (h1?.high || p1) * (h2?.high || p2) * (h3?.high || p3);
+                const low = (h1?.low || p1) * (h2?.low || p2) * (h3?.low || p3);
+                const close = p1 * p2 * p3;
+                
+                combined.push({
+                    time: parseInt(ts),
+                    open: parseFloat(open.toFixed(4)),
+                    high: parseFloat(Math.max(open, high, close).toFixed(4)),
+                    low: parseFloat(Math.min(open, low, close).toFixed(4)),
+                    close: parseFloat(close.toFixed(4))
+                });
+                
+                prevPrices = { h1: p1, h2: p2, h3: p3 };
+            }
+            
+            return combined;
+        }
+
+        // ============================================
+        // CHART RENDERING
+        // ============================================
+
+        async function loadAndRenderChart() {
+            try {
+                const now = Math.floor(Date.now() / 1000);
+                const threeDaysAgo = now - (3 * 24 * 60 * 60);
+                
+                // Fetch swaps for all hops in parallel
+                const [swaps1, swaps2, swaps3] = await Promise.all([
+                    getPoolSwaps(HOPS[0].poolId, threeDaysAgo),
+                    getPoolSwaps(HOPS[1].poolId, threeDaysAgo),
+                    getPoolSwaps(HOPS[2].poolId, threeDaysAgo)
+                ]);
+                
+                // Calculate hourly prices for each hop
+                const hop1Prices = calculateHopPrice(swaps1.swaps, HOPS[0].tokenIn, HOPS[0].tokenOut);
+                const hop2Prices = calculateHopPrice(swaps2.swaps, HOPS[1].tokenIn, HOPS[1].tokenOut);
+                const hop3Prices = calculateHopPrice(swaps3.swaps, HOPS[2].tokenIn, HOPS[2].tokenOut);
+                
+                // Combine into composite price
+                const candles = combineHopPrices(hop1Prices, hop2Prices, hop3Prices);
+                
+                if (candles.length === 0) {
+                    document.getElementById('chart').innerHTML = '<div class="error">No swap data found</div>';
+                    return;
+                }
+                
+                // Calculate stats
+                const latest = candles[candles.length - 1];
+                const oldest = candles[0];
+                const priceChange = ((latest.close - oldest.open) / oldest.open * 100).toFixed(2);
+                const high24h = Math.max(...candles.slice(-24).map(c => c.high));
+                const low24h = Math.min(...candles.slice(-24).map(c => c.low));
+                
+                // Update stats
+                document.getElementById('currentPrice').textContent = `${latest.close.toFixed(2)} sDAI`;
+                document.getElementById('priceChange').textContent = `${priceChange > 0 ? '+' : ''}${priceChange}%`;
+                document.getElementById('priceChange').className = `stat-value ${priceChange < 0 ? 'negative' : ''}`;
+                document.getElementById('highPrice').textContent = `${high24h.toFixed(2)} sDAI`;
+                document.getElementById('lowPrice').textContent = `${low24h.toFixed(2)} sDAI`;
+                
+                // Update pool prices
+                const lastH1 = Object.values(hop1Prices).pop();
+                const lastH2 = Object.values(hop2Prices).pop();
+                const lastH3 = Object.values(hop3Prices).pop();
+                document.getElementById('price-hop1').textContent = lastH1 ? `1 GNO = ${lastH1.close.toFixed(4)} WXDAI` : '--';
+                document.getElementById('price-hop2').textContent = lastH2 ? `1 WXDAI = ${lastH2.close.toFixed(6)} USDC` : '--';
+                document.getElementById('price-hop3').textContent = lastH3 ? `1 USDC = ${lastH3.close.toFixed(4)} sDAI` : '--';
+                document.getElementById('price-composite').textContent = `1 GNO = ${latest.close.toFixed(2)} sDAI`;
+
+                // Render chart
+                document.getElementById('chart').innerHTML = '';
+                const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+                    layout: {
+                        background: { type: 'solid', color: 'transparent' },
+                        textColor: '#888'
+                    },
+                    grid: {
+                        vertLines: { color: 'rgba(255,255,255,0.05)' },
+                        horzLines: { color: 'rgba(255,255,255,0.05)' }
+                    },
+                    timeScale: { timeVisible: true, secondsVisible: false },
+                    crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
+                });
+                
+                const candleSeries = chart.addCandlestickSeries({
+                    upColor: '#00d4aa',
+                    downColor: '#ff4757',
+                    borderUpColor: '#00d4aa',
+                    borderDownColor: '#ff4757',
+                    wickUpColor: '#00d4aa',
+                    wickDownColor: '#ff4757'
+                });
+                
+                candleSeries.setData(candles);
+                chart.timeScale().fitContent();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('chart').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        // Initialize
+        loadAndRenderChart();
+        
+        // Refresh every 5 minutes
+        setInterval(loadAndRenderChart, 5 * 60 * 1000);
+    </script>
+</body>
+</html>

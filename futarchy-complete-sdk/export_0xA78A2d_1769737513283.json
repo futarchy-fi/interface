@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "proposal": "0xA78A2d5844c653dAc60dA8A3F9eC958D09A4EE6A",
+  "chainId": 100,
+  "exportedAt": "2026-01-30T01:45:20.542Z",
+  "options": {
+    "candleLimit": 500,
+    "tradeLimit": 100,
+    "startTime": 1769132713,
+    "gapFill": true
+  },
+  "pools": {
+    "yes": null,
+    "no": null
+  },
+  "candles": {
+    "yes": [],
+    "no": []
+  },
+  "trades": [],
+  "tradesError": "No pool addresses provided"
+}

@@ -1,0 +1,45 @@
+[
+  {
+    "msg": "Checking Org: 0x818fdf727aa4672c80bbfd47ee13975080ac40e5"
+  },
+  {
+    "strategy": "Strategy 1 (Org Entity)",
+    "result": {
+      "errors": [
+        {
+          "locations": [
+            {
+              "column": 9,
+              "line": 2
+            }
+          ],
+          "message": "Type `Query` has no field `organization`"
+        }
+      ]
+    }
+  },
+  {
+    "strategy": "Strategy 2 (Owner)",
+    "result": {
+      "errors": [
+        {
+          "locations": [
+            {
+              "column": 13,
+              "line": 5
+            }
+          ],
+          "message": "Type `Proposal` has no field `owner`"
+        }
+      ]
+    }
+  },
+  {
+    "strategy": "Strategy 3 (Company Token)",
+    "result": {
+      "data": {
+        "proposals": []
+      }
+    }
+  }
+]
