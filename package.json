@@ -40,6 +40,8 @@
     "@tanstack/react-query": "^5.62.16",
     "@uiw/react-markdown-preview": "^5.1.4",
     "@uiw/react-md-editor": "^4.0.6",
+    "@uniswap/universal-router-sdk": "^4.32.0",
+    "@uniswap/v4-sdk": "^1.28.0",
     "1155-to-20-helper": "github:xyzseer/1155-to-20-helper",
     "axios": "^1.7.7",
     "chart.js": "^4.4.3",

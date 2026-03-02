@@ -1,9 +1,10 @@
 [build]
-  command = "npm run build"
+  command = "npm install --legacy-peer-deps && npm run build"
   publish = "out"
 
 [build.environment]
   NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
   NEXT_PUBLIC_API_URL = "https://stag.api.tickspread.com"
   NEXT_PUBLIC_API_VERSION = "v1"
   NEXT_PUBLIC_RPC_URL = "https://rpc.gnosischain.com"
@@ -17,11 +18,11 @@
 
 # Deploy previews on PRs
 [context.deploy-preview]
-  command = "npm run build"
+  command = "npm install --legacy-peer-deps && npm run build"
 
 # Branch deploys
 [context.branch-deploy]
-  command = "npm run build"
+  command = "npm install --legacy-peer-deps && npm run build"
 
 # Custom headers
 [[headers]]
