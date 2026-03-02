@@ -99,13 +99,11 @@ const CompaniesPage = ({ useStorybookUrl = false }) => {
     >
       <PageLayout>
         {/* Fire the CEO Section */}
-        <div className="mt-8 md:mt-10">
-          <FireTheCeoPromoBanner />
-        </div>
+        <FireTheCeoPromoBanner />
 
         {/* Active Milestones Section */}
-        <div className="mb-12 mt-8 md:mt-10">
-          <h2 className="mt-16 text-2xl font-semibold text-futarchyGray12 dark:text-white mb-6">
+        <div className="mb-12 mt-4">
+          <h2 className="text-2xl font-semibold text-futarchyGray12 dark:text-white mb-6">
             Active Milestones
           </h2>
           {isEventsCarouselLoading ? (
