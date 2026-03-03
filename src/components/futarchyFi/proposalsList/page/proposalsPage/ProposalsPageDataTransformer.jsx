@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { ethers } from "ethers";
 // POOL_CONFIG_THIRD is now available in useContractConfig
 import { getAlgebraPoolPrice } from '../../../../../utils/getAlgebraPoolPrice';
-import { generateFallbackImage } from '../../../../refactor/utils/imageUtils';
+import { generateFallbackImage } from '../../../../../utils/imageUtils';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co';

@@ -23,9 +23,9 @@ import OrganizationManagerModal from "../../../../debug/OrganizationManagerModal
 const GNOSIS_CHAIN_ID = 100;
 
 const PROPOSAL_IMAGES = {
-  "ethereum-budget": "/assets/ethereum-budget-picture.png",
+  "ethereum-budget": "/assets/ethereum-budget-picture.webp",
   "gnosis-pay": "/assets/gnosis-pay.png",
-  "protocol-upgrade": "/assets/protocol-update-picture.png",
+  "protocol-upgrade": "/assets/protocol-update-picture.webp",
 };
 
 const getImageKey = (proposal) => {

@@ -1,14 +1,11 @@
-// SwapPage.jsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
+// LandingPage.jsx
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import LandingModal from "./LandingModal";
 import ApplicationForm from "../application/ApplicationForm";
 import RootLayout from "../../layout/RootLayout";
 import Link from 'next/link';
-
-// Add this after imports, at "RIGHT HERE":
-const rand = (min, max) => Math.random() * (max - min) + min;
 
 // Dynamic import of TypewriterEffect with ssr disabled
 const TypewriterEffect = dynamic(() => import("react-typewriter-effect"), {
@@ -22,13 +19,13 @@ const getCompaniesUrl = (useStorybookUrl = false) => {
   return '/companies';
 };
 
-const SwapPage = ({ useStorybookUrl = false }) => {
+const LandingPage = ({ useStorybookUrl = false }) => {
   const [showModal, setShowModal] = useState(false);
   const [showApplicationForm, setShowApplicationForm] = useState(false);
   const canvasRef = useRef(null);
   const [isRobinSectionVisible, setIsRobinSectionVisible] = useState(false);
   const robinSectionRef = useRef(null);
-  const [isMobile, setIsMobile] = useState(false);
+
   const [isTextVisible, setIsTextVisible] = useState(false);
 
   useEffect(() => {
@@ -501,15 +498,15 @@ const SwapPage = ({ useStorybookUrl = false }) => {
                   <Image
                     src="/assets/futarchy-logo.svg"
                     alt="Futarchy Icon"
-                    width={isMobile ? 40 : 50}
-                    height={isMobile ? 40 : 50}
+                    width={50}
+                    height={50}
                     priority
                   />
                   <Image
                     src="/assets/futarchy-fi-logo.svg"
                     alt="Futarchy Logo"
-                    width={isMobile ? 160 : 200}
-                    height={isMobile ? 40 : 50}
+                    width={200}
+                    height={50}
                     priority
                   />
                 </div>
@@ -727,7 +724,7 @@ const SwapPage = ({ useStorybookUrl = false }) => {
                         value.
                       </p>
                       <Image
-                        src="/assets/card1-logo.png"
+                        src="/assets/card1-logo.webp"
                         alt="Conditional Markets"
                         width={300}
                         height={150}
@@ -748,7 +745,7 @@ const SwapPage = ({ useStorybookUrl = false }) => {
                         traditional votes.
                       </p>
                       <Image
-                        src="/assets/card2-logo.png"
+                        src="/assets/card2-logo.webp"
                         alt="Buy Sell Shares"
                         width={300}
                         height={150}
@@ -768,7 +765,7 @@ const SwapPage = ({ useStorybookUrl = false }) => {
                         estimates quantify the proposal's potential effect.
                       </p>
                       <Image
-                        src="/assets/card3-logo.png"
+                        src="/assets/card3-logo.webp"
                         alt="Market Prices"
                         width={300}
                         height={150}
@@ -788,7 +785,7 @@ const SwapPage = ({ useStorybookUrl = false }) => {
                         value. Highest predicted value outcome gets implemented.
                       </p>
                       <Image
-                        src="/assets/card4-logo.png"
+                        src="/assets/card4-logo.webp"
                         alt="Shareholder Value"
                         width={300}
                         height={150}
@@ -808,7 +805,7 @@ const SwapPage = ({ useStorybookUrl = false }) => {
                         evolve into a self-enforcing decision-making system.
                       </p>
                       <Image
-                        src="/assets/card5-logo.png"
+                        src="/assets/card5-logo.webp"
                         alt="Advisory System"
                         width={300}
                         height={150}
@@ -957,4 +954,4 @@ const SwapPage = ({ useStorybookUrl = false }) => {
   );
 };
 
-export default SwapPage;
+export default LandingPage;

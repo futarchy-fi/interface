@@ -2,7 +2,7 @@ import axios from "axios";
 // Import the fetchCompanyData function to get actual active milestone count
 import { fetchCompanyData, getAvailableCompanies } from "../../proposalsList/page/proposalsPage/ProposalsPageDataTransformer";
 // Import image utilities for dynamic image handling
-import { getCompanyImage } from "../../../refactor/utils/imageUtils";
+import { getCompanyImage } from "../../../../utils/imageUtils";
 // Import Supabase client
 import { createClient } from '@supabase/supabase-js';
 
@@ -33,7 +33,7 @@ const mockCompanies = [
 
 // ✅ REFACTORED: Removed hardcoded COMPANY_IMAGES constant
 // Images now come from backend 'image' field with smart fallbacks
-// See: src/components/refactor/utils/imageUtils.js for fallback logic
+// See: src/utils/imageUtils.js for fallback logic
 //
 // OLD: const COMPANY_IMAGES = { "gnosis": "/assets/...", ... }
 // NEW: Uses getCompanyImage(companyData) which reads from backend

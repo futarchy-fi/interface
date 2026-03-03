@@ -5,7 +5,6 @@ import { Oxanium, Barlow } from "next/font/google";
 import Head from "next/head";
 import metadata from "../../app/metadata";
 import Providers from "../providers/providers";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { CurrencyProvider } from "../contexts/CurrencyContext";
 import { ThemeProvider } from "../contexts/ThemeContext";
@@ -28,14 +27,6 @@ export default function App({ Component, pageProps }) {
   const isMarketPage = router.pathname.startsWith('/markets') ||
     router.pathname.includes('/market') ||
     router.asPath.startsWith('/markets/');
-
-  const handleConnect = ({ address, connector, isReconnected }) => {
-    console.log('Wallet Connected!', {
-      address,
-      connector: connector?.name,
-      isReconnected
-    });
-  };
 
   return (
     <Providers>

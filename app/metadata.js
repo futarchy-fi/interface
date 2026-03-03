@@ -4,9 +4,9 @@ export default {
   openGraph: {
     title: "Futarchy.fi - Markets Know Better Than Experts",
     description: "It's time we let markets decide. Harness collective intelligence through market mechanisms to guide decision-making in your organization.",
-    url: "https://app.futarchy.fi",
+    url: "https://futarchy.fi",
     siteName: "Futarchy.fi",
-
+    // TODO: Create a 1200x630 OG image at /public/assets/futarchy-fi-og.png
     locale: "en_US",
     type: "website",
   },
@@ -14,6 +14,7 @@ export default {
     card: "summary_large_image",
     title: "Futarchy.fi - Markets Know Better Than Experts",
     description: "It's time we let markets decide. Harness collective intelligence through market mechanisms to guide decision-making in your organization.",
+    // TODO: Add OG image for Twitter card
   },
   icons: {
     icon: "/assets/favicon.ico",

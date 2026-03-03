@@ -1,33 +1,23 @@
 // components/common/Header.jsx
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { WalletIcon } from "../futarchyFi/proposalsList/cards/Resources";
 import HeaderDropdown from "./HeaderDropdown";
-import { useRouter } from "next/router";
 import ThemeToggle from "./ThemeToggle";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useSdaiRate } from "../../hooks/useSdaiRate";
 import { useCurrency } from "../../contexts/CurrencyContext";
-import { mockRecentMarkets } from '../../mocks/mockRecentMarkets';
-import { mockPreviewData as fireCeoMarkets } from '../futarchyFi/companyList/components/FireTheCeoPromoBanner';
 import { useAccount, useSwitchChain, useDisconnect } from 'wagmi';
 import RpcRefreshButton from './RpcRefreshButton';
 
 const Header = ({ config = 'landing' }) => {
-  const [showUSD, setShowUSD] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const { selectedCurrency, setSelectedCurrency, baseTokenSymbol, allowWXDAI } = useCurrency();
-  const router = useRouter();
-  const { rate: sdaiRate, isLoading: isLoadingRate, error: rateError } = useSdaiRate();
   const { isDarkMode } = useTheme();
 
   // Get chain info from wagmi v2
   const { chain, isConnected } = useAccount();
   const { chains, switchChain } = useSwitchChain();
-  const isMainnet = chain?.id === 1;
   const isGnosis = chain?.id === 100;
 
   const navigationOptions = [
@@ -42,12 +32,12 @@ const Header = ({ config = 'landing' }) => {
   const headerConfigs = {
     landing: {
       button: (
-        <button
-          onClick={() => { }}
+        <Link
+          href="/companies"
           className="h-12 border-2 border-black hover:border-black bg-black px-4 py-3 rounded-xl text-base font-semibold text-white hover:bg-white hover:text-black transition-colors shadow-xs dark:border-white dark:bg-white dark:text-black dark:hover:bg-black dark:hover:text-white"
         >
-          <div>Get Early Access</div>
-        </button>
+          Launch App
+        </Link>
       )
     },
     app: {
@@ -142,39 +132,9 @@ const Header = ({ config = 'landing' }) => {
 
   const currentConfig = headerConfigs[config] || headerConfigs['app'];
 
-  // Determine which logo to use. The app header always uses the white text logo.
-  const getLogo = () => {
-    return "/assets/futarchy-fi-logo-text-white.svg";
-  };
-
-  // Mock data for milestone and company
-  const milestoneMarkets = [
-    {
-      title: "What will be the impact on GNO price if this milestone is achieved?",
-      type: "milestone",
-      impact: "+10.3%",
-      endDate: "2025-12-20"
-    }
-  ];
-
-  const companies = [
-    {
-      title: "GnosisDAO",
-      type: "company",
-      description: "Infrastructure & Tools",
-      image: "/assets/gnosis-dao-logo.png"
-    }
-  ];
-
-  const searchData = [
-    ...companies,
-    ...fireCeoMarkets.map(item => ({ title: item.title, type: 'fire_ceo', ...item })),
-    ...milestoneMarkets
-  ];
-
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 ${currentConfig.className || 'bg-futarchyDarkGray2 dark:bg-futarchyDarkGray2'}`}>
-      <div className={`h-20 border-b-2 ${currentConfig.className ? 'border-futarchyDarkGray42 dark:border-futarchyDarkGray42' : 'border-futarchyDarkGray42 dark:border-futarchyDarkGray42'}`}>
+      <div className="h-20 border-b-2 border-futarchyDarkGray42 dark:border-futarchyDarkGray42">
         <div className="container mx-auto px-5 h-full flex items-center justify-between">
           <div className="flex items-center gap-14">
             {/* Logo Section */}
@@ -183,7 +143,7 @@ const Header = ({ config = 'landing' }) => {
               className="flex items-center gap-2 group cursor-pointer"
             >
               <Image
-                src={getLogo()}
+                src="/assets/futarchy-fi-logo-text-white.svg"
                 alt="Futarchy Logo"
                 width={128}
                 height={22}
@@ -196,77 +156,8 @@ const Header = ({ config = 'landing' }) => {
             {currentConfig.additionalElements}
           </div>
 
-          {/* Search Bar */}
-          <div className="flex-1 flex justify-center">
-            <div className="relative w-full max-w-md">
-              <input
-                type="text"
-                placeholder="Search CEO, milestones, companies..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="hidden w-full pl-10 pr-4 py-2 rounded-lg bg-futarchyGray122/20 text-white placeholder-futarchyGray122 focus:outline-none focus:ring-2 focus:ring-futarchyGray122 transition-all"
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setTimeout(() => setIsSearchFocused(false), 100)}
-              />
-              <span className="hidden absolute left-3 top-1/2 -translate-y-1/2 text-futarchyGray122">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-                </svg>
-              </span>
-              {/* Dropdown for combined search results: CEO, milestones, companies */}
-              {(isSearchFocused || searchTerm) && (
-                <div className="absolute left-0 mt-2 w-full bg-futarchyDarkGray2 border border-futarchyGray122/30 rounded-lg shadow-lg z-50">
-                  {(() => {
-                    const filteredResults = searchData.filter(m =>
-                      m.title.toLowerCase().includes(searchTerm.toLowerCase())
-                    );
-
-                    return (
-                      <>
-                        {/* Fire the CEO Section */}
-                        {filteredResults.filter(item => item.type === 'fire_ceo').length > 0 && (
-                          <>
-                            <div className="p-2 text-xs text-futarchyGray122 font-semibold">Fire the CEO</div>
-                            {filteredResults.filter(item => item.type === 'fire_ceo').map((item, idx) => (
-                              <div key={`fireceo-${idx}`} className="flex items-center justify-between gap-2 px-4 py-2 cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg">
-                                <span>{item.title}</span>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                        {/* Milestone Section */}
-                        {filteredResults.filter(item => item.type === 'milestone').length > 0 && (
-                          <>
-                            <div className="p-2 text-xs text-futarchyGray122 font-semibold">Milestone</div>
-                            {filteredResults.filter(item => item.type === 'milestone').map((item, idx) => (
-                              <div key={`milestone-${idx}`} className="flex items-center justify-between gap-2 px-4 py-2 cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg">
-                                <span>{item.title}</span>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                        {/* Company Section */}
-                        {filteredResults.filter(item => item.type === 'company').length > 0 && (
-                          <>
-                            <div className="p-2 text-xs text-futarchyGray122 font-semibold">Company</div>
-                            {filteredResults.filter(item => item.type === 'company').map((item, idx) => (
-                              <div key={`company-${idx}`} className="flex items-center justify-between gap-2 px-4 py-2 cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg">
-                                <span>{item.title}</span>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                        {/* No Results */}
-                        {filteredResults.length === 0 && (
-                          <div className="px-4 py-2 text-futarchyGray122 text-sm">No results found.</div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Spacer */}
+          <div className="flex-1" />
 
           {/* Right side buttons */}
           <div className="flex items-center gap-4">

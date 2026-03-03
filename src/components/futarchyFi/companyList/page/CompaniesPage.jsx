@@ -3,7 +3,7 @@ import { useAccount } from 'wagmi';
 import RootLayout from "../../../layout/RootLayout";
 import { fetchHighlightData } from "./HighlightDataTransformer";
 import { fetchEventHighlightData } from "./EventsHighlightDataTransformer";
-import FireTheCeoPromoBanner from "../components/FireTheCeoPromoBanner";
+
 import CompaniesListCarousel from "../components/CompaniesListCarousel";
 import { OrganizationsTable } from "../table";
 import { useAggregatorCompanies } from "../../../../hooks/useAggregatorCompanies";
@@ -48,7 +48,6 @@ const CompaniesPage = ({ useStorybookUrl = false }) => {
       const aggregator = urlParams.get('useAggregator');
       if (aggregator) {
         setAggregatorAddress(aggregator);
-        console.log('[CompaniesPage] Using aggregator:', aggregator);
       }
     }
   }, []);
@@ -98,9 +97,6 @@ const CompaniesPage = ({ useStorybookUrl = false }) => {
       footerConfig="main"
     >
       <PageLayout>
-        {/* Fire the CEO Section */}
-        <FireTheCeoPromoBanner />
-
         {/* Active Milestones Section */}
         <div className="mb-12 mt-4">
           <h2 className="text-2xl font-semibold text-futarchyGray12 dark:text-white mb-6">
