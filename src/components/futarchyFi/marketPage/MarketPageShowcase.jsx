@@ -4841,16 +4841,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                   }
                   const yes = Number(newYesPrice);
                   const no = Number(newNoPrice);
-                  const spotPriceValue = newBasePrice !== null ? newBasePrice : latestPrices.spotPriceSDAI;
-
-                  let impactValue;
-                  if (hasSpot && spotPriceValue && spotPriceValue > 0) {
-                    impactValue = ((yes - no) / spotPriceValue) * 100;
-                  } else {
-                    // Fallback formula when no spot price: (yes - no) / max(yes, no)
-                    const denominator = Math.max(yes, no);
-                    impactValue = denominator > 0 ? ((yes - no) / denominator) * 100 : 0;
-                  }
+                  const denominator = Math.max(yes, no);
+                  const impactValue = denominator > 0 ? ((yes - no) / denominator) * 100 : 0;
 
                   const prefix = impactValue > 0 ? '+' : '';
                   return `${prefix}${impactValue.toFixed(2)}%`;
@@ -4865,21 +4857,13 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                   }
                   const yes = Number(newYesPrice);
                   const no = Number(newNoPrice);
-                  const spotPriceValue = newBasePrice !== null ? newBasePrice : latestPrices.spotPriceSDAI;
+                  const denominator = Math.max(yes, no);
+                  const impactValue = denominator > 0 ? ((yes - no) / denominator) * 100 : 0;
 
-                  let impactValue = 0;
-                  if (hasSpot && spotPriceValue && spotPriceValue > 0) {
-                    impactValue = ((yes - no) / spotPriceValue) * 100;
-                  } else {
-                    const denominator = Math.max(yes, no);
-                    impactValue = denominator > 0 ? ((yes - no) / denominator) * 100 : 0;
-                  }
-
-                  // Teal/green for positive impact, crimson red for negative
                   return impactValue >= 0 ? 'text-futarchyTeal7' : 'text-futarchyCrimson11';
                 })()}
                 Icon={ImpactIcon}
-                isLoading={newYesPrice === null || newNoPrice === null || latestPrices.loading}
+                isLoading={newYesPrice === null || newNoPrice === null}
               />
 
               <StatDisplay
@@ -5171,10 +5155,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                             <ChartParameters
                               tradingPair={`${config?.BASE_TOKENS_CONFIG?.company?.symbol || DEFAULT_BASE_TOKENS_CONFIG.company.symbol}/${selectedCurrency === 'WXDAI' ? 'xDAI' : currencySymbol}`}
                               spotPrice={(() => {
-                                // Use first available: pool candles base price, Balancer spot, or external (CoinGecko) spot
-                                const raw = newBasePrice ?? latestPrices.spotPriceSDAI ?? finalSpotPrice ?? null;
-                                if (raw === null && latestPrices.loading && !finalSpotPrice) return null; // still loading
-                                const value = Number(raw || 0);
+                                const value = Number(newBasePrice !== null ? newBasePrice : (latestPrices.spotPriceSDAI || 0));
                                 const displayValue = selectedCurrency === 'WXDAI' && sdaiRate && !isLoadingRate && !rateError && sdaiRate > 0
                                   ? value * sdaiRate
                                   : value;
