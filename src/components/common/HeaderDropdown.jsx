@@ -62,7 +62,7 @@ const HeaderDropdown = ({ options, config, onWalletConnectClick, chain, mounted 
       >
         <OpenMenuIcon
           className="w-5 h-5"
-          fill={isDarkMode ? "white" : (isCompaniesSection ? "white" : "white")}
+          fill="white"
         />
       </button>
 

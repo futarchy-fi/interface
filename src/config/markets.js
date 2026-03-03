@@ -299,12 +299,12 @@ export const MARKETS_CONFIG = {
   "0xa28614aa999117C555757D56A8178F271C24d7BA": {
     "title": "What will be the price of GNO if GIP-143 is approved?",
     "description": "Auto-generated pool for futarchy governance norm prediction.",
-    "image": "/assets/gnosis-proposal-1.png",
+    "image": "/assets/gnosis-proposal-1.webp",
     "path": "/markets/0xa28614aa999117C555757D56A8178F271C24d7BA",
     "openGraph": {
       "title": "What will be the price of GNO if GIP-143 is approved? | Futarchy.fi",
       "description": "Auto-generated pool for futarchy governance norm prediction.",
-      "image": "/assets/gnosis-proposal-1.png",
+      "image": "/assets/gnosis-proposal-1.webp",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -312,7 +312,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "What will be the price of GNO if GIP-143 is approved? | Futarchy.fi",
       "description": "Auto-generated pool for futarchy governance norm prediction.",
-      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.png"
+      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.webp"
     },
     "keywords": [
       "futarchy",
@@ -425,12 +425,12 @@ export const MARKETS_CONFIG = {
   "0x7e9Fc0C3d6C1619d4914556ad2dEe6051Ce68418": {
     "title": "What will be the price of GNO if its price is >= 130 sDAI?",
     "description": "Predict whether Gnosis (GNO) will trade at or above 130 sDAI (Savings xDAI) by December 28, 2025, at 11:59 PM. Join the market to forecast GNO’s long-term price movement, stake your opinion with sDAI, and see where traders think GNO is headed.",
-    "image": "/assets/gnosis-proposal-1.png",
+    "image": "/assets/gnosis-proposal-1.webp",
     "path": "/markets/0x7e9Fc0C3d6C1619d4914556ad2dEe6051Ce68418",
     "openGraph": {
       "title": "What will be the price of GNO if its price is >= 130 sDAI? | Futarchy.fi",
       "description": "Predict whether Gnosis (GNO) will trade at or above 130 sDAI (Savings xDAI) by December 28, 2025, at 11:59 PM. Join the market to forecast GNO’s long-term price movement, stake your opinion with sDAI, and see where traders think GNO is headed.",
-      "image": "/assets/gnosis-proposal-1.png",
+      "image": "/assets/gnosis-proposal-1.webp",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -438,7 +438,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "What will be the price of GNO if its price is >= 130 sDAI? | Futarchy.fi",
       "description": "Predict whether Gnosis (GNO) will trade at or above 130 sDAI (Savings xDAI) by December 28, 2025, at 11:59 PM. Join the market to forecast GNO’s long-term price movement, stake your opinion with sDAI, and see where traders think GNO is headed.",
-      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.png"
+      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.webp"
     },
     "keywords": [
       "futarchy",
@@ -470,12 +470,12 @@ export const MARKETS_CONFIG = {
   "0x3f124FA6B58Ee61D1162175A578c588Db9689EF0": {
     "title": "What will the impact on GNO price be if GIP-140 is approved?",
     "description": "Auto-generated pool for futarchy governance norm prediction.",
-    "image": "/assets/gnosis-proposal-1.png",
+    "image": "/assets/gnosis-proposal-1.webp",
     "path": "/markets/0x3f124FA6B58Ee61D1162175A578c588Db9689EF0",
     "openGraph": {
       "title": "What will the impact on GNO price be if GIP-140 is approved? | Futarchy.fi",
       "description": "Auto-generated pool for futarchy governance norm prediction.",
-      "image": "/assets/gnosis-proposal-1.png",
+      "image": "/assets/gnosis-proposal-1.webp",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -483,7 +483,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "What will the impact on GNO price be if GIP-140 is approved? | Futarchy.fi",
       "description": "Auto-generated pool for futarchy governance norm prediction.",
-      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.png"
+      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.webp"
     },
     "keywords": [
       "futarchy",
@@ -515,12 +515,12 @@ export const MARKETS_CONFIG = {
   "0x7D96A3f714782710917f6045441B39483c5Dc60a": {
     "title": "What will the impact on GNO price be if GIP-139 be approved by GnosisDAO?",
     "description": "Auto-generated pool for futarchy governance norm prediction.",
-    "image": "/assets/gnosis-proposal-1.png",
+    "image": "/assets/gnosis-proposal-1.webp",
     "path": "/markets/0x7D96A3f714782710917f6045441B39483c5Dc60a",
     "openGraph": {
       "title": "What will the impact on GNO price be if GIP-139 be approved by GnosisDAO? | Futarchy.fi",
       "description": "Auto-generated pool for futarchy governance norm prediction.",
-      "image": "/assets/gnosis-proposal-1.png",
+      "image": "/assets/gnosis-proposal-1.webp",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -528,7 +528,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "What will the impact on GNO price be if GIP-139 be approved by GnosisDAO? | Futarchy.fi",
       "description": "Auto-generated pool for futarchy governance norm prediction.",
-      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.png"
+      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.webp"
     },
     "keywords": [
       "futarchy",
@@ -902,12 +902,12 @@ export const MARKETS_CONFIG = {
   "0xC5A3Ff432233cceab9b40a568966FcaD54a24BeB": {
     "title": "Futarchy Governance Prediction: GIP-128 GNO Funding Vote",
     "description": "Predict GIP-128’s approval and its effect on GNO price using GNO & sDAI. Shape GnosisDAO policy—trade or participate in this key governance market!",
-    "image": "/assets/gnosis-proposal-1.png",
+    "image": "/assets/gnosis-proposal-1.webp",
     "path": "/markets/0xC5A3Ff432233cceab9b40a568966FcaD54a24BeB",
     "openGraph": {
       "title": "Futarchy Governance Prediction: GIP-128 GNO Funding Vote | Futarchy.fi",
       "description": "Predict GIP-128’s approval and its effect on GNO price using GNO & sDAI. Shape GnosisDAO policy—trade or participate in this key governance market!",
-      "image": "/assets/gnosis-proposal-1.png",
+      "image": "/assets/gnosis-proposal-1.webp",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -915,7 +915,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "Futarchy Governance Prediction: GIP-128 GNO Funding Vote | Futarchy.fi",
       "description": "Predict GIP-128’s approval and its effect on GNO price using GNO & sDAI. Shape GnosisDAO policy—trade or participate in this key governance market!",
-      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.png"
+      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.webp"
     },
     "keywords": [
       "futarchy",
@@ -1082,12 +1082,12 @@ export const MARKETS_CONFIG = {
   "0x3e2176000a869FDDD5A4D58A66513fa834955570": {
     "title": "Futarchy Governance: Predict Gnosis TVL & Policy Impact",
     "description": "Shape Gnosis policy via Futarchy! Trade GNO & sDAI to decide if $400M TVL boosts GNO price. Influence DeFi governance—join the market now.",
-    "image": "/assets/gnosis-proposal-1.png",
+    "image": "/assets/gnosis-proposal-1.webp",
     "path": "/markets/0x3e2176000a869FDDD5A4D58A66513fa834955570",
     "openGraph": {
       "title": "Futarchy Governance: Predict Gnosis TVL & Policy Impact | Futarchy.fi",
       "description": "Shape Gnosis policy via Futarchy! Trade GNO & sDAI to decide if $400M TVL boosts GNO price. Influence DeFi governance—join the market now.",
-      "image": "/assets/gnosis-proposal-1.png",
+      "image": "/assets/gnosis-proposal-1.webp",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -1095,7 +1095,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "Futarchy Governance: Predict Gnosis TVL & Policy Impact | Futarchy.fi",
       "description": "Shape Gnosis policy via Futarchy! Trade GNO & sDAI to decide if $400M TVL boosts GNO price. Influence DeFi governance—join the market now.",
-      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.png"
+      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.webp"
     },
     "keywords": [
       "futarchy",
@@ -1217,12 +1217,12 @@ export const MARKETS_CONFIG = {
   "0xDA36a35CA4Fe6214C37a452159C0C9EAd45D5919": {
     "title": "Futarchy Governance Market: GnosisPay €2M Volume & GNO Impact",
     "description": "Trade GNO or sDAI in this Futarchy market to influence GnosisPay policy. Decide if €2M weekly volume will affect GNO price. Shape governance now!",
-    "image": "/assets/gnosis-proposal-1.png",
+    "image": "/assets/gnosis-proposal-1.webp",
     "path": "/markets/0xDA36a35CA4Fe6214C37a452159C0C9EAd45D5919",
     "openGraph": {
       "title": "Futarchy Governance Market: GnosisPay €2M Volume & GNO Impact | Futarchy.fi",
       "description": "Trade GNO or sDAI in this Futarchy market to influence GnosisPay policy. Decide if €2M weekly volume will affect GNO price. Shape governance now!",
-      "image": "/assets/gnosis-proposal-1.png",
+      "image": "/assets/gnosis-proposal-1.webp",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -1230,7 +1230,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "Futarchy Governance Market: GnosisPay €2M Volume & GNO Impact | Futarchy.fi",
       "description": "Trade GNO or sDAI in this Futarchy market to influence GnosisPay policy. Decide if €2M weekly volume will affect GNO price. Shape governance now!",
-      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.png"
+      "image": "https://app.futarchy.fi/assets/gnosis-proposal-1.webp"
     },
     "keywords": [
       "futarchy",

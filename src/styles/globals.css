@@ -28,37 +28,23 @@ html[data-theme="gradient"] .bg-futarchyDarkGrayBG {
   background: transparent !important;
 }
 
-/* Hide scrollbar for IE, Edge and Firefox */
-.no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+/* Hide scrollbar */
+.no-scrollbar,
+.overflow-y-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-
-.iekbcc0.ju367v75{
-  border-radius: 0.5rem !important;
-}
-.iekbcc0.ju367v8b.ju367v6k.ju367v77.ju367v7q.ju367v9.ju367v6 {
-  display: none !important;
-}
-@keyframes alternate {
-  0%,
-  100% {
-    color: var(--color-primary);
-  }
-  50% {
-    color: var(--color-secondary);
-  }
-}
-
-
-
+.no-scrollbar::-webkit-scrollbar,
 .overflow-y-scroll::-webkit-scrollbar {
   display: none;
 }
 
-.overflow-y-scroll {
-  -ms-overflow-style: none;  /* Internet Explorer 10+ */
-  scrollbar-width: none;  /* Firefox */
+/* RainbowKit overrides */
+.iekbcc0.ju367v75 {
+  border-radius: 0.5rem !important;
+}
+.iekbcc0.ju367v8b.ju367v6k.ju367v77.ju367v7q.ju367v9.ju367v6 {
+  display: none !important;
 }
 
 /* Custom Scrollbar Styling */

@@ -18,16 +18,9 @@ import CollateralModal from "./collateralModal/CollateralModal";
 import { useAccount } from 'wagmi';
 import { ethers } from "ethers";
 import { motion, AnimatePresence } from 'framer-motion';
-import ConditionalMarketIntroModal from './ConditionalMarketIntroModal';
-import FutarchyQuizModal from './FutarchyQuizModal';
+
 import RedeemTokens from "./redeemTokens/RedeemTokens";
 import EditProposalModal from '../../debug/EditProposalModal';
-
-// Set this flag to false to disable the quiz everywhere
-const ENABLE_FUTARCHY_QUIZ = false;
-
-// Set this flag to false to disable spot-based price inversion (backend now handles price adjustments)
-const ENABLE_SPOT_BASED_INVERSION = false;
 
 import ConfirmSwapModal from './ConfirmSwapModal';
 import MarketStatsDebugToast from './MarketStatsDebugToast';
@@ -55,7 +48,7 @@ import {
   WRAPPER_SERVICE_ADDRESS,
   ERC20_ABI
 } from "./constants/contracts";
-import { BASE_TOKENS_CONFIG as DEFAULT_BASE_TOKENS_CONFIG } from "../../refactor/constants/addresses";
+import { BASE_TOKENS_CONFIG as DEFAULT_BASE_TOKENS_CONFIG } from "../../../constants/addresses";
 // Import the new useContractConfig hook
 import { useContractConfig } from "../../../hooks/useContractConfig";
 import { useChainValidation } from "../../../hooks/useChainValidation";
@@ -2134,9 +2127,6 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     // Auto-hide after 10 seconds
     setTimeout(() => setSafeToastVisible(false), 10000);
   }, []);
-  // Modal for conditional market explanation
-  const [showIntroModal, setShowIntroModal] = useState(false);
-  const [showQuizModal, setShowQuizModal] = useState(false);
   const [marketHasClosed, setMarketHasClosed] = useState(false);
   const [isPredictionMarketModalOpen, setIsPredictionMarketModalOpen] = useState(false);
   const [isAddLiquidityModalOpen, setIsAddLiquidityModalOpen] = useState(false);
@@ -2245,34 +2235,6 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     });
   };
 
-
-  useEffect(() => {
-    // Only show if not previously dismissed
-    if (typeof window !== 'undefined') {
-      const hasSeen = localStorage.getItem('hasSeenConditionalMarketIntro');
-      const quizDone = localStorage.getItem('hasCompletedFutarchyQuiz');
-      if (!hasSeen) {
-        setShowIntroModal(true);
-      } else if (ENABLE_FUTARCHY_QUIZ && !quizDone) {
-        setShowQuizModal(true);
-      }
-    }
-  }, []);
-
-  const handleCloseIntroModal = () => {
-    setShowIntroModal(false);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('hasSeenConditionalMarketIntro', 'true');
-      // Show quiz if not already done and quiz is enabled
-      if (ENABLE_FUTARCHY_QUIZ && !localStorage.getItem('hasCompletedFutarchyQuiz')) {
-        setShowQuizModal(true);
-      }
-    }
-  };
-
-  const handleCloseQuizModal = () => {
-    setShowQuizModal(false);
-  };
 
   // Scroll detection for minimized header - DESKTOP ONLY with animation lock
   useEffect(() => {
@@ -2778,31 +2740,6 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
           console.log('[MarketPageShowcase] BASE price from pool_candles:', { raw: rawBasePrice, used: basePrice });
         }
 
-        // Apply spot price-based inversion logic (like TripleChart does)
-        // This ensures YES/NO prices are in the same range as the spot price
-        // NOTE: Event probability (third price) should NOT be inverted based on spot price
-        // NOTE: Backend now handles price adjustments, so this can be disabled via ENABLE_SPOT_BASED_INVERSION flag
-        if (ENABLE_SPOT_BASED_INVERSION && basePrice !== null && yesPrice !== null && noPrice !== null) {
-          // If spot price < 1: invert YES/NO values > 1 to make them < 1
-          // If spot price >= 1: invert YES/NO values < 1 to make them > 1
-          const spotLessThanOne = basePrice < 1;
-
-          // Process YES price
-          if ((spotLessThanOne && yesPrice > 1) || (!spotLessThanOne && yesPrice < 1)) {
-            const invertedYes = 1 / yesPrice;
-            console.log(`[MarketPageShowcase] Inverting YES for spot alignment: ${yesPrice} -> ${invertedYes} (spot: ${basePrice} ${spotLessThanOne ? '< 1' : '>= 1'})`);
-            yesPrice = invertedYes;
-          }
-
-          // Process NO price
-          if ((spotLessThanOne && noPrice > 1) || (!spotLessThanOne && noPrice < 1)) {
-            const invertedNo = 1 / noPrice;
-            console.log(`[MarketPageShowcase] Inverting NO for spot alignment: ${noPrice} -> ${invertedNo} (spot: ${basePrice} ${spotLessThanOne ? '< 1' : '>= 1'})`);
-            noPrice = invertedNo;
-          }
-          // Do NOT invert third price - it's a probability and should remain as-is
-        }
-
         if (isMounted) {
           console.log('[MarketPageShowcase] Fetched prices from Supabase pool_candles:', {
             yesPrice, noPrice, thirdPrice, basePrice,
@@ -2886,29 +2823,10 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
           // Backend now handles token slot inversion, use raw price directly
           let adjustedPrice = newPrice;
 
-          // Apply spot price-based inversion if we have a base price
-          if (ENABLE_SPOT_BASED_INVERSION && newBasePrice !== null && newBasePrice !== undefined) {
-            const spotLessThanOne = newBasePrice < 1;
-            if ((spotLessThanOne && adjustedPrice > 1) || (!spotLessThanOne && adjustedPrice < 1)) {
-              adjustedPrice = 1 / adjustedPrice;
-              console.log(`[MarketPageShowcase] Realtime YES inverted for spot alignment: ${newPrice} -> ${adjustedPrice} (spot: ${newBasePrice})`);
-            }
-          }
-
           setNewYesPrice(adjustedPrice);
-          console.log('[MarketPageShowcase] Realtime YES price updated:', adjustedPrice);
         } else if (poolAddress === config.POOL_CONFIG_NO.address.toLowerCase()) {
           // Backend now handles token slot inversion, use raw price directly
           let adjustedPrice = newPrice;
-
-          // Apply spot price-based inversion if we have a base price
-          if (ENABLE_SPOT_BASED_INVERSION && newBasePrice !== null && newBasePrice !== undefined) {
-            const spotLessThanOne = newBasePrice < 1;
-            if ((spotLessThanOne && adjustedPrice > 1) || (!spotLessThanOne && adjustedPrice < 1)) {
-              adjustedPrice = 1 / adjustedPrice;
-              console.log(`[MarketPageShowcase] Realtime NO inverted for spot alignment: ${newPrice} -> ${adjustedPrice} (spot: ${newBasePrice})`);
-            }
-          }
 
           setNewNoPrice(adjustedPrice);
           console.log('[MarketPageShowcase] Realtime NO price updated:', adjustedPrice);
@@ -2926,32 +2844,6 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
           setNewBasePrice(newPrice);
           console.log('[MarketPageShowcase] Realtime BASE price updated:', newPrice);
 
-          // When base price updates, we might need to re-adjust YES/NO prices
-          // This ensures consistency with the spot price range
-          // NOTE: Only do this if ENABLE_SPOT_BASED_INVERSION is true
-          if (ENABLE_SPOT_BASED_INVERSION && adjustedPrice !== null) {
-            const spotLessThanOne = adjustedPrice < 1;
-
-            // Re-adjust YES price if needed
-            if (newYesPrice !== null) {
-              let reAdjustedYes = newYesPrice;
-              if ((spotLessThanOne && newYesPrice > 1) || (!spotLessThanOne && newYesPrice < 1)) {
-                reAdjustedYes = 1 / newYesPrice;
-                setNewYesPrice(reAdjustedYes);
-                console.log(`[MarketPageShowcase] Re-adjusted YES for new spot: ${newYesPrice} -> ${reAdjustedYes}`);
-              }
-            }
-
-            // Re-adjust NO price if needed
-            if (newNoPrice !== null) {
-              let reAdjustedNo = newNoPrice;
-              if ((spotLessThanOne && newNoPrice > 1) || (!spotLessThanOne && newNoPrice < 1)) {
-                reAdjustedNo = 1 / newNoPrice;
-                setNewNoPrice(reAdjustedNo);
-                console.log(`[MarketPageShowcase] Re-adjusted NO for new spot: ${newNoPrice} -> ${reAdjustedNo}`);
-              }
-            }
-          }
         }
       })
       .subscribe((status) => {
@@ -5831,13 +5723,6 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
               setMergeTokenType('currency');
             }}
           />
-
-          {/* Add Conditional Market Intro Modal */}
-          <ConditionalMarketIntroModal open={showIntroModal} onClose={handleCloseIntroModal} />
-          {/* Add Futarchy Quiz Modal */}
-          {ENABLE_FUTARCHY_QUIZ && (
-            <FutarchyQuizModal open={showQuizModal} onClose={handleCloseQuizModal} />
-          )}
 
           {/* Snapshot Results Widget */}
           <SnapshotWidget

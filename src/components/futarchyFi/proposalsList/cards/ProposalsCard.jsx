@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { CheckIcon, CancelIcon, NewspaperIcon, EyeIcon } from "./Resources";
 import Image from 'next/image';
 import { createSupabasePoolFetcher } from "../../../../../SupabasePoolFetcher";
-import { generateFallbackImage } from "../../../refactor/utils/imageUtils";
+import { generateFallbackImage } from "../../../../utils/imageUtils";
 import { getMarketUrl } from "../../../../utils/urlUtils";
 
 // Create Supabase pool fetcher instance

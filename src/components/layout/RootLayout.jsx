@@ -13,7 +13,7 @@ const oxanium = Oxanium({
 const RootLayout = ({
   children,
   headerConfig = "landing",
-  footerConfig = "main",
+  footerConfig, // kept for backward compat, Footer is now unified
   useSnapScroll = false,
   heroContent = null,
   secondaryHeader = null,
@@ -89,7 +89,7 @@ const RootLayout = ({
             {/* Section 3: Footer */}
             <section className="snap-start h-screen flex flex-col relative pt-20">
               {secondaryHeader}
-              <Footer config={footerConfig} className="flex-grow" />
+              <Footer className="flex-grow" />
             </section>
           </Providers>
         </div>
@@ -109,7 +109,7 @@ const RootLayout = ({
             <main className="flex-grow">
               {children}
             </main>
-            <Footer config={footerConfig} />
+            <Footer />
           </Providers>
         </div>
       </>
@@ -119,15 +119,15 @@ const RootLayout = ({
   return (
     <div className={`${oxanium.className} flex flex-col min-h-screen`}>
       <Providers>
-        <Header 
-          config={headerConfig} 
+        <Header
+          config={headerConfig}
           darkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode} // Pass the toggle function
         />
         <main className="flex-grow">
           {children}
         </main>
-        <Footer config={footerConfig} />
+        <Footer />
       </Providers>
     </div>
   );

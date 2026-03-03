@@ -52,14 +52,3 @@ export function getSubgraphEndpoint(chainId) {
 export function isChainSupported(chainId) {
     return chainId in SUBGRAPH_ENDPOINTS;
 }
-
-// CommonJS export for Node.js testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        SUBGRAPH_ENDPOINTS,
-        POOL_TYPES,
-        OUTCOME_SIDES,
-        getSubgraphEndpoint,
-        isChainSupported
-    };
-}

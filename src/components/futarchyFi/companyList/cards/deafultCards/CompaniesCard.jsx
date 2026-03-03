@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import FutarchyTileAnimation from "../../components/FutarchyTileAnimation";
-import { generateFallbackImage } from "../../../../refactor/utils/imageUtils";
+import { generateFallbackImage } from "../../../../../utils/imageUtils";
 import EditCompanyModal from "../../../../debug/EditCompanyModal";
 
 const getStorybookUrl = (companyId) => {

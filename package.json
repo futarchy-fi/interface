@@ -1,5 +1,5 @@
 {
-  "name": "quivers-ark",
+  "name": "futarchy-interface",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -15,7 +15,7 @@
     "copy-structure": "node copyStructure.mjs",
     "getpoolprice": "node getAlgebraPoolPrice.js",
     "get-trade-history": "node getTradeHistory.js",
-    "start-proposal": "node proposal-cli-fixed.js",
+    "start-proposal": "node scripts/proposal-cli.js",
     "send-to-supabase": "node send-to-supabase.js",
     "send-pool": "node send-to-supabase.js pool-request.json create_pool",
     "send-request": "node send-to-supabase.js request.json create_pool",
@@ -24,8 +24,6 @@
   "dependencies": {
     "@balancer-labs/sdk": "^1.1.6",
     "@cowprotocol/cow-sdk": "^5.3.2",
-    "@emoji-mart/data": "^1.2.1",
-    "@emoji-mart/react": "^1.1.1",
     "@gnosis.pm/cow-sdk": "^0.0.6",
     "@marcreichel/apple-tv-card": "^1.0.2",
     "@rainbow-me/rainbowkit": "^2.2.1",
@@ -50,8 +48,6 @@
     "dayjs-plugin-utc": "^0.1.2",
     "decimal.js": "^10.5.0",
     "dom-to-image": "^2.6.0",
-    "emoji-mart": "^5.6.0",
-    "emoji-picker-react": "^4.12.0",
     "ethers": "^5.7.2",
     "framer-motion": "^11.11.17",
     "graphql-tag": "^2.12.6",
@@ -64,8 +60,6 @@
     "next-themes": "^0.4.6",
     "nextjs-google-analytics": "^2.3.7",
     "openai": "^5.12.0",
-    "primeicons": "^7.0.0",
-    "primereact": "^10.8.5",
     "quill": "^2.0.3",
     "react": "^18",
     "react-chartjs-2": "^5.2.0",

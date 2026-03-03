@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import ToggleButton from "./ToggleButton";
-import gsap from "gsap";
+
 const ApprovalIcon = ({ className }) => (
   <svg
     className={className}
@@ -14,158 +14,6 @@ const ApprovalIcon = ({ className }) => (
       d="M23.0606 5.99999L8.99999 20.0607L0.939331 12L1.99999 10.9393L8.99999 17.9393L22 4.93933L23.0606 5.99999Z"
       fill="currentColor"
     />
-  </svg>
-);
-
-const CursorGlow = () => {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      setPosition({ x: e.clientX, y: e.clientY });
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
-
-  return (
-    <div
-      className="pointer-events-none fixed inset-0 z-30"
-      style={{
-        background: `radial-gradient(600px at ${position.x}px ${position.y}px, rgba(69, 255, 197, 0.05), transparent 80%)`,
-      }}
-    />
-  );
-};
-
-const InfoCard = ({ title, description, ShapeComponent, shapeColor }) => {
-  const shapeRef = useRef(null);
-  const cardRef = useRef(null);
-  const [isHovered, setIsHovered] = useState(false);
-  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const shape = shapeRef.current;
-
-    const handleHover = () => {
-      gsap.to(shape, {
-        rotation: 90,
-        scale: 1.1,
-        duration: 0.5,
-        ease: "back.out(1.7)",
-      });
-    };
-
-    const handleLeave = () => {
-      gsap.to(shape, {
-        rotation: 0,
-        scale: 1,
-        duration: 0.5,
-        ease: "back.out(1.7)",
-      });
-    };
-
-    shape.addEventListener("mouseenter", handleHover);
-    shape.addEventListener("mouseleave", handleLeave);
-
-    return () => {
-      shape.removeEventListener("mouseenter", handleHover);
-      shape.removeEventListener("mouseleave", handleLeave);
-    };
-  }, []);
-
-  const handleMouseMove = (e) => {
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left; // X position within the card
-    const y = e.clientY - rect.top; // Y position within the card
-    setCursorPos({ x, y });
-  };
-
-  return (
-    <div
-      ref={cardRef}
-      className={`p-8 transition-all duration-300 relative overflow-hidden transform-gpu
-                  ${isHovered ? `bg-[${shapeColor}]` : "bg-white"}
-                  hover:shadow-xl`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onMouseMove={handleMouseMove}
-      style={{
-        background: isHovered
-          ? shapeColor
-          : `radial-gradient(circle at ${cursorPos.x}px ${cursorPos.y}px, rgba(69, 255, 197, 0.05), transparent 80%)`,
-      }}
-    >
-      <div
-        ref={shapeRef}
-        className="absolute -right-4 -top-4 w-20 h-20 cursor-pointer
-                   transition-transform origin-center"
-      >
-        <ShapeComponent />
-      </div>
-      <h3
-        className={`text-2xl font-medium mb-3 ${
-          isHovered ? "text-white" : "text-black"
-        }`}
-      >
-        {title}
-      </h3>
-      <p
-        className={`text-lg leading-relaxed ${
-          isHovered ? "text-white" : "text-[#6F7A9B]"
-        }`}
-      >
-        {description}
-      </p>
-    </div>
-  );
-};
-
-const PredictionShape = () => (
-  <svg viewBox="0 0 100 100">
-    <g className="transform-origin-center">
-      <path d="M50 10 L90 90 L10 90 Z" className="fill-[#2EBAC6]" />
-      <circle cx="50" cy="50" r="20" className="fill-[#92E9EF]" />
-      <rect
-        x="40"
-        y="40"
-        width="20"
-        height="20"
-        transform="rotate(45 50 50)"
-        className="fill-[#2EBAC6]"
-      />
-    </g>
-  </svg>
-);
-
-const VoteShape = () => (
-  <svg viewBox="0 0 100 100">
-    <g className="transform-origin-center">
-      <circle cx="50" cy="50" r="40" className="fill-[#B6509E]" />
-      <path
-        d="M30 50 L45 65 L70 35"
-        stroke="#E2A9D7"
-        strokeWidth="8"
-        fill="none"
-      />
-      <circle cx="50" cy="50" r="20" className="fill-[#E2A9D7]" />
-    </g>
-  </svg>
-);
-
-const BackedShape = () => (
-  <svg viewBox="0 0 100 100">
-    <g className="transform-origin-center">
-      <rect x="20" y="20" width="60" height="60" className="fill-[#FF6B3D]" />
-      <circle cx="50" cy="50" r="20" className="fill-[#FFA981]" />
-      <path
-        d="M35 50 L50 65 L65 35"
-        stroke="#FF6B3D"
-        strokeWidth="6"
-        fill="none"
-      />
-    </g>
   </svg>
 );
 
@@ -198,18 +46,6 @@ const LandingModal = ({ handleClose, onApplyClick }) => {
     const encodedEmail = btoa(email);
     const encodedEthAddress = ethAddress ? btoa(ethAddress) : "none";
 
-    console.log("Form Data Before Analytics:", {
-      fullEmail: email,
-      encodedEmail,
-      emailName,
-      emailDomain,
-      ethAddress,
-      encodedEthAddress,
-      showEthField,
-      emailValid,
-      ethValid,
-    });
-
     if (emailValid && ethValid) {
       const formData = new FormData();
       formData.append("email", email);
@@ -229,18 +65,8 @@ const LandingModal = ({ handleClose, onApplyClick }) => {
         value: showEthField ? 1 : 0,
       };
 
-      console.log("Analytics Event Data:", analyticsData);
-      console.log("GA Status:", {
-        gaAvailable: typeof window !== "undefined" && !!window.gtag,
-        gtagFunction: typeof window !== "undefined" ? window.gtag : "not available",
-      });
-      setIsSuccess(true); // Keep this line to indicate success
-
       if (typeof window !== "undefined" && window.gtag) {
         window.gtag("event", "waitlist_signup", analyticsData);
-        console.log("Analytics Event Sent");
-      } else {
-        console.error("Google Analytics not initialized");
       }
 
       // Send data to FormBold API
@@ -251,25 +77,25 @@ const LandingModal = ({ handleClose, onApplyClick }) => {
         });
 
         if (response.ok) {
-          setIsSuccess(true); // Set success state to true
-        } else {
-          console.error("Form submission failed:", response.statusText);
+          setIsSuccess(true);
         }
       } catch (error) {
-        console.error("Error submitting form:", error);
+        // Silently fail — don't block user experience
       }
     } else {
-      window.gtag("event", "form_error", {
-        event_category: "error",
-        event_label: !emailValid ? "invalid_email" : "invalid_eth_address",
-        error_type: !emailValid
-          ? "email_validation"
-          : !ethValid
-          ? "eth_validation"
-          : "unknown",
-        email_provided: email ? 1 : 0,
-        eth_field_shown: showEthField ? 1 : 0,
-      });
+      if (typeof window !== "undefined" && window.gtag) {
+        window.gtag("event", "form_error", {
+          event_category: "error",
+          event_label: !emailValid ? "invalid_email" : "invalid_eth_address",
+          error_type: !emailValid
+            ? "email_validation"
+            : !ethValid
+            ? "eth_validation"
+            : "unknown",
+          email_provided: email ? 1 : 0,
+          eth_field_shown: showEthField ? 1 : 0,
+        });
+      }
 
       setErrors({
         email: !emailValid ? "Please enter a valid email address" : "",
