@@ -75,102 +75,84 @@ const fetchCustomSpotPrice = async (fetchSpotPriceUrl) => {
 };
 
 /**
- * Fetch spot price using Balancer SDK
+ * Fetch spot price using Balancer V3 REST API (lightweight, no SDK import)
  */
 const fetchBalancerSpotPrice = async () => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
   try {
-    console.log('[SPOT] Starting Balancer spot price fetch...');
-    
-    // Import Balancer SDK dynamically to avoid bundle issues
-    const { BalancerSDK, BalancerNetworkConfig, Network } = await import('@balancer-labs/sdk');
-    console.log('[SPOT] Balancer SDK imported successfully');
-    
-    // Initialize Balancer SDK for Gnosis Chain
-    const balancer = new BalancerSDK({
-      network: Network.GNOSIS,
-      rpcUrl: 'https://rpc.gnosis.gateway.fm'
-    });
-    console.log('[SPOT] Balancer SDK initialized for Gnosis Chain');
+    console.log('[SPOT] Fetching Balancer spot price via V3 API...');
 
-    console.log('[SPOT] Fetching Balancer spot price for GNO/sDAI...');
-    console.log('[SPOT] GNO Address:', BASE_COMPANY_TOKEN_ADDRESS);
-    console.log('[SPOT] sDAI Address:', BASE_CURRENCY_TOKEN_ADDRESS);
+    const companyAddr = BASE_COMPANY_TOKEN_ADDRESS.toLowerCase();
+    const currencyAddr = BASE_CURRENCY_TOKEN_ADDRESS.toLowerCase();
 
-    // Find pools containing both tokens
-    console.log('[SPOT] Fetching all pools...');
-    const pools = await balancer.pools.all();
-    console.log('[SPOT] Total pools found:', pools.length);
-    
-    const relevantPools = pools.filter(pool => 
-      pool.tokens.some(token => token.address.toLowerCase() === BASE_COMPANY_TOKEN_ADDRESS.toLowerCase()) &&
-      pool.tokens.some(token => token.address.toLowerCase() === BASE_CURRENCY_TOKEN_ADDRESS.toLowerCase())
-    );
-    console.log('[SPOT] Relevant pools found:', relevantPools.length);
-
-    if (relevantPools.length === 0) {
-      console.log('[SPOT] No pools found - checking individual token presence...');
-      const gnoPoolsCount = pools.filter(pool => 
-        pool.tokens.some(token => token.address.toLowerCase() === BASE_COMPANY_TOKEN_ADDRESS.toLowerCase())
-      ).length;
-      const sdaiPoolsCount = pools.filter(pool => 
-        pool.tokens.some(token => token.address.toLowerCase() === BASE_CURRENCY_TOKEN_ADDRESS.toLowerCase())
-      ).length;
-      console.log('[SPOT] Pools with GNO:', gnoPoolsCount);
-      console.log('[SPOT] Pools with sDAI:', sdaiPoolsCount);
-      
-      throw new Error(`No Balancer pools found containing both GNO and sDAI`);
-    }
-
-    // Use the pool with highest liquidity
-    const bestPool = relevantPools.reduce((best, current) => {
-      const bestLiquidity = parseFloat(best.totalLiquidity || '0');
-      const currentLiquidity = parseFloat(current.totalLiquidity || '0');
-      return currentLiquidity > bestLiquidity ? current : best;
+    const response = await fetch('https://api-v3.balancer.fi/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        query: `{
+          poolGetPools(
+            where: { chainIn: [GNOSIS], tokensIn: ["${companyAddr}", "${currencyAddr}"] }
+            orderBy: totalLiquidity
+            orderDirection: desc
+            first: 10
+          ) {
+            id address type
+            dynamicData { totalLiquidity }
+            poolTokens { address symbol balance decimals weight }
+          }
+        }`
+      })
     });
 
-    console.log('[SPOT] Using pool:', {
-      id: bestPool.id,
-      address: bestPool.address,
-      type: bestPool.poolType,
-      totalLiquidity: bestPool.totalLiquidity,
-      tokens: bestPool.tokens.map(t => ({ address: t.address, symbol: t.symbol }))
+    clearTimeout(timeout);
+
+    if (!response.ok) throw new Error(`Balancer V3 API returned ${response.status}`);
+
+    const data = await response.json();
+    const pools = data.data?.poolGetPools || [];
+
+    // Find pool containing BOTH company and currency tokens
+    const matchingPool = pools.find(pool => {
+      const addrs = pool.poolTokens.map(t => t.address.toLowerCase());
+      return addrs.includes(companyAddr) && addrs.includes(currencyAddr);
     });
 
-    // Calculate spot price (GNO price in sDAI terms)
-    console.log('[SPOT] Calculating spot price...');
-    const spotPrice = await bestPool.calcSpotPrice(BASE_COMPANY_TOKEN_ADDRESS, BASE_CURRENCY_TOKEN_ADDRESS);
-    console.log('[SPOT] Raw spot price from Balancer:', spotPrice);
-    
-    // Invert the price since Balancer returns sDAI/GNO but we want GNO/sDAI
-    const rawPrice = parseFloat(spotPrice);
-    if (rawPrice === 0 || !isFinite(rawPrice)) {
-      throw new Error(`Invalid spot price from Balancer: ${rawPrice}`);
-    }
-    const finalPrice = 1 / rawPrice;
-    console.log('[SPOT] Inverted price (GNO/sDAI):', finalPrice);
-    
-    const result = {
-      price: finalPrice,
+    if (!matchingPool) throw new Error('No Balancer pool found containing both tokens');
+
+    const companyToken = matchingPool.poolTokens.find(t => t.address.toLowerCase() === companyAddr);
+    const currencyToken = matchingPool.poolTokens.find(t => t.address.toLowerCase() === currencyAddr);
+
+    const companyBalance = parseFloat(companyToken.balance);
+    const currencyBalance = parseFloat(currencyToken.balance);
+
+    // Weighted pool: price = (currencyBalance/currencyWeight) / (companyBalance/companyWeight)
+    const companyWeight = parseFloat(companyToken.weight || '1');
+    const currencyWeight = parseFloat(currencyToken.weight || '1');
+
+    const price = (currencyBalance / currencyWeight) / (companyBalance / companyWeight);
+
+    if (!isFinite(price) || price <= 0) throw new Error(`Invalid calculated price: ${price}`);
+
+    console.log('[SPOT] Balancer V3 spot price:', price, 'from pool:', matchingPool.id);
+
+    return {
+      price,
       pool: {
-        id: bestPool.id,
-        address: bestPool.address,
-        type: bestPool.poolType,
-        totalLiquidity: bestPool.totalLiquidity
+        id: matchingPool.id,
+        address: matchingPool.address,
+        type: matchingPool.type,
+        totalLiquidity: matchingPool.dynamicData?.totalLiquidity
       },
       timestamp: Date.now(),
       source: 'balancer'
     };
-    
-    console.log('[SPOT] Returning result:', result);
-    return result;
 
   } catch (error) {
-    console.error('[SPOT] Failed to fetch Balancer spot price:', error);
-    console.error('[SPOT] Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
+    clearTimeout(timeout);
+    console.error('[SPOT] Balancer V3 API fetch failed:', error.message);
     throw error;
   }
 };
@@ -208,104 +190,33 @@ const useLatestPrices = (pollingInterval = 30000, config = null) => {
 
     const fetchLatestPrices = async () => {
       try {
-        console.log('[SPOT] Starting fetchLatestPrices...');
-        
-        // Fetch YES/NO position data and Balancer spot price in parallel
-        console.log('[SPOT] Fetching data from multiple sources...');
-        
-        // Fetch each source separately with individual error handling
-        let yesResponse, noResponse, balancerSpotPrice;
-        
+        // YES/NO pool data is currently unused (fetched via subgraph instead)
+        let balancerSpotPrice;
+
+        // Try custom spot price first if available, then fall back to Balancer V3 API
+        const fetchSpotPriceUrl = config?.metadata?.fetchSpotPrice || config?.marketInfo?.fetchSpotPrice;
         try {
-          console.log('[SPOT] Fetching YES pool data...');
-       //   yesResponse = await fetch(YES_POOL_URL);
-          console.log('[SPOT] YES pool response status:', yesResponse.status);
-        } catch (error) {
-          console.error('[SPOT] Failed to fetch YES pool data:', error);
-          yesResponse = null;
-        }
-        
-        try {
-          console.log('[SPOT] Fetching NO pool data...');
-        //noResponse = await fetch(NO_POOL_URL);
-          console.log('[SPOT] NO pool response status:', noResponse.status);
-        } catch (error) {
-          console.error('[SPOT] Failed to fetch NO pool data:', error);
-          noResponse = null;
-        }
-        
-        // Try custom spot price first if available, then fall back to Balancer
-        try {
-          // Debug the config structure
-          console.log('[SPOT] Config debug:', {
-            hasConfig: !!config,
-            hasMetadata: !!config?.metadata,
-            fetchSpotPrice: config?.metadata?.fetchSpotPrice,
-            marketInfo: config?.marketInfo,
-            fullConfig: config
-          });
-          
-          const fetchSpotPriceUrl = config?.metadata?.fetchSpotPrice || config?.marketInfo?.fetchSpotPrice;
-          
           if (fetchSpotPriceUrl) {
-            console.log('[SPOT] Fetching custom spot price from:', fetchSpotPriceUrl);
             balancerSpotPrice = await fetchCustomSpotPrice(fetchSpotPriceUrl);
-            console.log('[SPOT] Custom spot price result:', balancerSpotPrice);
           } else {
-            console.log('[SPOT] No custom fetchSpotPrice URL found, using Balancer...');
-            console.log('[SPOT] Checked paths:', {
-              'config?.metadata?.fetchSpotPrice': config?.metadata?.fetchSpotPrice,
-              'config?.marketInfo?.fetchSpotPrice': config?.marketInfo?.fetchSpotPrice,
-              'config structure': {
-                hasConfig: !!config,
-                hasMetadata: !!config?.metadata,
-                hasMarketInfo: !!config?.marketInfo,
-                metadataKeys: config?.metadata ? Object.keys(config.metadata) : null,
-                marketInfoKeys: config?.marketInfo ? Object.keys(config.marketInfo) : null
-              }
-            });
             balancerSpotPrice = await fetchBalancerSpotPrice();
-            console.log('[SPOT] Balancer spot price result:', balancerSpotPrice);
           }
         } catch (error) {
-          console.error('[SPOT] Failed to fetch spot price from primary source:', error);
-          
-          // If custom spot price failed, try Balancer as fallback
-          const fallbackFetchSpotPriceUrl = config?.metadata?.fetchSpotPrice || config?.marketInfo?.fetchSpotPrice;
-          if (fallbackFetchSpotPriceUrl) {
+          console.error('[SPOT] Primary spot price fetch failed:', error.message);
+          // If custom failed, try Balancer as fallback
+          if (fetchSpotPriceUrl) {
             try {
-              console.log('[SPOT] Custom spot price failed, falling back to Balancer...');
               balancerSpotPrice = await fetchBalancerSpotPrice();
-              console.log('[SPOT] Balancer fallback spot price result:', balancerSpotPrice);
             } catch (balancerError) {
-              console.error('[SPOT] Balancer fallback also failed:', balancerError);
+              console.error('[SPOT] Balancer fallback also failed:', balancerError.message);
               balancerSpotPrice = null;
             }
           } else {
             balancerSpotPrice = null;
           }
         }
-        
-        // Parse API responses if they exist
+
         let yesData = null, noData = null;
-        
-        if (yesResponse && yesResponse.ok) {
-          try {
-            yesData = await yesResponse.json();
-            console.log('[SPOT] YES data parsed successfully');
-          } catch (error) {
-            console.error('[SPOT] Failed to parse YES response:', error);
-          }
-        }
-        
-        if (noResponse && noResponse.ok) {
-          try {
-            noData = await noResponse.json();
-            console.log('[SPOT] NO data parsed successfully');
-          } catch (error) {
-            console.error('[SPOT] Failed to parse NO response:', error);
-          }
-        }
 
         // Extract prices with fallbacks
         const latestYesCandle = yesData?.candles?.[yesData.candles.length - 1];
