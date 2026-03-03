@@ -5170,10 +5170,12 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                           <div className="h-16 bg-futarchyGray2 dark:bg-futarchyDarkGray2 border-b-2 border-futarchyGray62 dark:border-futarchyGray11/70">
                             <ChartParameters
                               tradingPair={`${config?.BASE_TOKENS_CONFIG?.company?.symbol || DEFAULT_BASE_TOKENS_CONFIG.company.symbol}/${selectedCurrency === 'WXDAI' ? 'xDAI' : currencySymbol}`}
-                              spotPrice={(latestPrices.loading && newBasePrice === null) ? null : (() => {
-                                const value = Number(newBasePrice !== null ? newBasePrice : (latestPrices.spotPriceSDAI || 0));
-                                const displayCurrency = selectedCurrency;
-                                const displayValue = displayCurrency === 'WXDAI' && sdaiRate && !isLoadingRate && !rateError && sdaiRate > 0
+                              spotPrice={(() => {
+                                // Use first available: pool candles base price, Balancer spot, or external (CoinGecko) spot
+                                const raw = newBasePrice ?? latestPrices.spotPriceSDAI ?? finalSpotPrice ?? null;
+                                if (raw === null && latestPrices.loading && !finalSpotPrice) return null; // still loading
+                                const value = Number(raw || 0);
+                                const displayValue = selectedCurrency === 'WXDAI' && sdaiRate && !isLoadingRate && !rateError && sdaiRate > 0
                                   ? value * sdaiRate
                                   : value;
                                 return displayValue;
