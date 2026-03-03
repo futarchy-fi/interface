@@ -237,7 +237,7 @@ export function transformSubgraphToSupabaseFormat(subgraphData, proposalAddress,
         // Standard fields
         event_status: 'open',
         visibility: 'public',
-        resolution_status: 'open',
+        resolution_status: null,  // Not available from market subgraph; useContractConfig falls back to _registryMetadata
         resolution_outcome: null,
         expiration_time: null
     };

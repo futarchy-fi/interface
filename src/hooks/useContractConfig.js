@@ -476,12 +476,12 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
             // Include question link from metadata (check both nested and direct paths)
             questionLink: metadata?.metadata?.question_link || metadata?.questionLink || null,
             // Add resolved status - only resolved if there's an actual outcome or resolution_status indicates completion
-            // Fall back to _registryMetadata for resolution fields (subgraph adapter hardcodes these to open/null)
+            // Fall back to _registryMetadata for resolution fields (market subgraph doesn't have these)
             resolved: (data.resolution_outcome !== null && data.resolution_outcome !== undefined)
               || data.resolution_status === 'resolved'
               || data._registryMetadata?.resolution_status === 'resolved'
               || (data._registryMetadata?.resolution_outcome !== null && data._registryMetadata?.resolution_outcome !== undefined),
-            resolutionStatus: data.resolution_status !== 'open' ? data.resolution_status : (data._registryMetadata?.resolution_status || data.resolution_status),
+            resolutionStatus: data.resolution_status || data._registryMetadata?.resolution_status || null,
             finalOutcome: data.resolution_outcome || data._registryMetadata?.resolution_outcome || metadata?.finalOutcome || null,
             // TWAP configuration (prioritize Registry metadata, then direct metadata)
             twapStartTimestamp: data._registryMetadata?.twapStartTimestamp || metadata?.twapStartTimestamp || null,
