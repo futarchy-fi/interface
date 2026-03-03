@@ -18,9 +18,62 @@ import PageLayout from "../../../../layout/PageLayout";
 import { useOrganization } from "../../../../../hooks/useOrganization";
 import { useChainId } from "wagmi";
 import OrganizationManagerModal from "../../../../debug/OrganizationManagerModal";
+import { SUBGRAPH_ENDPOINTS } from "../../../../../config/subgraphEndpoints";
 
 // Gnosis Chain ID
 const GNOSIS_CHAIN_ID = 100;
+
+/**
+ * Fetch volume data from subgraph for a list of proposals and sort by total volume.
+ * Each proposal must have a proposalID (contract address) field.
+ */
+const fetchAndSortByVolume = async (proposals, chainId = 100) => {
+  const endpoint = SUBGRAPH_ENDPOINTS[chainId];
+  if (!endpoint) return proposals;
+
+  // Only fetch for proposals that have a proposal ID looking like an address
+  const addressProposals = proposals.filter(p => p.proposalID && p.proposalID.startsWith('0x'));
+  if (addressProposals.length === 0) return proposals;
+
+  // Batch fetch: query each proposal's pools for volume data
+  const volumeMap = {};
+  try {
+    await Promise.all(
+      addressProposals.map(async (p) => {
+        try {
+          const query = `{
+            proposal(id: "${p.proposalID.toLowerCase()}") {
+              pools { volumeToken0 volumeToken1 liquidity }
+            }
+          }`;
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+          });
+          const result = await res.json();
+          const pools = result.data?.proposal?.pools || [];
+          volumeMap[p.proposalID] = pools.reduce((sum, pool) => {
+            return sum + (parseFloat(pool.volumeToken0) || 0) + (parseFloat(pool.volumeToken1) || 0);
+          }, 0);
+        } catch (e) {
+          volumeMap[p.proposalID] = 0;
+        }
+      })
+    );
+  } catch (e) {
+    console.warn('[ProposalsPage] Failed to batch-fetch volume data:', e);
+    return proposals;
+  }
+
+  // Attach volume and sort
+  const withVolume = proposals.map(p => ({
+    ...p,
+    totalVolume: volumeMap[p.proposalID] || 0
+  }));
+  withVolume.sort((a, b) => (b.totalVolume || 0) - (a.totalVolume || 0));
+  return withVolume;
+};
 
 const PROPOSAL_IMAGES = {
   "ethereum-budget": "/assets/ethereum-budget-picture.webp",
@@ -124,6 +177,8 @@ const ProposalsPage = ({
             let predictionPools = { yes: null, no: null };
             let yesPrice = null;
             let noPrice = null;
+            let totalVolume = 0;
+            let totalLiquidity = 0;
 
             try {
               const { SUBGRAPH_ENDPOINTS } = await import('../../../../../config/subgraphEndpoints');
@@ -137,6 +192,9 @@ const ProposalsPage = ({
                       type
                       outcomeSide
                       price
+                      liquidity
+                      volumeToken0
+                      volumeToken1
                     }
                   }
                 }`;
@@ -161,6 +219,14 @@ const ProposalsPage = ({
                   poolAddresses.no = noConditional.id;
                   noPrice = parseFloat(noConditional.price) || null;
                 }
+
+                // Aggregate volume and liquidity across all pools
+                totalVolume = pools.reduce((sum, p) => {
+                  return sum + (parseFloat(p.volumeToken0) || 0) + (parseFloat(p.volumeToken1) || 0);
+                }, 0);
+                totalLiquidity = pools.reduce((sum, p) => {
+                  return sum + (parseFloat(p.liquidity) || 0);
+                }, 0);
 
                 // Extract prediction pools
                 const yesPrediction = pools.find(p => p.type === 'PREDICTION' && p.outcomeSide === 'YES');
@@ -204,10 +270,15 @@ const ProposalsPage = ({
                 display_title_0: p.displayNameQuestion,
                 display_title_1: p.displayNameEvent
               },
+              totalVolume,
+              totalLiquidity,
               fromSubgraph: true
             };
           })
         );
+
+        // Sort by total volume (highest first), fallback to timestamp
+        transformedProposals.sort((a, b) => (b.totalVolume || 0) - (a.totalVolume || 0));
 
         setProposals(transformedProposals);
         setIsLoadingCompany(false);
@@ -242,7 +313,9 @@ const ProposalsPage = ({
               PROPOSAL_IMAGES["gnosis-pay"],
           }));
 
-          setProposals(proposalsWithImages);
+          // Sort by volume/liquidity from subgraph
+          const sorted = await fetchAndSortByVolume(proposalsWithImages, GNOSIS_CHAIN_ID);
+          setProposals(sorted);
         }
         setError(null);
       } catch (err) {

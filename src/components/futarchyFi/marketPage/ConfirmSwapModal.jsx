@@ -3795,7 +3795,9 @@ const ConfirmSwapModal = memo(({
                                 <div className="flex justify-between">
                                     <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Type</span>
                                     <span className={`font-medium ${transactionData.action === 'Buy'
-                                        ? 'text-futarchyBlue11 dark:text-futarchyBlueDark11'
+                                        ? (transactionData.outcome === 'Event Will Occur'
+                                            ? 'text-futarchyBlue11 dark:text-futarchyBlueDark11'
+                                            : 'text-futarchyOrange11 dark:text-futarchyOrangeDark11')
                                         : transactionData.action === 'Redeem'
                                             ? 'text-futarchyGreen11 dark:text-futarchyGreenDark11'
                                             : 'text-futarchyCrimson11 dark:text-futarchyCrimsonDark11'

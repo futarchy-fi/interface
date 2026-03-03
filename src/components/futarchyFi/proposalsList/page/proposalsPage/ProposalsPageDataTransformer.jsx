@@ -945,6 +945,8 @@ const transformCompanyData = async (data, isMockData, useNewPrices, newYesPriceA
     }))).filter(Boolean)
   };
   
+  // Note: sorting is handled in ProposalsPage (by volume/liquidity from subgraph)
+  // Fallback sort by timestamp for cases where volume sort is not applied
   if (transformed.proposals) {
     transformed.proposals.sort((a, b) => b.timestamp - a.timestamp);
   }
