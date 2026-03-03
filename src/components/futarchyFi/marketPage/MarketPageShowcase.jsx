@@ -4812,12 +4812,12 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
 
   // Extract hero content for RootLayout
   const marketHero = (
-    <div className={`relative bg-futarchyDarkGray2/90 dark:bg-futarchyDarkGray2/70  dark:border-futarchyGray112/40 backdrop-blur-sm font-oxanium flex flex-col border-b-2 border-futarchyDarkGray42 transition-all duration-300 ease-in-out ${isScrolled ? 'lg:h-20' : 'h-full'
+    <div className={`relative bg-futarchyDarkGray2/90 dark:bg-futarchyDarkGray2/70  dark:border-futarchyGray112/40 backdrop-blur-sm font-oxanium flex flex-col border-b-2 border-futarchyDarkGray42 transition-all duration-300 ease-in-out ${isScrolled ? 'lg:h-20' : ''
       }`}>
       <div className="container mx-auto px-5 flex-grow flex flex-col justify-center">
-        <div className={`grid grid-cols-1 lg:grid-cols-3 transition-all duration-300 ease-in-out ${isScrolled ? 'py-8 lg:py-3' : 'py-8 lg:py-12'
+        <div className={`grid grid-cols-1 lg:grid-cols-3 transition-all duration-300 ease-in-out ${isScrolled ? 'py-8 lg:py-3' : 'py-4 lg:py-6'
           }`}>
-          <div className={`lg:col-span-2 space-y-3 py-4 lg:space-y-4 border-b-2 border-futarchyDarkGray42 lg:border-b-0 lg:border-r lg:pr-6 transition-all duration-300 ease-in-out ${isScrolled ? 'lg:py-0' : 'lg:py-6'
+          <div className={`lg:col-span-2 space-y-2 py-2 lg:space-y-3 border-b-2 border-futarchyDarkGray42 lg:border-b-0 lg:border-r lg:pr-6 transition-all duration-300 ease-in-out ${isScrolled ? 'lg:py-0' : 'lg:py-3'
             }`}>
             <h1 className={`font-semibold text-white leading-tight min-h-[1.5rem] transition-all duration-300 ease-in-out ${isScrolled ? 'text-sm lg:text-base' : 'text-sm lg:text-xl'
               }`}>
@@ -5068,13 +5068,6 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                     });
                   }
 
-                  // Alternative Interface badge
-                  badges.push({
-                    text: 'Alt Interface',
-                    colorScheme: 'orange',
-                    link: 'https://gnosis-price-watch-koeppelmann.replit.app/'
-                  });
-
                   return badges;
                 })()} />
               )}
@@ -5084,7 +5077,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
             </div>
           </div>
 
-          <div className={`lg:col-span-1 transition-all duration-300 ease-in-out ${isScrolled ? 'lg:py-2 lg:pl-6' : 'py-4 lg:py-6 lg:pl-6'
+          <div className={`lg:col-span-1 transition-all duration-300 ease-in-out ${isScrolled ? 'lg:py-2 lg:pl-6' : 'py-2 lg:py-3 lg:pl-6'
             }`}>
             {/* Description - hides on scroll */}
             <div className={`transition-all duration-300 ease-in-out ${isScrolled ? 'lg:hidden' : ''
@@ -5119,12 +5112,6 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
           </div>
         </div>
       </div>
-      <div className="absolute bottom-4 lg:hidden animate-bounce w-full">
-        <div className="flex flex-col items-center text-white justify-center">
-          <ArrowDownIcon className="h-6 w-6" />
-          <span className="text-xs mt-1">Scroll Down</span>
-        </div>
-      </div>
     </div>
   );
 
@@ -5138,7 +5125,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       />
 
       <PriceHeader yesPrice={newYesPrice} noPrice={newNoPrice} currencySymbol={currencySymbol} />
-      <RootLayout headerConfig="app" footerConfig="main" useSnapScroll={true} heroContent={marketHero}>
+      <RootLayout headerConfig="app" footerConfig="main" useSnapScroll={false} heroContent={marketHero}>
         <PageLayout>
           {/* Main Content Area - Split Design */}
           <div className="relative flex-1">
