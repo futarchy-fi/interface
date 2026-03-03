@@ -27,6 +27,7 @@ const PROPOSAL_POOLS_QUERY = `
       pools {
         id
         outcomeSide
+        type
         liquidity
         volumeToken0
         volumeToken1
