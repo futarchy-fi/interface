@@ -18,7 +18,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 let supabase;
 if (supabaseUrl && supabaseAnonKey) {
   supabase = createClient(supabaseUrl, supabaseAnonKey);
-  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') { // Assuming 'false' means debug is ON based on user's previous changes
+  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') { // Assuming 'false' means debug is ON based on user's previous changes
     console.log('DEBUG (ViewModel): Supabase client initialized successfully.');
   }
 } else {
@@ -627,14 +627,14 @@ async function batchFetchTokenSymbols(rawTrades, config = null) {
 
 // Enrich raw trade data with token symbols and determine trade type (Conditional or Prediction)
 async function enrichTradeData(rawTrades, poolAddressForLog, config = null) {
-  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`DEBUG: enrichTradeData called for pool: ${poolAddressForLog}, with ${rawTrades.length} trades.`);
+  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`DEBUG: enrichTradeData called for pool: ${poolAddressForLog}, with ${rawTrades.length} trades.`);
 
   // Batch fetch all token symbols first to minimize RPC calls
   const symbolMap = await batchFetchTokenSymbols(rawTrades, config);
 
   const enrichedTrades = [];
   for (const trade of rawTrades) {
-    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`DEBUG: Enriching trade: ${trade.evt_tx_hash}, token0: ${trade.token0}, token1: ${trade.token1}`);
+    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`DEBUG: Enriching trade: ${trade.evt_tx_hash}, token0: ${trade.token0}, token1: ${trade.token1}`);
 
     // Use pre-fetched symbols from batch operation (much faster!)
     const token0SymbolStr = symbolMap[trade.token0?.toLowerCase()] || null;
@@ -673,14 +673,14 @@ async function enrichTradeData(rawTrades, poolAddressForLog, config = null) {
       marketCategory,
     });
   }
-  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log('DEBUG: enrichTradeData finished. Enriched trades:', enrichedTrades.length);
+  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log('DEBUG: enrichTradeData finished. Enriched trades:', enrichedTrades.length);
   return enrichedTrades;
 }
 
 // This function processes an individual enriched trade to match the final script output structure
 async function processAndFormatTrade(enrichedTrade, queriedPoolAddress) {
   // DEBUG_MODE is used directly as it's a module-level constant
-  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
     console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): START processAndFormatTrade for tx: ${enrichedTrade.evt_tx_hash}`, JSON.stringify(enrichedTrade, null, 2));
   }
 
@@ -695,7 +695,7 @@ async function processAndFormatTrade(enrichedTrade, queriedPoolAddress) {
   const amount0_abs_BN = amount0_BN.abs();
   const amount1_abs_BN = amount1_BN.abs();
 
-  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
     console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): Raw amounts BN - amount0: ${amount0_BN.toString()}, amount1: ${amount1_BN.toString()}`);
     console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): Absolute amounts BN - amount0_abs: ${amount0_abs_BN.toString()}, amount1_abs: ${amount1_abs_BN.toString()}`);
   }
@@ -727,12 +727,12 @@ async function processAndFormatTrade(enrichedTrade, queriedPoolAddress) {
     if (amount_formatted_for_price !== 0) {
       price = (cost_formatted_for_price / amount_formatted_for_price).toFixed(2);
     }
-    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
       console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): Price Calc - cost_formatted: ${cost_formatted_for_price}, amount_formatted: ${amount_formatted_for_price}, price: ${price}`);
     }
   }
 
-  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
     console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): Intermediate main values - finalSide: ${finalSide}, finalOutcome: ${finalOutcome}, price: ${price}`);
     console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): Intermediate main amounts (Wei) - primary_amount_wei (token0): ${primary_amount_wei.toString()}, primary_cost_wei (token1): ${primary_cost_wei.toString()}`);
   }
@@ -765,7 +765,7 @@ async function processAndFormatTrade(enrichedTrade, queriedPoolAddress) {
     userReceived_AmountWei_forAmounts = amount1_abs_BN;
   }
 
-  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
     console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): For Amounts Object - User Sent: ${userSent_AmountWei_forAmounts?.toString()} of ${userSent_TokenSymbol_forAmounts}`);
     console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): For Amounts Object - User Received: ${userReceived_AmountWei_forAmounts?.toString()} of ${userReceived_TokenSymbol_forAmounts}`);
   }
@@ -776,22 +776,22 @@ async function processAndFormatTrade(enrichedTrade, queriedPoolAddress) {
 
   let formattedUserSentAmount = "0.000000";
   if (userSent_TokenSymbol_forAmounts && userSent_AmountWei_forAmounts) {
-    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
       console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): Before formatUnits for UserSent (amounts.in) - value: ${userSent_AmountWei_forAmounts.toString()}, symbol: ${userSent_TokenSymbol_forAmounts}, decimals: ${decimalsForSentToken}`);
     }
     formattedUserSentAmount = parseFloat(ethers.utils.formatUnits(userSent_AmountWei_forAmounts, decimalsForSentToken)).toFixed(6);
-    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
       console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): After formatUnits for UserSent (amounts.in) - formattedUserSentAmount: ${formattedUserSentAmount}`);
     }
   }
 
   let formattedUserReceivedAmount = "0.000000";
   if (userReceived_TokenSymbol_forAmounts && userReceived_AmountWei_forAmounts) {
-    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
       console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): Before formatUnits for UserReceived (amounts.out) - value: ${userReceived_AmountWei_forAmounts.toString()}, symbol: ${userReceived_TokenSymbol_forAmounts}, decimals: ${decimalsForReceivedToken}`);
     }
     formattedUserReceivedAmount = parseFloat(ethers.utils.formatUnits(userReceived_AmountWei_forAmounts, decimalsForReceivedToken)).toFixed(6);
-    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
       console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): After formatUnits for UserReceived (amounts.out) - formattedUserReceivedAmount: ${formattedUserReceivedAmount}`);
     }
   }
@@ -820,7 +820,7 @@ async function processAndFormatTrade(enrichedTrade, queriedPoolAddress) {
     formattedTimestamp: formatTimestamp(enrichedTrade.evt_block_time), // Using existing helper
   };
 
-  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
     console.log(`DEBUG (MarketHistoryViewModel - processAndFormatTrade): END processAndFormatTrade. Final formatted trade for tx ${enrichedTrade.evt_tx_hash}:`, JSON.stringify(formattedTrade, null, 2));
   }
 
@@ -911,7 +911,7 @@ export function useTradeHistory(config = null) {
 
     // If not forcing refresh, check for an active promise first
     if (!forceRefresh && activeFetchPromises.has(address)) {
-      if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`DEBUG: Active fetch already in progress for ${address}. Returning existing promise.`);
+      if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`DEBUG: Active fetch already in progress for ${address}. Returning existing promise.`);
       return activeFetchPromises.get(address);
     }
 
@@ -933,9 +933,9 @@ export function useTradeHistory(config = null) {
     // Proceed to fetch (or re-fetch if forceRefresh is true)
     const fetchPromise = (async () => {
       try {
-        if (forceRefresh && process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+        if (forceRefresh && process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
           console.log(`DEBUG: [FetchID ${currentFetchId}] Force refresh requested for ${address}. Bypassing cache.`);
-        } else if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+        } else if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
           console.log(`DEBUG: [FetchID ${currentFetchId}] Cache miss or expired for ${address}. Fetching fresh trades.`);
         }
 
@@ -972,11 +972,11 @@ export function useTradeHistory(config = null) {
             });
           // --- End Cascade changes ---
         } else {
-          if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: SQL Direct Mode OFF. Preparing to fetch trades for ${address} via API_ENDPOINT.`);
+          if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: SQL Direct Mode OFF. Preparing to fetch trades for ${address} via API_ENDPOINT.`);
           // Existing logic using API_ENDPOINT with dynamic pools
           const poolsToQuery = getPoolsToQuery(effectiveConfig);
           fetchPromise = Promise.all(poolsToQuery.map(async (pool) => {
-            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Querying pool ${pool.name} (${pool.address}) for user ${address} via API.`);
+            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Querying pool ${pool.name} (${pool.address}) for user ${address} via API.`);
             // Keep this log always active as per user request
             console.log(`DEBUG: [FetchID ${currentFetchId}] ====> MAKING HTTP POST to ${API_ENDPOINT} for pool_address: ${pool.address}, user_address: ${address}`);
 
@@ -995,12 +995,12 @@ export function useTradeHistory(config = null) {
             if (!response.ok) {
               const errorText = await response.text();
               console.error(`Error fetching trades for pool ${pool.address}: ${response.status} - ${errorText}`);
-              if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`DEBUG: Failed response for pool ${pool.address}:`, errorText);
+              if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`DEBUG: Failed response for pool ${pool.address}:`, errorText);
               return []; // Continue to next pool on error
             }
 
             const responseData = await response.json();
-            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`DEBUG: Full response from pool ${pool.address}:`, responseData);
+            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`DEBUG: Full response from pool ${pool.address}:`, responseData);
 
             if (responseData && responseData.success && Array.isArray(responseData.data)) {
               const rawTradesFromPool = responseData.data;
@@ -1024,12 +1024,12 @@ export function useTradeHistory(config = null) {
         }
 
         allTrades.sort((a, b) => dayjs(b.timestamp).valueOf() - dayjs(a.timestamp).valueOf());
-        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log('Processed trades (fresh fetch):', allTrades);
+        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log('Processed trades (fresh fetch):', allTrades);
 
         console.log(`[TRADE_HISTORY_DEBUG] [${currentFetchOperationId}] Final result for fetchTrades - returning ${allTrades.length} trades for address ${address}.`);
 
         tradeHistoryCache.set(address, { trades: allTrades, timestamp: Date.now() });
-        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`[TRADE_HISTORY_DEBUG] [FetchID ${currentFetchId}] Cached new trades for address ${address} in module cache.`);
+        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`[TRADE_HISTORY_DEBUG] [FetchID ${currentFetchId}] Cached new trades for address ${address} in module cache.`);
 
         console.log(`[TRADE_HISTORY_DEBUG] [${currentFetchOperationId}] 📤 STATE: About to call setTrades with ${allTrades.length} trades.`);
         const setTradesStartTime = performance.now();
@@ -1057,7 +1057,7 @@ export function useTradeHistory(config = null) {
     })();
 
     activeFetchPromises.set(address, fetchPromise);
-    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`DEBUG: [FetchID ${currentFetchId}] New fetch promise stored for ${address}.`);
+    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`DEBUG: [FetchID ${currentFetchId}] New fetch promise stored for ${address}.`);
     return fetchPromise;
 
   }, [address, effectiveConfig]); // Dependencies: address for cache keys and promise map keys, effectiveConfig for dynamic pools
@@ -1068,7 +1068,7 @@ export function useTradeHistory(config = null) {
     fetchTrades()
       .catch(err => {
         // Error is already logged and set in fetchTrades, just ensure loading state is handled
-        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: fetchTrades in useEffect caught an error (expected if already handled).`);
+        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: fetchTrades in useEffect caught an error (expected if already handled).`);
       })
       .finally(() => {
         setLoading(false);
@@ -1078,13 +1078,13 @@ export function useTradeHistory(config = null) {
   // --- Cascade: Add useEffect for Supabase real-time subscription ---
   React.useEffect(() => {
     if (!realtime_websocket || !supabase || !address || !isConnected) {
-      if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false' && realtime_websocket) {
+      if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true' && realtime_websocket) {
         console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Skipping Supabase real-time subscription. Conditions not met: realtime_websocket=${realtime_websocket}, supabase=${!!supabase}, address=${address}, isConnected=${isConnected}`);
       }
       return;
     }
 
-    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
       console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Setting up Supabase real-time subscription for trades for address: ${address.toLowerCase()}`);
     }
 
@@ -1100,7 +1100,7 @@ export function useTradeHistory(config = null) {
           filter: `user_address=eq.${address.toLowerCase()}`
         },
         async (payload) => {
-          if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+          if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
             console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Real-time trade update received for ${address.toLowerCase()}:`, payload);
           }
           const newRawTrade = payload.new;
@@ -1108,7 +1108,7 @@ export function useTradeHistory(config = null) {
             try {
               // Ensure the new trade has an ID, which is used as eventId in processAndFormatTrade
               if (typeof newRawTrade.id === 'undefined') {
-                if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+                if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
                   console.warn(`DEBUG (ViewModel) [${currentFetchOperationId}]: Real-time trade received without an 'id' field, assigning tx_hash as temporary id:`, newRawTrade.evt_tx_hash);
                 }
                 // Attempt to use evt_tx_hash or a unique identifier if id is missing.
@@ -1128,47 +1128,47 @@ export function useTradeHistory(config = null) {
                   );
 
                   if (tradeExists) {
-                    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+                    if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
                       console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Real-time trade ${processedNewTrade.txHash} (ID: ${processedNewTrade.eventId}) already exists in state, skipping update.`);
                     }
                     return prevTrades;
                   }
 
-                  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+                  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
                     console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Adding new real-time trade to state:`, processedNewTrade);
                   }
                   const updatedTrades = [processedNewTrade, ...prevTrades];
 
                   // Update cache
                   tradeHistoryCache.set(address, { trades: updatedTrades, timestamp: Date.now() });
-                  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+                  if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
                     console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Module cache updated with real-time trade for ${address}.`);
                   }
                   return updatedTrades;
                 });
               } else {
-                if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+                if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
                   console.error(`DEBUG (ViewModel) [${currentFetchOperationId}]: Failed to enrich real-time trade data. Raw trade:`, newRawTrade);
                 }
               }
             } catch (e) {
-              if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+              if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
                 console.error(`DEBUG (ViewModel) [${currentFetchOperationId}]: Error processing real-time trade. Error:`, e, "Raw trade payload:", newRawTrade);
               }
             }
           } else {
-            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
               console.warn(`DEBUG (ViewModel) [${currentFetchOperationId}]: Real-time trade payload did not contain 'new' trade data. Payload:`, payload);
             }
           }
         }
       )
       .subscribe((status, err) => {
-        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
           console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Supabase channel '${channelName}' subscription status: ${status}`);
         }
         if (status === 'SUBSCRIBED') {
-          if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+          if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
             console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Successfully subscribed to 'trade_history' table inserts for user ${address.toLowerCase()} on channel '${channelName}'.`);
           }
         } else if (status === 'CHANNEL_ERROR') {
@@ -1182,17 +1182,17 @@ export function useTradeHistory(config = null) {
 
     return () => {
       if (tradeChannel) {
-        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+        if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
           console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Removing Supabase real-time subscription for trades from channel '${channelName}' for address: ${address.toLowerCase()}`);
         }
         supabase.removeChannel(tradeChannel)
           .then(status => {
-            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
               console.log(`DEBUG (ViewModel) [${currentFetchOperationId}]: Supabase channel '${channelName}' removal status: ${status}`);
             }
           })
           .catch(error => {
-            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'false') {
+            if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
               console.error(`DEBUG (ViewModel) [${currentFetchOperationId}]: Error removing Supabase channel '${channelName}':`, error);
             }
           });

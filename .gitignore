@@ -115,3 +115,12 @@ temp/
 
 # Kleros output files
 swapr/kleros_output*.txt
+
+# Local Netlify folder
+.netlify
+
+# TradingView charting library (proprietary, requires license)
+public/static/tradingview/
+
+# macOS resource forks
+__MACOSX/

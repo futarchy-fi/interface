@@ -4,9 +4,10 @@
  * Used by MarketPageShowcase for SPOT price data
  */
 
-// Configurable server URL - defaults to localhost:3456
+// Configurable server URL via env var or window override
 const BALANCER_SERVER_URL =
     (typeof window !== 'undefined' && window.BALANCER_SERVER_URL) ||
+    process.env.NEXT_PUBLIC_BALANCER_SERVER_URL ||
     'http://localhost:3456';
 
 /**
