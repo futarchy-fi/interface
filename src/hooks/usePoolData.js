@@ -176,11 +176,15 @@ const fetchBestPoolsForProposal = async (proposalId, chainId = 100) => {
 
     console.log(`[Pool Data] Found ${pools.length} pools for proposal on chain ${chainId}`);
 
-    // Helper to find best pool for a side
+    // Helper to find best pool for a side — prefer CONDITIONAL pools (where trading happens)
     const getBestPool = (side) => {
       const sidePools = pools.filter(p => p.outcomeSide === side);
       if (sidePools.length === 0) return null;
-      // Sort by liquidity (parsed as float for comparison, assuming raw L is simpler to compare roughly)
+      // Prefer CONDITIONAL pools (actual trading volume), then EXPECTED_VALUE, then PREDICTION
+      const conditional = sidePools.filter(p => p.type === 'CONDITIONAL');
+      if (conditional.length > 0) {
+        return conditional.sort((a, b) => parseFloat(b.liquidity) - parseFloat(a.liquidity))[0];
+      }
       return sidePools.sort((a, b) => parseFloat(b.liquidity) - parseFloat(a.liquidity))[0];
     };
 
