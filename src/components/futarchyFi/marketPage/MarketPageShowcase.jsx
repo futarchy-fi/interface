@@ -5073,6 +5073,13 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                     });
                   }
 
+                  // Alternative Interface badge
+                  badges.push({
+                    text: 'Alt Interface',
+                    colorScheme: 'orange',
+                    link: 'https://gnosis-price-watch-koeppelmann.replit.app/'
+                  });
+
                   return badges;
                 })()} />
               )}
