@@ -329,8 +329,11 @@ export const useYesNoPoolData = (config) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!config || !config.POOL_CONFIG_YES || !config.POOL_CONFIG_NO) {
-      console.log('Pool data hook: Missing config or pool addresses', config);
+    const proposalId = config?.proposalId || config?.MARKET_ADDRESS;
+    const hasPoolConfig = config?.POOL_CONFIG_YES && config?.POOL_CONFIG_NO;
+
+    if (!config || (!hasPoolConfig && !proposalId)) {
+      console.log('Pool data hook: Missing config and no proposal ID for discovery', config);
       setLoading(false);
       return;
     }
@@ -340,8 +343,8 @@ export const useYesNoPoolData = (config) => {
         setLoading(true);
         setError(null);
 
-        const yesPoolId = config.POOL_CONFIG_YES.address;
-        const noPoolId = config.POOL_CONFIG_NO.address;
+        const yesPoolId = config.POOL_CONFIG_YES?.address;
+        const noPoolId = config.POOL_CONFIG_NO?.address;
 
         // Get chainId from config (default to Gnosis 100)
         const chainId = config.chainId || config.CHAIN_ID || 100;
@@ -354,8 +357,6 @@ export const useYesNoPoolData = (config) => {
         const PROPOSALS_USING_SUBGRAPH_DATA = [
           '0x45e1064348fD8A407D6D1F59Fc64B05F633b28FC'
         ];
-
-        const proposalId = config.proposalId || config.MARKET_ADDRESS;
 
         // Start with global toggle (if enabled, always use subgraph)
         let useSubgraph = ENABLE_SUBGRAPH_FOR_ALL_PROPOSALS;
@@ -379,23 +380,30 @@ export const useYesNoPoolData = (config) => {
         const currentSource = useSubgraph ? 'subgraph' : 'tickspread';
         console.log('Fetching pool data from:', currentSource);
 
-        if (useSubgraph) {
-          const proposalId = config.proposalId || config.MARKET_ADDRESS;
-          if (proposalId) {
-            const bestPools = await fetchBestPoolsForProposal(proposalId, chainId);
-            if (bestPools) {
-              console.log('Using Smart Pool Selection from Subgraph:', bestPools);
-              setData({
-                yesPool: bestPools.yesPool || { volume: 0, liquidity: 0 },
-                noPool: bestPools.noPool || { volume: 0, liquidity: 0 },
-                source: 'subgraph'
-              });
-              setLoading(false);
-              return;
-            }
+        // Try subgraph discovery by proposal ID (works even without explicit pool config)
+        if (useSubgraph && proposalId) {
+          const bestPools = await fetchBestPoolsForProposal(proposalId, chainId);
+          if (bestPools) {
+            console.log('Using Smart Pool Selection from Subgraph:', bestPools);
+            setData({
+              yesPool: bestPools.yesPool || { volume: 0, liquidity: 0 },
+              noPool: bestPools.noPool || { volume: 0, liquidity: 0 },
+              source: 'subgraph'
+            });
+            setLoading(false);
+            return;
           }
+        }
 
-          // 2. Fallback to Config Addresses
+        // Fallback paths below require explicit pool addresses
+        if (!yesPoolId || !noPoolId) {
+          console.log('Pool data hook: No pools found via subgraph and no explicit pool config');
+          setLoading(false);
+          return;
+        }
+
+        if (useSubgraph) {
+          // Fallback to Config Addresses
           const [yesData, noData] = await Promise.all([
             fetchSubgraphPoolData(yesPoolId, chainId),
             fetchSubgraphPoolData(noPoolId, chainId)
@@ -457,52 +465,7 @@ export const useYesNoPoolData = (config) => {
           };
         };
 
-        if (useSubgraph) {
-          let subgraphData = null;
-
-          // 1. Try Smart Fetch by Proposal ID (preferred)
-          const proposalId = config.proposalId || config.MARKET_ADDRESS;
-          if (proposalId) {
-            const bestPools = await fetchBestPoolsForProposal(proposalId, chainId);
-            if (bestPools && (bestPools.yesPool.liquidity.amount > 0 || bestPools.noPool.liquidity.amount > 0)) {
-              console.log('Using Smart Pool Selection from Subgraph:', bestPools);
-              subgraphData = {
-                yesPool: bestPools.yesPool,
-                noPool: bestPools.noPool,
-                source: 'subgraph'
-              };
-            }
-          }
-
-          // 2. Fallback to Config Addresses (if Smart Fetch failed or was empty)
-          if (!subgraphData) {
-            const [yesData, noData] = await Promise.all([
-              fetchSubgraphPoolData(yesPoolId, chainId),
-              fetchSubgraphPoolData(noPoolId, chainId)
-            ]);
-
-            const hasData = (yesData && yesData.liquidity.amount > 0) || (noData && noData.liquidity.amount > 0);
-
-            if (hasData) {
-              subgraphData = {
-                yesPool: yesData || { volume: 0, liquidity: 0 },
-                noPool: noData || { volume: 0, liquidity: 0 },
-                source: 'subgraph'
-              };
-            }
-          }
-
-          // If we found valid subgraph data, use it
-          if (subgraphData) {
-            setData(subgraphData);
-            setLoading(false);
-            return;
-          }
-
-          console.warn('Subgraph returned no/empty data. Falling back to Legacy API...');
-        }
-
-        // 3. Ultimate Fallback: Legacy API
+        // Ultimate Fallback: Legacy API
         const legacyData = await fetchLegacyData();
         setData(legacyData);
 
