@@ -2865,6 +2865,17 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     config?.BASE_POOL_CONFIG?.currencySlot
   ]);
 
+  // Fallback: use subgraph-derived prices when Supabase pool_candles aren't available
+  // (e.g., AAVE market has no POOL_CONFIG_YES/NO so Supabase fetch never runs)
+  useEffect(() => {
+    if (newYesPrice === null && poolData?.yesPool?.price != null) {
+      setNewYesPrice(poolData.yesPool.price);
+    }
+    if (newNoPrice === null && poolData?.noPool?.price != null) {
+      setNewNoPrice(poolData.noPool.price);
+    }
+  }, [newYesPrice, newNoPrice, poolData?.yesPool?.price, poolData?.noPool?.price]);
+
   // Connection state for tracking wallet connection changes
   const [previousConnectionState, setPreviousConnectionState] = useState(isConnected);
 
@@ -4841,16 +4852,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                   }
                   const yes = Number(newYesPrice);
                   const no = Number(newNoPrice);
-                  const spotPriceValue = newBasePrice !== null ? newBasePrice : latestPrices.spotPriceSDAI;
-
-                  let impactValue;
-                  if (hasSpot && spotPriceValue && spotPriceValue > 0) {
-                    impactValue = ((yes - no) / spotPriceValue) * 100;
-                  } else {
-                    // Fallback formula when no spot price: (yes - no) / max(yes, no)
-                    const denominator = Math.max(yes, no);
-                    impactValue = denominator > 0 ? ((yes - no) / denominator) * 100 : 0;
-                  }
+                  const denominator = Math.max(yes, no);
+                  const impactValue = denominator > 0 ? ((yes - no) / denominator) * 100 : 0;
 
                   const prefix = impactValue > 0 ? '+' : '';
                   return `${prefix}${impactValue.toFixed(2)}%`;
@@ -4865,21 +4868,13 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                   }
                   const yes = Number(newYesPrice);
                   const no = Number(newNoPrice);
-                  const spotPriceValue = newBasePrice !== null ? newBasePrice : latestPrices.spotPriceSDAI;
+                  const denominator = Math.max(yes, no);
+                  const impactValue = denominator > 0 ? ((yes - no) / denominator) * 100 : 0;
 
-                  let impactValue = 0;
-                  if (hasSpot && spotPriceValue && spotPriceValue > 0) {
-                    impactValue = ((yes - no) / spotPriceValue) * 100;
-                  } else {
-                    const denominator = Math.max(yes, no);
-                    impactValue = denominator > 0 ? ((yes - no) / denominator) * 100 : 0;
-                  }
-
-                  // Teal/green for positive impact, crimson red for negative
                   return impactValue >= 0 ? 'text-futarchyTeal7' : 'text-futarchyCrimson11';
                 })()}
                 Icon={ImpactIcon}
-                isLoading={newYesPrice === null || newNoPrice === null || latestPrices.loading}
+                isLoading={newYesPrice === null || newNoPrice === null}
               />
 
               <StatDisplay
@@ -5170,10 +5165,9 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                           <div className="h-16 bg-futarchyGray2 dark:bg-futarchyDarkGray2 border-b-2 border-futarchyGray62 dark:border-futarchyGray11/70">
                             <ChartParameters
                               tradingPair={`${config?.BASE_TOKENS_CONFIG?.company?.symbol || DEFAULT_BASE_TOKENS_CONFIG.company.symbol}/${selectedCurrency === 'WXDAI' ? 'xDAI' : currencySymbol}`}
-                              spotPrice={(latestPrices.loading && newBasePrice === null) ? null : (() => {
+                              spotPrice={(() => {
                                 const value = Number(newBasePrice !== null ? newBasePrice : (latestPrices.spotPriceSDAI || 0));
-                                const displayCurrency = selectedCurrency;
-                                const displayValue = displayCurrency === 'WXDAI' && sdaiRate && !isLoadingRate && !rateError && sdaiRate > 0
+                                const displayValue = selectedCurrency === 'WXDAI' && sdaiRate && !isLoadingRate && !rateError && sdaiRate > 0
                                   ? value * sdaiRate
                                   : value;
                                 return displayValue;

@@ -86,12 +86,9 @@ const ChartParameters = ({
   console.log('[ChartParameters] config received:', config);
   console.log('[ChartParameters] precisionConfig extracted:', precisionConfig);
   console.log('[ChartParameters] precision display values:', precisionConfig?.display);
-  // As per user instruction, impact is calculated as (yesPrice - noPrice) / spotPrice
-  // Fallback if no spot: (Yes - No) / Max(Yes, No) * 100
+  // Impact = (Yes - No) / Max(Yes, No) * 100 — independent of spot price
   let impact = 0;
-  if (showSpot && spotPrice > 0 && yesPrice !== null && noPrice !== null) {
-    impact = ((yesPrice - noPrice) / spotPrice) * 100;
-  } else if (yesPrice !== null && noPrice !== null) {
+  if (yesPrice !== null && noPrice !== null) {
     const denominator = Math.max(yesPrice, noPrice);
     impact = denominator > 0 ? ((yesPrice - noPrice) / denominator) * 100 : 0;
   }
