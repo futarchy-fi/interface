@@ -214,9 +214,47 @@ const fetchBestPoolsForProposal = async (proposalId, chainId = 100) => {
 
     if (!yesPool && !noPool) return null;
 
+    // Fetch latest candle close price for each pool (more accurate than tick)
+    const fetchLatestCandlePrice = async (poolId) => {
+      if (!poolId) return null;
+      try {
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `{ candles(where: { pool: "${poolId.toLowerCase()}" }, orderBy: time, orderDirection: desc, first: 1) { close } }`
+          })
+        });
+        const res = await resp.json();
+        const closePrice = res.data?.candles?.[0]?.close;
+        return closePrice ? parseFloat(closePrice) : null;
+      } catch (err) {
+        console.warn('[Pool Data] Failed to fetch candle price for', poolId, err);
+        return null;
+      }
+    };
+
+    const [yesCandlePrice, noCandlePrice] = await Promise.all([
+      yesPool ? fetchLatestCandlePrice(yesPool.id) : Promise.resolve(null),
+      noPool ? fetchLatestCandlePrice(noPool.id) : Promise.resolve(null)
+    ]);
+
+    const yesData = formatSubgraphPoolData(yesPool, currencySymbol);
+    const noData = formatSubgraphPoolData(noPool, currencySymbol);
+
+    // Override tick-derived price with candle price when available
+    if (yesCandlePrice != null) {
+      console.log(`[Pool Data] YES candle price: ${yesCandlePrice} (tick-derived: ${yesData.price})`);
+      yesData.price = yesCandlePrice;
+    }
+    if (noCandlePrice != null) {
+      console.log(`[Pool Data] NO candle price: ${noCandlePrice} (tick-derived: ${noData.price})`);
+      noData.price = noCandlePrice;
+    }
+
     return {
-      yesPool: formatSubgraphPoolData(yesPool, currencySymbol),
-      noPool: formatSubgraphPoolData(noPool, currencySymbol)
+      yesPool: yesData,
+      noPool: noData
     };
 
   } catch (e) {
