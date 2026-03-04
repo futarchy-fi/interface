@@ -2619,6 +2619,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     useSupabase: useSupabaseSnapshot,
     autoFetch: true,
     refreshInterval: 60000, // Refresh every 60 seconds
+    registrySnapshotId: config?._registryMetadata?.snapshot_id || null,
   });
 
   // Process the market title with regex to extract components
@@ -5041,6 +5042,19 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                       colorScheme: 'violet',
                       link: marketData.question_link
                     });
+                  }
+
+                  // Snapshot Vote badge - link to Snapshot proposal
+                  {
+                    const effectiveSnapshotId = snapshotProposalId || config?._registryMetadata?.snapshot_id;
+                    if (effectiveSnapshotId) {
+                      const spaceId = snapshotData?.spaceId || 'gnosis.eth';
+                      badges.push({
+                        text: 'Snapshot Vote',
+                        colorScheme: 'default',
+                        link: `https://snapshot.box/#/s:${spaceId}/proposal/${effectiveSnapshotId}`
+                      });
+                    }
                   }
 
                   // Add Liquidity badge
