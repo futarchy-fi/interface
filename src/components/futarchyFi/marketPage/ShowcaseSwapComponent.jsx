@@ -417,6 +417,14 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         }
 
         if (isActive) {
+          // Detect insufficient liquidity: impact > 99% means the pool can't handle this trade
+          const afterPrice = quoteResult.priceAfter ?? executionPrice;
+          let insufficientLiquidity = false;
+          if (currentPrice && afterPrice) {
+            const impactPct = Math.abs(parseFloat(afterPrice) - currentPrice) / currentPrice * 100;
+            insufficientLiquidity = impactPct > 99;
+          }
+
           setQuoterPreview({
             isLoading: false,
             amountOut: quoteResult.amountOutFormatted || quoteResult.amountOut,
@@ -424,12 +432,11 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             executionPrice,
             priceImpact: quoteResult.priceImpact,
             slippage: quoteResult.slippage,
-            // Pool price after swap — FutarchyQuoteHelper returns it directly;
-            // Uniswap path computes it as executionPrice (from sqrtPriceX96After)
-            priceAfter: quoteResult.priceAfter ?? executionPrice,
+            priceAfter: afterPrice,
             minimumReceived: quoteResult.minimumReceived,
-            amountOutRaw: quoteResult.amountOutRaw, // [FIX] Ensure raw amount is saved to state
+            amountOutRaw: quoteResult.amountOutRaw,
             chainId: chainId,
+            insufficientLiquidity,
             error: null
           });
         }
@@ -702,6 +709,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         currentPrice: (USING_FUTARCHY_QUOTER && quoterPreview?.currentPrice) ? quoterPreview.currentPrice : null,
         executionPrice: (USING_FUTARCHY_QUOTER && quoterPreview?.executionPrice) ? quoterPreview.executionPrice : null,
         isApproximate: !(USING_FUTARCHY_QUOTER && quoterPreview?.amountOut && !quoterPreview.error),
+        insufficientLiquidity: quoterPreview?.insufficientLiquidity || false,
       };
       console.log("Opening ConfirmSwapModal directly with data:", directConfirmData);
       setConfirmModalData(directConfirmData);
@@ -1498,6 +1506,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                         }
 
                         if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
+                          if (quoterPreview.insufficientLiquidity) {
+                            return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
+                          }
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
                           return `${formatWith(parseFloat(quoterPreview.amountOut), 'swapPrice')} ${symbol}`;
                         }
@@ -1596,6 +1607,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                         }
 
                         if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
+                          if (quoterPreview.insufficientLiquidity) {
+                            return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
+                          }
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
                           return `${formatWith(parseFloat(quoterPreview.amountOut), 'swapPrice')} ${symbol}`;
                         }
@@ -1679,9 +1693,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             <button
               onClick={handleConfirmClick}
               className="group relative overflow-hidden w-full py-3 px-4 rounded-xl font-semibold transition-colors text-sm bg-futarchyGray2 dark:bg-futarchyDarkGray2 border-2 border-futarchyGray62 dark:border-futarchyGray112/40 text-black dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!amount || parseFloat(amount) <= 0 || marketHasClosed || quoterPreview.isLoading}
+              disabled={!amount || parseFloat(amount) <= 0 || marketHasClosed || quoterPreview.isLoading || quoterPreview.insufficientLiquidity}
             >
-              <span className="relative z-10">{quoterPreview.isLoading ? 'Calculating...' : 'Confirm Swap'}</span>
+              <span className="relative z-10">{quoterPreview.isLoading ? 'Calculating...' : quoterPreview.insufficientLiquidity ? 'Insufficient Liquidity' : 'Confirm Swap'}</span>
               {(amount && parseFloat(amount) > 0 && !marketHasClosed) && (
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-black/10 dark:via-white/20 to-transparent transform -translate-x-full -skew-x-12 group-hover:translate-x-full transition-transform duration-500 ease-in-out pointer-events-none"></div>
               )}
