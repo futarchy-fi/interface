@@ -1489,30 +1489,28 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       <div className="mt-2 pt-2 border-t border-futarchyGold6 dark:border-futarchyGold6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
-                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{quoterPreview.currentPrice.toFixed(2)}</span>
+                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{quoterPreview.executionPrice.toFixed(2)}</span>
+                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
                         </div>
+                        {(() => {
+                          const cur = parseFloat(quoterPreview.currentPrice);
+                          const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
+                          const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
+                          const val = quoterPreview.chainId === 100 ? slippage : impact;
+                          return (
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">
                             {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
                           </span>
-                          <span className={`font-medium ${Math.abs(quoterPreview.chainId === 100 ? (quoterPreview.slippage || 0) : (quoterPreview.priceImpact || 0)) > 1
-                            ? 'text-futarchyCrimson9'
-                            : 'text-futarchyGreen9'
-                            }`}>
-                            {quoterPreview.chainId === 100
-                              ? (quoterPreview.slippage !== null && quoterPreview.slippage !== undefined
-                                ? `${quoterPreview.slippage.toFixed(2)}%`
-                                : '0%')
-                              : (quoterPreview.priceImpact !== null && quoterPreview.priceImpact !== undefined
-                                ? `${quoterPreview.priceImpact.toFixed(2)}%`
-                                : '0%')
-                            }
+                          <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
+                            {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
                           </span>
                         </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -1578,30 +1576,28 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       <div className="mt-2 pt-2 border-t border-futarchyBlue6 dark:border-futarchyBlue6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
-                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{quoterPreview.currentPrice.toFixed(2)}</span>
+                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{quoterPreview.executionPrice.toFixed(2)}</span>
+                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
                         </div>
+                        {(() => {
+                          const cur = parseFloat(quoterPreview.currentPrice);
+                          const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
+                          const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
+                          const val = quoterPreview.chainId === 100 ? slippage : impact;
+                          return (
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">
                             {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
                           </span>
-                          <span className={`font-medium ${Math.abs(quoterPreview.chainId === 100 ? (quoterPreview.slippage || 0) : (quoterPreview.priceImpact || 0)) > 1
-                            ? 'text-futarchyCrimson9'
-                            : 'text-futarchyGreen9'
-                            }`}>
-                            {quoterPreview.chainId === 100
-                              ? (quoterPreview.slippage !== null && quoterPreview.slippage !== undefined
-                                ? `${quoterPreview.slippage.toFixed(2)}%`
-                                : '0%')
-                              : (quoterPreview.priceImpact !== null && quoterPreview.priceImpact !== undefined
-                                ? `${quoterPreview.priceImpact.toFixed(2)}%`
-                                : '0%')
-                            }
+                          <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
+                            {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
                           </span>
                         </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
