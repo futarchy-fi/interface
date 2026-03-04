@@ -749,7 +749,10 @@ const transformCompanyData = async (data, isMockData, useNewPrices, newYesPriceA
         
         const timestampDate = proposal.timestamp ? new Date(proposal.timestamp) : now;
         const countdownFinish = proposal.countdown_finish || false;
-        const approvalStatus = proposal.approval_status || "ongoing";
+        // Derive approvalStatus: resolution_status takes priority over approval_status
+        const approvalStatus = proposal.resolution_status === 'resolved'
+          ? (proposal.resolution_outcome === 'yes' ? 'approved' : 'refused')
+          : (proposal.approval_status || "ongoing");
         
         let predictionPools = null;
         let initialImpact = null; // Renamed from impact

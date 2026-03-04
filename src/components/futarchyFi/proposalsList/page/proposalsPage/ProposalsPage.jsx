@@ -255,7 +255,11 @@ const ProposalsPage = ({
                 ? `${p.displayNameQuestion} ${p.displayNameEvent || ''}`
                 : 'Untitled Proposal',
               description: p.description || '',
-              approvalStatus: 'ongoing',
+              approvalStatus: proposalMeta.resolution_status === 'resolved'
+                ? (proposalMeta.resolution_outcome === 'yes' ? 'approved' : 'refused')
+                : 'ongoing',
+              resolution_status: proposalMeta.resolution_status || null,
+              resolution_outcome: proposalMeta.resolution_outcome || null,
               chainId,
               // Use org's cover image as the card banner
               image: subgraphOrg.coverImage || subgraphOrg.logo || PROPOSAL_IMAGES['gnosis-pay'],
