@@ -473,6 +473,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             amountOut: null,
             currentPrice: fallbackPrice,
             chainId: chainId,
+            insufficientLiquidity: true, // Quoter failure means pool can't handle this trade
             error: error.message
           });
         }
@@ -1505,10 +1506,12 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           );
                         }
 
+                        // Insufficient liquidity check — covers both quoter success (extreme impact) and failure (no liquidity)
+                        if ((chainId === 1 || chainId === 100) && quoterPreview.insufficientLiquidity) {
+                          return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
+                        }
+
                         if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
-                          if (quoterPreview.insufficientLiquidity) {
-                            return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
-                          }
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
                           return `${formatWith(parseFloat(quoterPreview.amountOut), 'swapPrice')} ${symbol}`;
                         }
@@ -1606,10 +1609,12 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           );
                         }
 
+                        // Insufficient liquidity check — covers both quoter success (extreme impact) and failure (no liquidity)
+                        if ((chainId === 1 || chainId === 100) && quoterPreview.insufficientLiquidity) {
+                          return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
+                        }
+
                         if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
-                          if (quoterPreview.insufficientLiquidity) {
-                            return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
-                          }
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
                           return `${formatWith(parseFloat(quoterPreview.amountOut), 'swapPrice')} ${symbol}`;
                         }

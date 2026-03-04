@@ -3820,7 +3820,13 @@ const ConfirmSwapModal = memo(({
                                     </span>
                                 </div>
                                 {/* For Uniswap SDK (Chain 1 - Ethereum), show QuoterV2-based fields */}
-                                {selectedSwapMethod === 'uniswapSdk' && (
+                                {selectedSwapMethod === 'uniswapSdk' && transactionData.insufficientLiquidity && (
+                                    <div className="bg-futarchyOrange3 dark:bg-futarchyOrangeDark3 border border-futarchyOrange7 dark:border-futarchyOrangeDark7 rounded-lg p-3 text-center">
+                                        <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 font-medium text-sm">Insufficient liquidity in this pool</span>
+                                        <p className="text-futarchyOrange11/70 dark:text-futarchyOrangeDark11/70 text-xs mt-1">This pool does not have enough in-range liquidity to execute this trade.</p>
+                                    </div>
+                                )}
+                                {selectedSwapMethod === 'uniswapSdk' && !transactionData.insufficientLiquidity && (
                                     <>
                                         <div className="flex justify-between">
                                             <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Expected Receive</span>
@@ -4000,7 +4006,13 @@ const ConfirmSwapModal = memo(({
                                     </>
                                 )}
                                 {/* For Algebra (Chain 100 - Gnosis), show Algebra Quoter fields */}
-                                {selectedSwapMethod === 'algebra' && (
+                                {selectedSwapMethod === 'algebra' && transactionData.insufficientLiquidity && (
+                                    <div className="bg-futarchyOrange3 dark:bg-futarchyOrangeDark3 border border-futarchyOrange7 dark:border-futarchyOrangeDark7 rounded-lg p-3 text-center">
+                                        <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 font-medium text-sm">Insufficient liquidity in this pool</span>
+                                        <p className="text-futarchyOrange11/70 dark:text-futarchyOrangeDark11/70 text-xs mt-1">This pool does not have enough in-range liquidity to execute this trade.</p>
+                                    </div>
+                                )}
+                                {selectedSwapMethod === 'algebra' && !transactionData.insufficientLiquidity && (
                                     <>
                                         <div className="flex justify-between">
                                             <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Expected Receive</span>
