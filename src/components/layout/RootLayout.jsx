@@ -124,6 +124,12 @@ const RootLayout = ({
           darkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode} // Pass the toggle function
         />
+        {secondaryHeader}
+        {heroContent && (
+          <div className="sticky top-20 z-30">
+            {heroContent}
+          </div>
+        )}
         <main className="flex-grow">
           {children}
         </main>
