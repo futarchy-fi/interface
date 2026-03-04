@@ -1489,12 +1489,18 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       <div className="mt-2 pt-2 border-t border-futarchyGold6 dark:border-futarchyGold6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
-                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{quoterPreview.currentPrice.toFixed(2)}</span>
+                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{quoterPreview.currentPrice.toFixed(4)}</span>
                         </div>
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{quoterPreview.executionPrice.toFixed(2)}</span>
+                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{quoterPreview.executionPrice.toFixed(4)}</span>
                         </div>
+                        {quoterPreview.priceAfter && (
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="text-futarchyGray11 dark:text-white/50">Pool Price After</span>
+                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{quoterPreview.priceAfter.toFixed(4)}</span>
+                        </div>
+                        )}
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">
                             {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
@@ -1505,10 +1511,10 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                             }`}>
                             {quoterPreview.chainId === 100
                               ? (quoterPreview.slippage !== null && quoterPreview.slippage !== undefined
-                                ? `${quoterPreview.slippage.toFixed(2)}%`
+                                ? `${Math.abs(quoterPreview.slippage) < 0.01 ? quoterPreview.slippage.toFixed(4) : quoterPreview.slippage.toFixed(2)}%`
                                 : '0%')
                               : (quoterPreview.priceImpact !== null && quoterPreview.priceImpact !== undefined
-                                ? `${quoterPreview.priceImpact.toFixed(2)}%`
+                                ? `${Math.abs(quoterPreview.priceImpact) < 0.01 ? quoterPreview.priceImpact.toFixed(4) : quoterPreview.priceImpact.toFixed(2)}%`
                                 : '0%')
                             }
                           </span>
@@ -1578,12 +1584,18 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       <div className="mt-2 pt-2 border-t border-futarchyBlue6 dark:border-futarchyBlue6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
-                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{quoterPreview.currentPrice.toFixed(2)}</span>
+                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{quoterPreview.currentPrice.toFixed(4)}</span>
                         </div>
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{quoterPreview.executionPrice.toFixed(2)}</span>
+                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{quoterPreview.executionPrice.toFixed(4)}</span>
                         </div>
+                        {quoterPreview.priceAfter && (
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="text-futarchyGray11 dark:text-white/50">Pool Price After</span>
+                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{quoterPreview.priceAfter.toFixed(4)}</span>
+                        </div>
+                        )}
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">
                             {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
@@ -1594,10 +1606,10 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                             }`}>
                             {quoterPreview.chainId === 100
                               ? (quoterPreview.slippage !== null && quoterPreview.slippage !== undefined
-                                ? `${quoterPreview.slippage.toFixed(2)}%`
+                                ? `${Math.abs(quoterPreview.slippage) < 0.01 ? quoterPreview.slippage.toFixed(4) : quoterPreview.slippage.toFixed(2)}%`
                                 : '0%')
                               : (quoterPreview.priceImpact !== null && quoterPreview.priceImpact !== undefined
-                                ? `${quoterPreview.priceImpact.toFixed(2)}%`
+                                ? `${Math.abs(quoterPreview.priceImpact) < 0.01 ? quoterPreview.priceImpact.toFixed(4) : quoterPreview.priceImpact.toFixed(2)}%`
                                 : '0%')
                             }
                           </span>
