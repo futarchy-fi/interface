@@ -523,6 +523,7 @@ const TwapCountdown = ({
   const [hasEnded, setHasEnded] = useState(false);
   const [isWaitingToStart, setIsWaitingToStart] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [twapResults, setTwapResults] = useState({ yes: null, no: null, spread: null });
   const [twapLoading, setTwapLoading] = useState(false);
   const [twapError, setTwapError] = useState(null);
@@ -763,133 +764,115 @@ const TwapCountdown = ({
     )
   );
 
-  return (
-    <div className={`${isScrolled ? 'mt-0' : 'mt-4'} p-2 lg:p-3 rounded-lg border transition-all duration-300 ${theme.container}`}>
-      <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${theme.pulse}`} />
-        <div className="flex-1">
-          {isWaitingToStart && timeUntilStart && (
-            <>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-medium ${theme.text}`}>
-                    TWAP Starts In
-                  </span>
-                  {!isScrolled && twapDescription && (
-                    <button
-                      onClick={() => setShowDetails(!showDetails)}
-                      className={`text-xs ${theme.desc} hover:${theme.text} underline transition-colors`}
-                    >
-                      {showDetails ? 'Hide' : 'See Details'}
-                    </button>
-                  )}
-                </div>
-                <span className={`text-xs font-mono ${theme.subText}`}>
-                  {timeUntilStart.days > 0 && `${timeUntilStart.days}d `}
-                  {String(timeUntilStart.hours).padStart(2, '0')}h {String(timeUntilStart.minutes).padStart(2, '0')}m {String(timeUntilStart.seconds).padStart(2, '0')}s
-                </span>
-              </div>
-              {renderDescription(theme.desc)}
-            </>
-          )}
+  // Collapsed header label and timer value
+  const headerLabel = isWaitingToStart ? 'TWAP Starts In'
+    : isActive ? 'TWAP Active'
+    : hasEnded ? 'TWAP Complete'
+    : 'TWAP';
 
-          {isActive && timeRemaining && (
-            <>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-medium ${theme.text}`}>
-                    TWAP Active
-                  </span>
-                  {percentDiff && (
-                    <span className={`text-xs font-bold ${theme.text}`}>
-                      ({percentDiff}%)
+  const headerTimer = isWaitingToStart && timeUntilStart
+    ? `${timeUntilStart.days > 0 ? `${timeUntilStart.days}d ` : ''}${String(timeUntilStart.hours).padStart(2, '0')}h ${String(timeUntilStart.minutes).padStart(2, '0')}m ${String(timeUntilStart.seconds).padStart(2, '0')}s`
+    : isActive && timeRemaining
+    ? `${String(timeRemaining.hours).padStart(2, '0')}h ${String(timeRemaining.minutes).padStart(2, '0')}m ${String(timeRemaining.seconds).padStart(2, '0')}s`
+    : null;
+
+  return (
+    <div className={`${isScrolled ? 'mt-0' : 'mt-4'} rounded-lg border transition-all duration-300 ${theme.container}`}>
+      {/* Collapsed header — always visible, click to expand */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full p-2 lg:p-3 flex items-center gap-2 cursor-pointer text-left"
+      >
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${theme.pulse}`} />
+        <div className="flex-1 flex items-center justify-between min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-medium ${theme.text}`}>
+              {headerLabel}
+            </span>
+            {percentDiff && (isActive || hasEnded) && (
+              <span className={`text-xs font-bold ${theme.text}`}>
+                ({percentDiff}%)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {headerTimer && (
+              <span className={`text-xs font-mono ${theme.subText}`}>
+                {headerTimer}
+              </span>
+            )}
+            <svg
+              className={`w-3.5 h-3.5 ${theme.text} transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+        </div>
+      </button>
+
+      {/* Expandable body */}
+      <div className={`grid transition-all duration-300 ease-in-out ${isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+        <div className="overflow-hidden">
+          <div className="px-2 lg:px-3 pb-2 lg:pb-3 space-y-2">
+            {/* Description */}
+            {!isScrolled && twapDescription && (
+              <p className={`text-xs ${theme.desc}`}>
+                {twapDescription}
+              </p>
+            )}
+
+            {/* TWAP values grid */}
+            {(isActive || hasEnded) && yesPoolConfig?.address && noPoolConfig?.address && (
+              <div className="rounded-md bg-white/5 dark:bg-white/10 p-2">
+                <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-white/70 dark:text-white/60">
+                  <span>{hasEnded ? 'Final TWAP Window' : 'Live TWAP Window'}</span>
+                  {lastTwapUpdate && (
+                    <span className="text-white/50 dark:text-white/40">
+                      Updated {lastTwapUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
                   )}
-                  {!isScrolled && twapDescription && (
-                    <button
-                      onClick={() => setShowDetails(!showDetails)}
-                      className={`text-xs ${theme.desc} hover:${theme.text} underline transition-colors`}
-                    >
-                      {showDetails ? 'Hide' : 'See Details'}
-                    </button>
-                  )}
                 </div>
-                <span className={`text-xs font-mono ${theme.subText}`}>
-                  {String(timeRemaining.hours).padStart(2, '0')}h {String(timeRemaining.minutes).padStart(2, '0')}m {String(timeRemaining.seconds).padStart(2, '0')}s
-                </span>
-              </div>
-              {renderDescription(theme.desc)}
-            </>
-          )}
 
-          {hasEnded && !isScrolled && (
-            <p className={`text-xs ${theme.text}`}>
-              {twapDescription}
-            </p>
-          )}
-          {hasEnded && isScrolled && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-medium ${theme.text}`}>
-                  TWAP Complete
-                </span>
-                {percentDiff && (
-                  <span className={`text-xs font-bold ${theme.text}`}>
-                    ({percentDiff}%)
-                  </span>
+                {twapError ? (
+                  <p className="mt-2 text-xs text-red-400 dark:text-red-300">{twapError}</p>
+                ) : (
+                  <>
+                    {twapLoading && (
+                      <div className="mt-2 flex items-center gap-2 text-[11px] text-white/70 dark:text-white/60">
+                        <span className="h-3 w-3 rounded-full border-2 border-white/40 border-t-transparent animate-spin" />
+                        Calculating TWAP…
+                      </div>
+                    )}
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-md bg-black/10 dark:bg-white/5 p-2">
+                        <p className="text-white/60 dark:text-white/70">YES TWAP</p>
+                        <p className="font-mono text-sm text-white dark:text-white">
+                          {formatTwapValue(twapResults.yes)}
+                        </p>
+                      </div>
+                      <div className="rounded-md bg-black/10 dark:bg-white/5 p-2">
+                        <p className="text-white/60 dark:text-white/70">NO TWAP</p>
+                        <p className="font-mono text-sm text-white dark:text-white">
+                          {formatTwapValue(twapResults.no)}
+                        </p>
+                      </div>
+                    </div>
+                    {leaderboardText && (
+                      <p className="mt-2 text-[11px] text-white/80 dark:text-white/70">
+                        {leaderboardText}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
-            </div>
-          )}
-
-          {(isActive || hasEnded) && yesPoolConfig?.address && noPoolConfig?.address && (
-            <div className={`grid transition-all duration-300 ease-in-out ${isScrolled ? 'grid-rows-[0fr] opacity-0 mt-0' : 'grid-rows-[1fr] opacity-100 mt-3'}`}>
-              <div className="overflow-hidden">
-                <div className="rounded-md bg-white/5 dark:bg-white/10 p-2">
-                  <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-white/70 dark:text-white/60">
-                    <span>{hasEnded ? 'Final TWAP Window' : 'Live TWAP Window'}</span>
-                    {lastTwapUpdate && (
-                      <span className="text-white/50 dark:text-white/40">
-                        Updated {lastTwapUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </span>
-                    )}
-                  </div>
-
-                  {twapError ? (
-                    <p className="mt-2 text-xs text-red-400 dark:text-red-300">{twapError}</p>
-                  ) : (
-                    <>
-                      {twapLoading && (
-                        <div className="mt-2 flex items-center gap-2 text-[11px] text-white/70 dark:text-white/60">
-                          <span className="h-3 w-3 rounded-full border-2 border-white/40 border-t-transparent animate-spin" />
-                          Calculating TWAP…
-                        </div>
-                      )}
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-md bg-black/10 dark:bg-white/5 p-2">
-                          <p className="text-white/60 dark:text-white/70">YES TWAP</p>
-                          <p className="font-mono text-sm text-white dark:text-white">
-                            {formatTwapValue(twapResults.yes)}
-                          </p>
-                        </div>
-                        <div className="rounded-md bg-black/10 dark:bg-white/5 p-2">
-                          <p className="text-white/60 dark:text-white/70">NO TWAP</p>
-                          <p className="font-mono text-sm text-white dark:text-white">
-                            {formatTwapValue(twapResults.no)}
-                          </p>
-                        </div>
-                      </div>
-                      {leaderboardText && (
-                        <p className="mt-2 text-[11px] text-white/80 dark:text-white/70">
-                          {leaderboardText}
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

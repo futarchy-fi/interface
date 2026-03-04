@@ -4530,6 +4530,100 @@ const ConfirmSwapModal = memo(({
                             </div>
                         )}
 
+                        {/* Post-Trade Summary Panel — Success */}
+                        {isFinalStateForCloseButton && orderStatus === 'fulfilled' && (
+                            <div className="mx-4 mb-4 p-4 bg-futarchyGreen3 dark:bg-futarchyGreenDark3 border border-futarchyGreen7 dark:border-futarchyGreenDark7 rounded-lg space-y-2">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <svg className="w-5 h-5 text-futarchyGreen11 dark:text-futarchyGreenDark11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M20 6L9 17l-5-5" />
+                                    </svg>
+                                    <span className="font-semibold text-sm text-futarchyGreen11 dark:text-futarchyGreenDark11">Trade Completed</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-futarchyGreen11/70 dark:text-futarchyGreenDark11/70">You sent</span>
+                                    <span className="text-futarchyGreen11 dark:text-futarchyGreenDark11 font-medium">{transactionData.amount}</span>
+                                </div>
+                                {transactionData.expectedReceiveAmount && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-futarchyGreen11/70 dark:text-futarchyGreenDark11/70">You received</span>
+                                        <span className="text-futarchyGreen11 dark:text-futarchyGreenDark11 font-medium">
+                                            ~{formatWith(parseFloat(transactionData.expectedReceiveAmount), 'amount')} {transactionData.receiveToken ||
+                                                (transactionData.action === 'Buy'
+                                                    ? (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).company.symbol
+                                                    : (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).currency.symbol)}
+                                        </span>
+                                    </div>
+                                )}
+                                {transactionData.outcome && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-futarchyGreen11/70 dark:text-futarchyGreenDark11/70">Outcome</span>
+                                        <span className="text-futarchyGreen11 dark:text-futarchyGreenDark11 font-medium">{transactionData.outcome}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-futarchyGreen11/70 dark:text-futarchyGreenDark11/70">Protocol</span>
+                                    <span className="text-futarchyGreen11 dark:text-futarchyGreenDark11 font-medium">
+                                        {selectedSwapMethod === 'cowswap' ? 'CoW Swap' :
+                                            selectedSwapMethod === 'algebra' ? 'Algebra (Swapr)' :
+                                                selectedSwapMethod === 'uniswap' ? 'Uniswap V3' :
+                                                    selectedSwapMethod === 'uniswapSdk' ? 'Uniswap SDK' :
+                                                        'SushiSwap V3'}
+                                    </span>
+                                </div>
+                                {transactionResultHash && (
+                                    <div className="pt-1 border-t border-futarchyGreen7/40 dark:border-futarchyGreenDark7/40">
+                                        <a
+                                            href={selectedSwapMethod === 'cowswap'
+                                                ? `${cowExplorerBase}${transactionResultHash}`
+                                                : `${explorerConfig.url}${transactionResultHash}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-1 text-sm text-futarchyGreen11 dark:text-futarchyGreenDark11 hover:underline"
+                                        >
+                                            View on {selectedSwapMethod === 'cowswap' ? 'CoW Explorer' : explorerConfig.name}
+                                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                                <polyline points="15 3 21 3 21 9" />
+                                                <line x1="10" y1="14" x2="21" y2="3" />
+                                            </svg>
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Post-Trade Summary Panel — Failed/Expired/Cancelled */}
+                        {isFinalStateForCloseButton && orderStatus !== 'fulfilled' && (
+                            <div className="mx-4 mb-4 p-4 bg-futarchyCrimson3 dark:bg-futarchyCrimsonDark3 border border-futarchyCrimson7 dark:border-futarchyCrimsonDark7 rounded-lg space-y-2">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <svg className="w-5 h-5 text-futarchyCrimson11 dark:text-futarchyCrimsonDark11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                    <span className="font-semibold text-sm text-futarchyCrimson11 dark:text-futarchyCrimsonDark11">
+                                        Trade {orderStatus === 'expired' ? 'Expired' : orderStatus === 'cancelled' ? 'Cancelled' : 'Failed'}
+                                    </span>
+                                </div>
+                                {transactionResultHash && (
+                                    <a
+                                        href={selectedSwapMethod === 'cowswap'
+                                            ? `${cowExplorerBase}${transactionResultHash}`
+                                            : `${explorerConfig.url}${transactionResultHash}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-1 text-sm text-futarchyCrimson11 dark:text-futarchyCrimsonDark11 hover:underline"
+                                    >
+                                        View on {selectedSwapMethod === 'cowswap' ? 'CoW Explorer' : explorerConfig.name}
+                                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                            <polyline points="15 3 21 3 21 9" />
+                                            <line x1="10" y1="14" x2="21" y2="3" />
+                                        </svg>
+                                    </a>
+                                )}
+                            </div>
+                        )}
+
                         {/* Main Action Button */}
                         <div className="px-4 flex items-center justify-center">
                             {/* Show ConnectButton if wallet not connected */}
@@ -4576,6 +4670,21 @@ const ConfirmSwapModal = memo(({
                                         }}
                                     </ConnectButton.Custom>
                                 </div>
+                            ) : isFinalStateForCloseButton && orderStatus === 'fulfilled' ? (
+                                <div className="w-full mb-4 flex gap-3">
+                                    <button
+                                        onClick={onClose}
+                                        className="flex-1 py-3 px-4 rounded-lg font-medium transition-colors bg-black text-white hover:bg-black/90 dark:bg-futarchyGray3 dark:text-black dark:hover:bg-futarchyGray3/80"
+                                    >
+                                        View Positions
+                                    </button>
+                                    <button
+                                        onClick={onClose}
+                                        className="flex-1 py-3 px-4 rounded-lg font-medium transition-colors border border-futarchyGray7 dark:border-futarchyDarkGray7 text-futarchyGray11 dark:text-futarchyGray112 hover:bg-futarchyGray3 dark:hover:bg-futarchyDarkGray5"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
                             ) : (
                                 <button
                                     onClick={
@@ -4587,22 +4696,18 @@ const ConfirmSwapModal = memo(({
                                     className={`w-full mb-4 py-3 px-4 rounded-lg font-medium transition-colors ${transactionData.insufficientLiquidity
                                         ? 'bg-futarchyOrange7 text-futarchyOrange11 cursor-not-allowed opacity-60'
                                         : isFinalStateForCloseButton
-                                        ? orderStatus === 'fulfilled'
-                                            ? 'bg-futarchyGreen7 text-futarchyGreen11 hover:bg-futarchyGreen8 dark:bg-futarchyGreenDark7 dark:text-futarchyGreenDark11 dark:hover:bg-futarchyGreenDark8' // Green for fulfilled
-                                            : 'bg-futarchyCrimson7 text-futarchyCrimson11 hover:bg-futarchyCrimson8 dark:bg-futarchyCrimsonDark7 dark:text-futarchyCrimsonDark11 dark:hover:bg-futarchyCrimsonDark8' // Red for expired/cancelled/failed
+                                            ? 'bg-futarchyCrimson7 text-futarchyCrimson11 hover:bg-futarchyCrimson8 dark:bg-futarchyCrimsonDark7 dark:text-futarchyCrimsonDark11 dark:hover:bg-futarchyCrimsonDark8'
                                         : isProcessing
                                             ? 'bg-futarchyGray6 text-futarchyGray11 dark:bg-futarchyDarkGray6 dark:text-futarchyDarkGray11 cursor-not-allowed'
                                             : 'bg-black text-white hover:bg-black/90 dark:bg-futarchyGray3 dark:text-black dark:hover:bg-futarchyGray3/80'
                                         }`}
                                 >
                                     {isFinalStateForCloseButton
-                                        ? orderStatus === 'fulfilled'
-                                            ? "Transaction Succeeded"
-                                            : "Transaction Finished"
+                                        ? "Transaction Finished"
                                         : isProcessing
                                             ? (
                                                 selectedSwapMethod === 'cowswap'
-                                                    ? (orderStatus === 'submitting' ? 'Submitting CoW Order...' : 'Processing CoW Swap...') // Generic processing for CoW, no link in button
+                                                    ? (orderStatus === 'submitting' ? 'Submitting CoW Order...' : 'Processing CoW Swap...')
                                                     : selectedSwapMethod === 'sushiswap'
                                                         ? 'Processing SushiSwap V3...'
                                                         : 'Processing Swap'

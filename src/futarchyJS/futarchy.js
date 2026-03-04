@@ -1202,12 +1202,18 @@ export const createFutarchy = (options = {}) => {
         onSwap?.();
         
         const tx = await executeV3Swap(fromToken, toToken, parsedAmount, signer);
-        
+
         onSwapSent?.(tx);
-        
+
         // Wait for confirmation
-        statusManager.update('Waiting for confirmation...');
-        const receipt = await tx.wait(TRANSACTION_SETTINGS.CONFIRMATION_BLOCKS);
+        let receipt;
+        if (tx.isCowSwapOrder) {
+          statusManager.update('CoW Swap order submitted');
+          receipt = { status: 1, transactionHash: tx.hash };
+        } else {
+          statusManager.update('Waiting for confirmation...');
+          receipt = await tx.wait(TRANSACTION_SETTINGS.CONFIRMATION_BLOCKS);
+        }
         
         // Update balances
         await balanceManager.updateBalances();
