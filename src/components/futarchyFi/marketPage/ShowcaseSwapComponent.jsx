@@ -1524,33 +1524,35 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
                           <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
-                        {(quoterPreview.priceAfter || quoterPreview.executionPrice) && (
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
-                        </div>
-                        )}
                         {(() => {
                           const cur = parseFloat(quoterPreview.currentPrice);
+                          const afterPrice = quoterPreview.priceAfter || quoterPreview.executionPrice;
                           const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
                           const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
                           const val = quoterPreview.chainId === 100 ? slippage : impact;
-                          if (!quoterPreview.executionPrice && !quoterPreview.priceAfter) {
+                          // No data or extreme impact (>99%) = insufficient liquidity
+                          if (!afterPrice || val > 99) {
                             return (
                               <div className="flex justify-between items-center text-[10px]">
-                                <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">No liquidity for this direction</span>
+                                <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">Insufficient liquidity</span>
                               </div>
                             );
                           }
                           return (
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">
-                            {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
-                          </span>
-                          <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
-                            {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
-                          </span>
-                        </div>
+                            <>
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
+                                <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(afterPrice).toFixed(4)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyGray11 dark:text-white/50">
+                                  {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
+                                </span>
+                                <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
+                                  {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
+                                </span>
+                              </div>
+                            </>
                           );
                         })()}
                       </div>
@@ -1620,33 +1622,34 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
                           <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
-                        {(quoterPreview.priceAfter || quoterPreview.executionPrice) && (
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
-                        </div>
-                        )}
                         {(() => {
                           const cur = parseFloat(quoterPreview.currentPrice);
+                          const afterPrice = quoterPreview.priceAfter || quoterPreview.executionPrice;
                           const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
                           const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
                           const val = quoterPreview.chainId === 100 ? slippage : impact;
-                          if (!quoterPreview.executionPrice && !quoterPreview.priceAfter) {
+                          if (!afterPrice || val > 99) {
                             return (
                               <div className="flex justify-between items-center text-[10px]">
-                                <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">No liquidity for this direction</span>
+                                <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">Insufficient liquidity</span>
                               </div>
                             );
                           }
                           return (
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">
-                            {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
-                          </span>
-                          <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
-                            {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
-                          </span>
-                        </div>
+                            <>
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
+                                <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(afterPrice).toFixed(4)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyGray11 dark:text-white/50">
+                                  {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
+                                </span>
+                                <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
+                                  {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
+                                </span>
+                              </div>
+                            </>
                           );
                         })()}
                       </div>
