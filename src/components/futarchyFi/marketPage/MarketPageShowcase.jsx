@@ -5044,6 +5044,19 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                     });
                   }
 
+                  // Snapshot Vote badge - link to Snapshot proposal
+                  {
+                    const effectiveSnapshotId = snapshotProposalId || config?._registryMetadata?.snapshot_id;
+                    if (effectiveSnapshotId) {
+                      const spaceId = snapshotData?.spaceId || 'gnosis.eth';
+                      badges.push({
+                        text: 'Snapshot Vote',
+                        colorScheme: 'default',
+                        link: `https://snapshot.box/#/s:${spaceId}/proposal/${effectiveSnapshotId}`
+                      });
+                    }
+                  }
+
                   // Add Liquidity badge
                   badges.push({
                     text: 'Add Liquidity',
