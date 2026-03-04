@@ -132,13 +132,33 @@ const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
     console.warn('Error calculating tick-adjusted liquidity:', e);
   }
 
+  // Derive company-token price from tick (price of company token in currency units)
+  // tick encodes price as 1.0001^tick where price = token1/token0
+  let price = null;
+  try {
+    if (pool.tick != null) {
+      const tick = parseFloat(pool.tick);
+      const rawPrice = Math.pow(1.0001, tick); // token1 per token0
+      if (currencyIsToken0) {
+        // token0=currency, token1=company → rawPrice = company/currency → invert
+        price = rawPrice > 0 ? 1 / rawPrice : null;
+      } else {
+        // token0=company, token1=currency → rawPrice = currency/company → use directly
+        price = rawPrice;
+      }
+    }
+  } catch (e) {
+    console.warn('Error calculating price from tick:', e);
+  }
+
   return {
     volume: volumeTotal,
     liquidity: {
       amount: adjustedLiquidity.toLocaleString('fullwide', { useGrouping: false }),
       token: 'Raw',
       isRaw: true
-    }
+    },
+    price
   };
 };
 

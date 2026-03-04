@@ -2865,6 +2865,17 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     config?.BASE_POOL_CONFIG?.currencySlot
   ]);
 
+  // Fallback: use subgraph-derived prices when Supabase pool_candles aren't available
+  // (e.g., AAVE market has no POOL_CONFIG_YES/NO so Supabase fetch never runs)
+  useEffect(() => {
+    if (newYesPrice === null && poolData?.yesPool?.price != null) {
+      setNewYesPrice(poolData.yesPool.price);
+    }
+    if (newNoPrice === null && poolData?.noPool?.price != null) {
+      setNewNoPrice(poolData.noPool.price);
+    }
+  }, [newYesPrice, newNoPrice, poolData?.yesPool?.price, poolData?.noPool?.price]);
+
   // Connection state for tracking wallet connection changes
   const [previousConnectionState, setPreviousConnectionState] = useState(isConnected);
 
