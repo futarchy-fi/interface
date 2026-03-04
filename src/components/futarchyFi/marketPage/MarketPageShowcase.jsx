@@ -2101,18 +2101,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
   const showSubgraphChart = useSubgraphParam === 'true' || useSubgraphParam === 'only';
 
   // External spot price from GeckoTerminal via spotClient
-  // Priority: 1) URL param, 2) proposal defaults
-  // Note: configSpotPrice (coingecko_ticker from registry) will be used via a separate useMemo after config loads
+  // Priority: 1) URL param, 2) proposal defaults, 3) config.marketInfo.coingecko_ticker
   const useSpotPriceParam = searchParams.get('useSpotPrice') || proposalDefaults.useSpotPrice;
-
-  // Initial call with URL param or proposal defaults only
-  // This will be supplemented with config.marketInfo.coingecko_ticker after config loads
-  const {
-    spotData: externalSpotData,
-    spotPrice: externalSpotPrice,
-    refetch: refetchExternalSpot,
-    loading: externalSpotLoading
-  } = useExternalSpotPrice(useSpotPriceParam);
 
   // Check for tradeSource parameter to switch between Supabase and Subgraph for trades
   // - No param: Default to Supabase UNLESS in whitelist
@@ -2380,17 +2370,18 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     loading: configSpotLoading
   } = useExternalSpotPrice(effectiveSpotPriceParam, config?.closeTimestamp || config?.metadata?.closeTimestamp || config?.marketInfo?.closeTimestamp);
 
-  // Use config-aware spot data if available, otherwise fall back to initial hook's data
-  // However, if the market is closed according to config, completely nullify spot data 
-  // (the initial externalSpotData didn't have the closeTimestamp so it fetched anyway)
+  // Nullify spot data for closed markets
   const isLocallyClosed = config && (() => {
     const ct = config?.closeTimestamp || config?.metadata?.closeTimestamp || config?.marketInfo?.closeTimestamp;
     return ct && typeof ct === 'number' && (Date.now() / 1000) > ct;
   })();
 
-  const finalSpotData = isLocallyClosed ? null : (configSpotData || externalSpotData);
-  const finalSpotPrice = isLocallyClosed ? null : (configSpotPrice || externalSpotPrice);
-  const finalSpotLoading = isLocallyClosed ? false : (configSpotLoading || externalSpotLoading);
+  const finalSpotData = isLocallyClosed ? null : configSpotData;
+  const finalSpotPrice = isLocallyClosed ? null : configSpotPrice;
+  const finalSpotLoading = isLocallyClosed ? false : configSpotLoading;
+
+  // Stabilize spotData reference — only update when actual data values change
+  const stableSpotData = useMemo(() => finalSpotData, [JSON.stringify(finalSpotData)]);
 
   const liquiditySummary = useMemo(() => {
     const tokensConfig = config?.BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG;
@@ -5253,7 +5244,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                             config={config}
                             // External spot price from CoinGecko (via ?useSpotPrice=... or config.marketInfo.coingecko_ticker)
                             showSpot={!!effectiveSpotPriceParam}
-                            spotData={finalSpotData}
+                            spotData={stableSpotData}
                             spotPrice={finalSpotPrice}
                             onSpotRefresh={refetchConfigSpot}
                           />
