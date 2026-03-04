@@ -216,42 +216,13 @@ const useLatestPrices = (pollingInterval = 30000, config = null) => {
           }
         }
 
-        let yesData = null, noData = null;
-
-        // Extract prices with fallbacks
-        const latestYesCandle = yesData?.candles?.[yesData.candles.length - 1];
-        const latestNoCandle = noData?.candles?.[noData.candles.length - 1];
-
-        const yesPrice = latestYesCandle?.average_price || 0;
-        const noPrice = latestNoCandle?.average_price || 0;
-        
         // Use Balancer spot price for base price if available
         const basePrice = balancerSpotPrice?.price || null;
-        console.log('[SPOT] Extracted prices:', { yesPrice, noPrice, basePrice });
-        
-        // Calculate the spot price (probability)
-        const yesValue = yesPrice;
-        const noValue = noPrice;
-        const totalValue = yesValue + noValue;
-        
-        // Calculate spot price as probability (YES / (YES + NO))
-        const spotPrice = totalValue > 0 ? yesValue / totalValue : 0.5; // default to 0.5 if no data
-        
-        // Use the Balancer spot price for GNO/sDAI
+        console.log('[SPOT] Extracted prices:', { basePrice });
+
+        // Spot price is the base asset price (YES/NO data comes from Supabase pool_candles, not here)
+        const spotPrice = basePrice;
         const spotPriceSDAI = basePrice;
-        
-        console.log('[SPOT] Calculated values:', { spotPrice, spotPriceSDAI, totalValue });
-
-        // Prepare formatted candle data for the chart
-        const formattedYesData = yesData?.candles?.map(candle => ({
-          time: candle.timestamp,
-          value: candle.average_price
-        })) || [];
-
-        const formattedNoData = noData?.candles?.map(candle => ({
-          time: candle.timestamp,
-          value: candle.average_price
-        })) || [];
 
         // Create synthetic base data from Balancer price for chart consistency
         const formattedBaseData = balancerSpotPrice ? [{
@@ -260,34 +231,23 @@ const useLatestPrices = (pollingInterval = 30000, config = null) => {
         }] : [];
 
         const finalState = {
-          yes: yesPrice,
-          no: noPrice,
+          yes: null,
+          no: null,
           base: basePrice,
           spotPrice: spotPrice,
           spotPriceSDAI: spotPriceSDAI,
           timestamp: balancerSpotPrice?.timestamp || Date.now(),
-          // Add the formatted candle data for the chart
-          yesData: formattedYesData,
-          noData: formattedNoData,
+          yesData: [],
+          noData: [],
           baseData: formattedBaseData,
           loading: false,
-          error: null, // Don't set error if at least Balancer price works
-          // Add Balancer-specific data
+          error: null,
           balancerPool: balancerSpotPrice?.pool || null,
-          source: balancerSpotPrice ? 'hybrid' : 'partial' // Stage API for positions, Balancer for spot price
+          source: balancerSpotPrice ? 'hybrid' : 'partial'
         };
-        
+
         console.log('[SPOT] Setting final state:', finalState);
         setPrices(finalState);
-
-        console.log('[SPOT] Prices fetched successfully:', {
-          spotPriceSDAI: spotPriceSDAI,
-          balancerPool: balancerSpotPrice?.pool?.id,
-          source: finalState.source,
-          hasYesData: !!yesData,
-          hasNoData: !!noData,
-          hasBalancerData: !!balancerSpotPrice
-        });
 
       } catch (error) {
         console.error('[SPOT] Error fetching latest prices:', error);
