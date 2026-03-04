@@ -477,7 +477,7 @@ const LandingPage = ({ useStorybookUrl = false }) => {
                           </div>
                         </button>
                         <Link
-                          href="/company"
+                          href="/companies"
                           className="w-40 h-12 border-2 border-black bg-transparent px-4 py-3 rounded-xl text-base font-semibold text-black hover:bg-black hover:text-white transition-colors shadow-xs flex items-center justify-center"
                         >
                           Get Started
