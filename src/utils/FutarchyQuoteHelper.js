@@ -89,11 +89,10 @@ export async function getSwapQuote({ proposal, amount, isYesPool, isInputCompany
     // 5. Calculations
     const expectedReceive = ethers.utils.formatEther(amountOutBig);
 
-    // Min Receive = Expected * (1 - slippage)
-    // We do this in number math for simplicity, or BigInt for precision
-    const slippageFactor = 1 - slippagePercentage;
-    const minReceiveVal = Number(expectedReceive) * slippageFactor;
-    const minReceive = minReceiveVal.toFixed(18); // String
+    // Min Receive = Expected * (1 - slippage), using BigNumber for precision
+    const slippageBps = Math.round(slippagePercentage * 10000);
+    const minReceiveBN = amountOutBig.mul(10000 - slippageBps).div(10000);
+    const minReceive = ethers.utils.formatEther(minReceiveBN);
 
     // Prices
     const amountInNum = Number(amount);

@@ -207,31 +207,31 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
 
     // Debounce: wait 500ms after user stops typing
     const timer = setTimeout(async () => {
+      // Resolve tokens and provider outside try so catch can use them for fallback
+      const baseTokenConfig = config?.BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG;
+      const mergeConfig = config?.MERGE_CONFIG || MERGE_CONFIG;
+
+      let tokenIn, tokenOut;
+      if (selectedAction === 'Buy') {
+        // Buy: currency -> company
+        tokenIn = selectedOutcome === 'approved'
+          ? mergeConfig.currencyPositions.yes.wrap.wrappedCollateralTokenAddress
+          : mergeConfig.currencyPositions.no.wrap.wrappedCollateralTokenAddress;
+        tokenOut = selectedOutcome === 'approved'
+          ? mergeConfig.companyPositions.yes.wrap.wrappedCollateralTokenAddress
+          : mergeConfig.companyPositions.no.wrap.wrappedCollateralTokenAddress;
+      } else {
+        // Sell: company -> currency
+        tokenIn = selectedOutcome === 'approved'
+          ? mergeConfig.companyPositions.yes.wrap.wrappedCollateralTokenAddress
+          : mergeConfig.companyPositions.no.wrap.wrappedCollateralTokenAddress;
+        tokenOut = selectedOutcome === 'approved'
+          ? mergeConfig.currencyPositions.yes.wrap.wrappedCollateralTokenAddress
+          : mergeConfig.currencyPositions.no.wrap.wrappedCollateralTokenAddress;
+      }
+
       try {
         console.log('[QUOTER SHOWCASE] Fetching quote for amount:', amount);
-
-        // Get token addresses based on action
-        const baseTokenConfig = config?.BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG;
-        const mergeConfig = config?.MERGE_CONFIG || MERGE_CONFIG;
-
-        let tokenIn, tokenOut;
-        if (selectedAction === 'Buy') {
-          // Buy: currency -> company
-          tokenIn = selectedOutcome === 'approved'
-            ? mergeConfig.currencyPositions.yes.wrap.wrappedCollateralTokenAddress
-            : mergeConfig.currencyPositions.no.wrap.wrappedCollateralTokenAddress;
-          tokenOut = selectedOutcome === 'approved'
-            ? mergeConfig.companyPositions.yes.wrap.wrappedCollateralTokenAddress
-            : mergeConfig.companyPositions.no.wrap.wrappedCollateralTokenAddress;
-        } else {
-          // Sell: company -> currency
-          tokenIn = selectedOutcome === 'approved'
-            ? mergeConfig.companyPositions.yes.wrap.wrappedCollateralTokenAddress
-            : mergeConfig.companyPositions.no.wrap.wrappedCollateralTokenAddress;
-          tokenOut = selectedOutcome === 'approved'
-            ? mergeConfig.currencyPositions.yes.wrap.wrappedCollateralTokenAddress
-            : mergeConfig.currencyPositions.no.wrap.wrappedCollateralTokenAddress;
-        }
 
         // Use best available RPC for the current chain
         const { getBestRpcProvider, getBestRpc } = await import('../../../utils/getBestRpc');
@@ -343,6 +343,16 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         } else {
           // Ethereum mainnet: Use Uniswap QuoterV2
           console.log('[QUOTER SHOWCASE] Using Uniswap QuoterV2 for Ethereum');
+
+          // Always fetch pool current price first (needed even if quote fails)
+          let poolData;
+          try {
+            poolData = await getPoolSqrtPrice(tokenIn, tokenOut, 500, ethersProvider, 1);
+            currentPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
+          } catch (poolErr) {
+            console.warn('[QUOTER SHOWCASE] Could not get pool price:', poolErr.message);
+          }
+
           quoteResult = await getUniswapV3QuoteWithPriceImpact({
             tokenIn,
             tokenOut,
@@ -354,17 +364,12 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
 
           console.log('[QUOTER SHOWCASE] Quote result:', quoteResult);
 
-          // Get pool current price
-          const poolData = await getPoolSqrtPrice(
-            tokenIn,
-            tokenOut,
-            quoteResult.feeTier,
-            ethersProvider,
-            1
-          );
+          // If pool price wasn't fetched above (different fee tier), try with the quoter's fee tier
+          if (!poolData && quoteResult.feeTier !== 500) {
+            poolData = await getPoolSqrtPrice(tokenIn, tokenOut, quoteResult.feeTier, ethersProvider, 1);
+            currentPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
+          }
 
-          // Calculate prices from sqrt
-          currentPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
           executionPrice = sqrtPriceX96ToPrice(quoteResult.sqrtPriceX96After);
         }
 
@@ -412,6 +417,14 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         }
 
         if (isActive) {
+          // Detect insufficient liquidity: impact > 99% means the pool can't handle this trade
+          const afterPrice = quoteResult.priceAfter ?? executionPrice;
+          let insufficientLiquidity = false;
+          if (currentPrice && afterPrice) {
+            const impactPct = Math.abs(parseFloat(afterPrice) - currentPrice) / currentPrice * 100;
+            insufficientLiquidity = impactPct > 99;
+          }
+
           setQuoterPreview({
             isLoading: false,
             amountOut: quoteResult.amountOutFormatted || quoteResult.amountOut,
@@ -419,20 +432,48 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             executionPrice,
             priceImpact: quoteResult.priceImpact,
             slippage: quoteResult.slippage,
-            // Add extra fields for UI if they exist (Price After)
-            priceAfter: quoteResult.priceAfter,
+            priceAfter: afterPrice,
             minimumReceived: quoteResult.minimumReceived,
-            amountOutRaw: quoteResult.amountOutRaw, // [FIX] Ensure raw amount is saved to state
+            amountOutRaw: quoteResult.amountOutRaw,
             chainId: chainId,
+            insufficientLiquidity,
             error: null
           });
         }
       } catch (error) {
         if (isActive) {
           console.error('[QUOTER SHOWCASE] Error:', error);
+
+          // Even when the quoter fails (e.g. no liquidity in sell direction),
+          // try to show the current pool price so More Info still works
+          let fallbackPrice = null;
+          try {
+            const { getBestRpcProvider } = await import('../../../utils/getBestRpc');
+            const ethersProvider = await getBestRpcProvider(chainId);
+            if (chainId === 1) {
+              const poolData = await getPoolSqrtPrice(tokenIn, tokenOut, 500, ethersProvider, 1);
+              fallbackPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
+              // Apply same inversion logic as the main path
+              const isBuy = selectedAction === 'Buy';
+              const shouldInvert = isBuy
+                ? (tokenIn.toLowerCase() < tokenOut.toLowerCase())
+                : (tokenOut.toLowerCase() < tokenIn.toLowerCase());
+              if (shouldInvert) fallbackPrice = 1 / fallbackPrice;
+            } else if (chainId === 100) {
+              // Gnosis: try the Algebra pool
+              const { getAlgebraQuoteWithSlippage } = await import('../../../utils/algebraQuoter');
+              // Can't get pool price without a full quote on Algebra, skip
+            }
+          } catch (poolErr) {
+            console.warn('[QUOTER SHOWCASE] Could not get fallback pool price:', poolErr.message);
+          }
+
           setQuoterPreview({
             isLoading: false,
             amountOut: null,
+            currentPrice: fallbackPrice,
+            chainId: chainId,
+            insufficientLiquidity: true, // Quoter failure means pool can't handle this trade
             error: error.message
           });
         }
@@ -620,17 +661,16 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
           receiveToken = getCurrencySymbol();
         }
       } else if (currentPrice && currentPrice > 0) {
-        // Fallback to legacy calc
+        // Fallback to legacy calc — spot price estimate with conservative fee deduction
+        const APPROX_POOL_FEE = 0.01; // 1% conservative estimate for pool fees
         if (selectedAction === 'Buy') {
           // Buying company token with currency
-          // Calculate exact expected amount without slippage (slippage is handled by the swap itself)
-          const rawExpected = inputAmount / currentPrice;
+          const rawExpected = (inputAmount / currentPrice) * (1 - APPROX_POOL_FEE);
           expectedReceiveAmount = formatWith(rawExpected, 'balance');
           receiveToken = (selectedOutcome === 'approved' ? 'YES_' : 'NO_') + getCompanySymbol();
         } else {
           // Selling company token for currency
-          // Calculate exact expected amount without slippage
-          const rawExpected = inputAmount * currentPrice;
+          const rawExpected = (inputAmount * currentPrice) * (1 - APPROX_POOL_FEE);
           expectedReceiveAmount = formatWith(rawExpected, 'balance');
           receiveToken = getCurrencySymbol();
         }
@@ -668,7 +708,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
           : null,
 
         currentPrice: (USING_FUTARCHY_QUOTER && quoterPreview?.currentPrice) ? quoterPreview.currentPrice : null,
-        executionPrice: (USING_FUTARCHY_QUOTER && quoterPreview?.executionPrice) ? quoterPreview.executionPrice : null
+        executionPrice: (USING_FUTARCHY_QUOTER && quoterPreview?.executionPrice) ? quoterPreview.executionPrice : null,
+        isApproximate: !(USING_FUTARCHY_QUOTER && quoterPreview?.amountOut && !quoterPreview.error),
+        insufficientLiquidity: quoterPreview?.insufficientLiquidity || false,
       };
       console.log("Opening ConfirmSwapModal directly with data:", directConfirmData);
       setConfirmModalData(directConfirmData);
@@ -1423,7 +1465,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                 Outcomes
               </h3>
               {/* Show toggle on Ethereum mainnet and Gnosis Chain when quote data is available */}
-              {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && quoterPreview.executionPrice && (
+              {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && (
                 <button
                   onClick={() => setShowPriceInfo(!showPriceInfo)}
                   className="flex items-center gap-1 text-[10px] text-futarchyGray11 dark:text-futarchyGray8 hover:text-futarchyGray12 dark:hover:text-futarchyGray3 transition-colors"
@@ -1464,6 +1506,11 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           );
                         }
 
+                        // Insufficient liquidity check — covers both quoter success (extreme impact) and failure (no liquidity)
+                        if ((chainId === 1 || chainId === 100) && quoterPreview.insufficientLiquidity) {
+                          return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
+                        }
+
                         if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
                           return `${formatWith(parseFloat(quoterPreview.amountOut), 'swapPrice')} ${symbol}`;
@@ -1485,30 +1532,41 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       {chainId === 1 && quoterPreview.amountOut ? 'Receive' : 'Receive'}
                     </span>
                     {/* Price info - on Ethereum mainnet and Gnosis Chain when we have quote data */}
-                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && quoterPreview.executionPrice && showPriceInfo && (
+                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && showPriceInfo && (
                       <div className="mt-2 pt-2 border-t border-futarchyGold6 dark:border-futarchyGold6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
                           <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
-                        </div>
                         {(() => {
                           const cur = parseFloat(quoterPreview.currentPrice);
+                          const afterPrice = quoterPreview.priceAfter || quoterPreview.executionPrice;
                           const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
                           const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
                           const val = quoterPreview.chainId === 100 ? slippage : impact;
+                          // No data or extreme impact (>99%) = insufficient liquidity
+                          if (!afterPrice || val > 99) {
+                            return (
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">Insufficient liquidity</span>
+                              </div>
+                            );
+                          }
                           return (
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">
-                            {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
-                          </span>
-                          <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
-                            {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
-                          </span>
-                        </div>
+                            <>
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
+                                <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(afterPrice).toFixed(4)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyGray11 dark:text-white/50">
+                                  {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
+                                </span>
+                                <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
+                                  {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
+                                </span>
+                              </div>
+                            </>
                           );
                         })()}
                       </div>
@@ -1551,6 +1609,11 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           );
                         }
 
+                        // Insufficient liquidity check — covers both quoter success (extreme impact) and failure (no liquidity)
+                        if ((chainId === 1 || chainId === 100) && quoterPreview.insufficientLiquidity) {
+                          return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
+                        }
+
                         if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
                           return `${formatWith(parseFloat(quoterPreview.amountOut), 'swapPrice')} ${symbol}`;
@@ -1572,30 +1635,40 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       {chainId === 1 && quoterPreview.amountOut ? 'Receive' : 'Receive'}
                     </span>
                     {/* Price info - on Ethereum mainnet and Gnosis Chain when we have quote data */}
-                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && quoterPreview.executionPrice && showPriceInfo && (
+                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && showPriceInfo && (
                       <div className="mt-2 pt-2 border-t border-futarchyBlue6 dark:border-futarchyBlue6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
                           <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
-                        </div>
                         {(() => {
                           const cur = parseFloat(quoterPreview.currentPrice);
+                          const afterPrice = quoterPreview.priceAfter || quoterPreview.executionPrice;
                           const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
                           const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
                           const val = quoterPreview.chainId === 100 ? slippage : impact;
+                          if (!afterPrice || val > 99) {
+                            return (
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">Insufficient liquidity</span>
+                              </div>
+                            );
+                          }
                           return (
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">
-                            {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
-                          </span>
-                          <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
-                            {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
-                          </span>
-                        </div>
+                            <>
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
+                                <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(afterPrice).toFixed(4)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyGray11 dark:text-white/50">
+                                  {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
+                                </span>
+                                <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
+                                  {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
+                                </span>
+                              </div>
+                            </>
                           );
                         })()}
                       </div>
@@ -1625,9 +1698,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             <button
               onClick={handleConfirmClick}
               className="group relative overflow-hidden w-full py-3 px-4 rounded-xl font-semibold transition-colors text-sm bg-futarchyGray2 dark:bg-futarchyDarkGray2 border-2 border-futarchyGray62 dark:border-futarchyGray112/40 text-black dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!amount || parseFloat(amount) <= 0 || marketHasClosed || quoterPreview.isLoading}
+              disabled={!amount || parseFloat(amount) <= 0 || marketHasClosed || quoterPreview.isLoading || quoterPreview.insufficientLiquidity}
             >
-              <span className="relative z-10">{quoterPreview.isLoading ? 'Calculating...' : 'Confirm Swap'}</span>
+              <span className="relative z-10">{quoterPreview.isLoading ? 'Calculating...' : quoterPreview.insufficientLiquidity ? 'Insufficient Liquidity' : 'Confirm Swap'}</span>
               {(amount && parseFloat(amount) > 0 && !marketHasClosed) && (
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-black/10 dark:via-white/20 to-transparent transform -translate-x-full -skew-x-12 group-hover:translate-x-full transition-transform duration-500 ease-in-out pointer-events-none"></div>
               )}

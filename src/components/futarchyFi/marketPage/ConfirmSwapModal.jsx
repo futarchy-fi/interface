@@ -2204,8 +2204,8 @@ const ConfirmSwapModal = memo(({
                     let minOutputAmount = null;
                     if (transactionData.expectedReceiveAmount && parseFloat(transactionData.expectedReceiveAmount) > 0) {
                         try {
-                            // Parse expected amount (already includes 1% buffer from ShowcaseSwapComponent)
-                            // Apply user-configured slippage on top of the buffer
+                            // Fee-inclusive from on-chain simulation when available
+                            // Apply user-configured slippage on top
                             const expectedAmountWei = ethers.utils.parseUnits(transactionData.expectedReceiveAmount, 18);
                             const safeSlippage = getSafeSlippageTolerance();
                             const slippageBps = Math.round(safeSlippage * 100); // Convert percentage to basis points
@@ -3820,7 +3820,13 @@ const ConfirmSwapModal = memo(({
                                     </span>
                                 </div>
                                 {/* For Uniswap SDK (Chain 1 - Ethereum), show QuoterV2-based fields */}
-                                {selectedSwapMethod === 'uniswapSdk' && (
+                                {selectedSwapMethod === 'uniswapSdk' && transactionData.insufficientLiquidity && (
+                                    <div className="bg-futarchyOrange3 dark:bg-futarchyOrangeDark3 border border-futarchyOrange7 dark:border-futarchyOrangeDark7 rounded-lg p-3 text-center">
+                                        <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 font-medium text-sm">Insufficient liquidity in this pool</span>
+                                        <p className="text-futarchyOrange11/70 dark:text-futarchyOrangeDark11/70 text-xs mt-1">This pool does not have enough in-range liquidity to execute this trade.</p>
+                                    </div>
+                                )}
+                                {selectedSwapMethod === 'uniswapSdk' && !transactionData.insufficientLiquidity && (
                                     <>
                                         <div className="flex justify-between">
                                             <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Expected Receive</span>
@@ -3849,7 +3855,12 @@ const ConfirmSwapModal = memo(({
                                             </span>
                                         </div>
                                         <div className="flex justify-between">
-                                            <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Min. Receive ({getSafeSlippageTolerance()}% slippage)</span>
+                                            <span className="text-futarchyGray11 dark:text-futarchyGray112/80">
+                                                Min. Receive ({getSafeSlippageTolerance()}% slippage)
+                                                {transactionData.isApproximate && (
+                                                    <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 ml-1" title="Estimate based on spot price — does not account for pool fees or concentrated liquidity. Actual output may differ.">~ approx</span>
+                                                )}
+                                            </span>
                                             <span className="text-futarchyGray12 dark:text-futarchyGray3 font-medium">
                                                 {swapRouteData.isLoading ? (
                                                     <span className="inline-flex items-center gap-1">
@@ -3934,14 +3945,25 @@ const ConfirmSwapModal = memo(({
                                             <>
                                                 <div className="flex justify-between">
                                                     <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Price Impact</span>
-                                                    <span className={`font-medium ${Math.abs(swapRouteData.data.priceImpact) > 2 ? 'text-futarchyCrimson11' : 'text-futarchyGreen11'}`}>
-                                                        {Math.abs(swapRouteData.data.priceImpact) < 0.01
-                                                            ? Math.abs(swapRouteData.data.priceImpact).toFixed(4)
-                                                            : Math.abs(swapRouteData.data.priceImpact).toFixed(2)}%
+                                                    <span className={`font-medium ${Math.abs(swapRouteData.data.priceImpact) > 99 ? 'text-futarchyOrange11' : Math.abs(swapRouteData.data.priceImpact) > 2 ? 'text-futarchyCrimson11' : 'text-futarchyGreen11'}`}>
+                                                        {Math.abs(swapRouteData.data.priceImpact) > 99
+                                                            ? 'Insufficient liquidity'
+                                                            : `${Math.abs(swapRouteData.data.priceImpact) < 0.01
+                                                                ? Math.abs(swapRouteData.data.priceImpact).toFixed(4)
+                                                                : Math.abs(swapRouteData.data.priceImpact).toFixed(2)}%`}
                                                     </span>
                                                 </div>
-                                                {/* Warning for high price impact */}
-                                                {Math.abs(swapRouteData.data.priceImpact) > 5 && (
+                                                {/* Warning for insufficient liquidity */}
+                                                {Math.abs(swapRouteData.data.priceImpact) > 99 && (
+                                                    <div className="mt-2 p-2 bg-futarchyOrange3 dark:bg-futarchyOrange11/10 border border-futarchyOrange11 rounded-lg">
+                                                        <p className="text-futarchyOrange11 font-medium text-sm">Insufficient Liquidity</p>
+                                                        <p className="text-futarchyOrange11 text-xs mt-1">
+                                                            This pool does not have enough liquidity to execute your trade. The price impact would be extreme.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {/* Warning for high price impact (but not insufficient) */}
+                                                {Math.abs(swapRouteData.data.priceImpact) > 5 && Math.abs(swapRouteData.data.priceImpact) <= 99 && (
                                                     <div className="mt-2 p-2 bg-futarchyCrimson3 dark:bg-futarchyCrimson11/10 border border-futarchyCrimson11 rounded-lg">
                                                         <div className="flex-1">
                                                             <p className="text-futarchyCrimson11 font-medium text-sm">
@@ -3984,7 +4006,13 @@ const ConfirmSwapModal = memo(({
                                     </>
                                 )}
                                 {/* For Algebra (Chain 100 - Gnosis), show Algebra Quoter fields */}
-                                {selectedSwapMethod === 'algebra' && (
+                                {selectedSwapMethod === 'algebra' && transactionData.insufficientLiquidity && (
+                                    <div className="bg-futarchyOrange3 dark:bg-futarchyOrangeDark3 border border-futarchyOrange7 dark:border-futarchyOrangeDark7 rounded-lg p-3 text-center">
+                                        <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 font-medium text-sm">Insufficient liquidity in this pool</span>
+                                        <p className="text-futarchyOrange11/70 dark:text-futarchyOrangeDark11/70 text-xs mt-1">This pool does not have enough in-range liquidity to execute this trade.</p>
+                                    </div>
+                                )}
+                                {selectedSwapMethod === 'algebra' && !transactionData.insufficientLiquidity && (
                                     <>
                                         <div className="flex justify-between">
                                             <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Expected Receive</span>
@@ -4098,10 +4126,12 @@ const ConfirmSwapModal = memo(({
                                         {(swapRouteData.data?.priceImpact !== null && swapRouteData.data?.priceImpact !== undefined) && (
                                             <div className="flex justify-between">
                                                 <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Price Impact</span>
-                                                <span className={`font-medium ${Math.abs(swapRouteData.data.priceImpact) > 2 ? 'text-futarchyCrimson11' : 'text-futarchyGreen11'}`}>
-                                                    {Math.abs(swapRouteData.data.priceImpact) < 0.01
-                                                        ? Math.abs(swapRouteData.data.priceImpact).toFixed(4)
-                                                        : Math.abs(swapRouteData.data.priceImpact).toFixed(2)}%
+                                                <span className={`font-medium ${Math.abs(swapRouteData.data.priceImpact) > 99 ? 'text-futarchyOrange11' : Math.abs(swapRouteData.data.priceImpact) > 2 ? 'text-futarchyCrimson11' : 'text-futarchyGreen11'}`}>
+                                                    {Math.abs(swapRouteData.data.priceImpact) > 99
+                                                        ? 'Insufficient liquidity'
+                                                        : `${Math.abs(swapRouteData.data.priceImpact) < 0.01
+                                                            ? Math.abs(swapRouteData.data.priceImpact).toFixed(4)
+                                                            : Math.abs(swapRouteData.data.priceImpact).toFixed(2)}%`}
                                                 </span>
                                             </div>
                                         )}
@@ -4145,7 +4175,12 @@ const ConfirmSwapModal = memo(({
                                             </span>
                                         </div>
                                         <div className="flex justify-between">
-                                            <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Min. Receive ({getSafeSlippageTolerance()}% slippage)</span>
+                                            <span className="text-futarchyGray11 dark:text-futarchyGray112/80">
+                                                Min. Receive ({getSafeSlippageTolerance()}% slippage)
+                                                {transactionData.isApproximate && (
+                                                    <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 ml-1" title="Estimate based on spot price — does not account for pool fees or concentrated liquidity. Actual output may differ.">~ approx</span>
+                                                )}
+                                            </span>
                                             <span className="text-futarchyGray12 dark:text-futarchyGray3 font-medium">
                                                 {formatWith(parseFloat(transactionData.expectedReceiveAmount) * (1 - getSafeSlippageTolerance() / 100), 'amount')} {transactionData.receiveToken ||
                                                     (transactionData.action === 'Buy'
@@ -4548,8 +4583,10 @@ const ConfirmSwapModal = memo(({
                                             ? onClose
                                             : handleConfirmSwap
                                     }
-                                    disabled={isProcessing && !isFinalStateForCloseButton} // Disable only if genuinely processing, not if it's a final state that looks like processing
-                                    className={`w-full mb-4 py-3 px-4 rounded-lg font-medium transition-colors ${isFinalStateForCloseButton
+                                    disabled={(isProcessing && !isFinalStateForCloseButton) || transactionData.insufficientLiquidity}
+                                    className={`w-full mb-4 py-3 px-4 rounded-lg font-medium transition-colors ${transactionData.insufficientLiquidity
+                                        ? 'bg-futarchyOrange7 text-futarchyOrange11 cursor-not-allowed opacity-60'
+                                        : isFinalStateForCloseButton
                                         ? orderStatus === 'fulfilled'
                                             ? 'bg-futarchyGreen7 text-futarchyGreen11 hover:bg-futarchyGreen8 dark:bg-futarchyGreenDark7 dark:text-futarchyGreenDark11 dark:hover:bg-futarchyGreenDark8' // Green for fulfilled
                                             : 'bg-futarchyCrimson7 text-futarchyCrimson11 hover:bg-futarchyCrimson8 dark:bg-futarchyCrimsonDark7 dark:text-futarchyCrimsonDark11 dark:hover:bg-futarchyCrimsonDark8' // Red for expired/cancelled/failed
@@ -4570,9 +4607,11 @@ const ConfirmSwapModal = memo(({
                                                         ? 'Processing SushiSwap V3...'
                                                         : 'Processing Swap'
                                             )
-                                            : transactionData.action === 'Redeem'
-                                                ? 'Confirm Redeem'
-                                                : 'Confirm Swap'
+                                            : transactionData.insufficientLiquidity
+                                                ? 'Insufficient Liquidity'
+                                                : transactionData.action === 'Redeem'
+                                                    ? 'Confirm Redeem'
+                                                    : 'Confirm Swap'
                                     }
                                 </button>
                             )}
