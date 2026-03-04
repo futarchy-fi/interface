@@ -207,31 +207,31 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
 
     // Debounce: wait 500ms after user stops typing
     const timer = setTimeout(async () => {
+      // Resolve tokens and provider outside try so catch can use them for fallback
+      const baseTokenConfig = config?.BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG;
+      const mergeConfig = config?.MERGE_CONFIG || MERGE_CONFIG;
+
+      let tokenIn, tokenOut;
+      if (selectedAction === 'Buy') {
+        // Buy: currency -> company
+        tokenIn = selectedOutcome === 'approved'
+          ? mergeConfig.currencyPositions.yes.wrap.wrappedCollateralTokenAddress
+          : mergeConfig.currencyPositions.no.wrap.wrappedCollateralTokenAddress;
+        tokenOut = selectedOutcome === 'approved'
+          ? mergeConfig.companyPositions.yes.wrap.wrappedCollateralTokenAddress
+          : mergeConfig.companyPositions.no.wrap.wrappedCollateralTokenAddress;
+      } else {
+        // Sell: company -> currency
+        tokenIn = selectedOutcome === 'approved'
+          ? mergeConfig.companyPositions.yes.wrap.wrappedCollateralTokenAddress
+          : mergeConfig.companyPositions.no.wrap.wrappedCollateralTokenAddress;
+        tokenOut = selectedOutcome === 'approved'
+          ? mergeConfig.currencyPositions.yes.wrap.wrappedCollateralTokenAddress
+          : mergeConfig.currencyPositions.no.wrap.wrappedCollateralTokenAddress;
+      }
+
       try {
         console.log('[QUOTER SHOWCASE] Fetching quote for amount:', amount);
-
-        // Get token addresses based on action
-        const baseTokenConfig = config?.BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG;
-        const mergeConfig = config?.MERGE_CONFIG || MERGE_CONFIG;
-
-        let tokenIn, tokenOut;
-        if (selectedAction === 'Buy') {
-          // Buy: currency -> company
-          tokenIn = selectedOutcome === 'approved'
-            ? mergeConfig.currencyPositions.yes.wrap.wrappedCollateralTokenAddress
-            : mergeConfig.currencyPositions.no.wrap.wrappedCollateralTokenAddress;
-          tokenOut = selectedOutcome === 'approved'
-            ? mergeConfig.companyPositions.yes.wrap.wrappedCollateralTokenAddress
-            : mergeConfig.companyPositions.no.wrap.wrappedCollateralTokenAddress;
-        } else {
-          // Sell: company -> currency
-          tokenIn = selectedOutcome === 'approved'
-            ? mergeConfig.companyPositions.yes.wrap.wrappedCollateralTokenAddress
-            : mergeConfig.companyPositions.no.wrap.wrappedCollateralTokenAddress;
-          tokenOut = selectedOutcome === 'approved'
-            ? mergeConfig.currencyPositions.yes.wrap.wrappedCollateralTokenAddress
-            : mergeConfig.currencyPositions.no.wrap.wrappedCollateralTokenAddress;
-        }
 
         // Use best available RPC for the current chain
         const { getBestRpcProvider, getBestRpc } = await import('../../../utils/getBestRpc');
@@ -343,6 +343,16 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         } else {
           // Ethereum mainnet: Use Uniswap QuoterV2
           console.log('[QUOTER SHOWCASE] Using Uniswap QuoterV2 for Ethereum');
+
+          // Always fetch pool current price first (needed even if quote fails)
+          let poolData;
+          try {
+            poolData = await getPoolSqrtPrice(tokenIn, tokenOut, 500, ethersProvider, 1);
+            currentPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
+          } catch (poolErr) {
+            console.warn('[QUOTER SHOWCASE] Could not get pool price:', poolErr.message);
+          }
+
           quoteResult = await getUniswapV3QuoteWithPriceImpact({
             tokenIn,
             tokenOut,
@@ -354,17 +364,12 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
 
           console.log('[QUOTER SHOWCASE] Quote result:', quoteResult);
 
-          // Get pool current price
-          const poolData = await getPoolSqrtPrice(
-            tokenIn,
-            tokenOut,
-            quoteResult.feeTier,
-            ethersProvider,
-            1
-          );
+          // If pool price wasn't fetched above (different fee tier), try with the quoter's fee tier
+          if (!poolData && quoteResult.feeTier !== 500) {
+            poolData = await getPoolSqrtPrice(tokenIn, tokenOut, quoteResult.feeTier, ethersProvider, 1);
+            currentPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
+          }
 
-          // Calculate prices from sqrt
-          currentPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
           executionPrice = sqrtPriceX96ToPrice(quoteResult.sqrtPriceX96After);
         }
 
@@ -431,9 +436,36 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
       } catch (error) {
         if (isActive) {
           console.error('[QUOTER SHOWCASE] Error:', error);
+
+          // Even when the quoter fails (e.g. no liquidity in sell direction),
+          // try to show the current pool price so More Info still works
+          let fallbackPrice = null;
+          try {
+            const { getBestRpcProvider } = await import('../../../utils/getBestRpc');
+            const ethersProvider = await getBestRpcProvider(chainId);
+            if (chainId === 1) {
+              const poolData = await getPoolSqrtPrice(tokenIn, tokenOut, 500, ethersProvider, 1);
+              fallbackPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
+              // Apply same inversion logic as the main path
+              const isBuy = selectedAction === 'Buy';
+              const shouldInvert = isBuy
+                ? (tokenIn.toLowerCase() < tokenOut.toLowerCase())
+                : (tokenOut.toLowerCase() < tokenIn.toLowerCase());
+              if (shouldInvert) fallbackPrice = 1 / fallbackPrice;
+            } else if (chainId === 100) {
+              // Gnosis: try the Algebra pool
+              const { getAlgebraQuoteWithSlippage } = await import('../../../utils/algebraQuoter');
+              // Can't get pool price without a full quote on Algebra, skip
+            }
+          } catch (poolErr) {
+            console.warn('[QUOTER SHOWCASE] Could not get fallback pool price:', poolErr.message);
+          }
+
           setQuoterPreview({
             isLoading: false,
             amountOut: null,
+            currentPrice: fallbackPrice,
+            chainId: chainId,
             error: error.message
           });
         }
@@ -1424,7 +1456,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                 Outcomes
               </h3>
               {/* Show toggle on Ethereum mainnet and Gnosis Chain when quote data is available */}
-              {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && quoterPreview.executionPrice && (
+              {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && (
                 <button
                   onClick={() => setShowPriceInfo(!showPriceInfo)}
                   className="flex items-center gap-1 text-[10px] text-futarchyGray11 dark:text-futarchyGray8 hover:text-futarchyGray12 dark:hover:text-futarchyGray3 transition-colors"
@@ -1486,21 +1518,30 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       {chainId === 1 && quoterPreview.amountOut ? 'Receive' : 'Receive'}
                     </span>
                     {/* Price info - on Ethereum mainnet and Gnosis Chain when we have quote data */}
-                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && quoterPreview.executionPrice && showPriceInfo && (
+                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && showPriceInfo && (
                       <div className="mt-2 pt-2 border-t border-futarchyGold6 dark:border-futarchyGold6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
                           <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
+                        {(quoterPreview.priceAfter || quoterPreview.executionPrice) && (
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
                           <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
                         </div>
+                        )}
                         {(() => {
                           const cur = parseFloat(quoterPreview.currentPrice);
                           const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
                           const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
                           const val = quoterPreview.chainId === 100 ? slippage : impact;
+                          if (!quoterPreview.executionPrice && !quoterPreview.priceAfter) {
+                            return (
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">No liquidity for this direction</span>
+                              </div>
+                            );
+                          }
                           return (
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">
@@ -1573,21 +1614,30 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       {chainId === 1 && quoterPreview.amountOut ? 'Receive' : 'Receive'}
                     </span>
                     {/* Price info - on Ethereum mainnet and Gnosis Chain when we have quote data */}
-                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && quoterPreview.executionPrice && showPriceInfo && (
+                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && showPriceInfo && (
                       <div className="mt-2 pt-2 border-t border-futarchyBlue6 dark:border-futarchyBlue6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
                           <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
+                        {(quoterPreview.priceAfter || quoterPreview.executionPrice) && (
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
                           <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
                         </div>
+                        )}
                         {(() => {
                           const cur = parseFloat(quoterPreview.currentPrice);
                           const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
                           const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
                           const val = quoterPreview.chainId === 100 ? slippage : impact;
+                          if (!quoterPreview.executionPrice && !quoterPreview.priceAfter) {
+                            return (
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">No liquidity for this direction</span>
+                              </div>
+                            );
+                          }
                           return (
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">
