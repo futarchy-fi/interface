@@ -1493,14 +1493,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                         </div>
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.executionPrice).toFixed(4)}</span>
+                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
                         </div>
-                        {quoterPreview.priceAfter && (
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">Pool Price After</span>
-                          <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.priceAfter).toFixed(4)}</span>
-                        </div>
-                        )}
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">
                             {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
@@ -1588,14 +1582,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                         </div>
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">After Swap</span>
-                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.executionPrice).toFixed(4)}</span>
+                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.priceAfter || quoterPreview.executionPrice).toFixed(4)}</span>
                         </div>
-                        {quoterPreview.priceAfter && (
-                        <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-futarchyGray11 dark:text-white/50">Pool Price After</span>
-                          <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.priceAfter).toFixed(4)}</span>
-                        </div>
-                        )}
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">
                             {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
