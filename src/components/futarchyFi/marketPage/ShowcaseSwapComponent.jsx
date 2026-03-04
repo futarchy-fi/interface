@@ -139,7 +139,11 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
   });
   const [showPriceInfo, setShowPriceInfo] = useState(false);
   const publicClient = usePublicClient();
-  const chainId = useChainId();
+  const walletChainId = useChainId();
+
+  // Use the market's chain (from config/registry) for quoting, not the wallet's chain.
+  // The wallet may be on Ethereum while viewing a Gnosis market.
+  const chainId = config?.chainId || walletChainId;
 
   const {
     signer,
