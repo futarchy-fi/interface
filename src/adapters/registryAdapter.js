@@ -279,6 +279,35 @@ export function extractResolutionFromMetadata(proposalEntity) {
 }
 
 /**
+ * Extract snapshot_id from ProposalEntity metadata
+ * @param {Object} proposalEntity - The ProposalEntity from Registry
+ * @returns {string|null} - Snapshot proposal ID or null
+ */
+export function extractSnapshotIdFromMetadata(proposalEntity) {
+    if (!proposalEntity?.metadata) {
+        return null;
+    }
+
+    try {
+        const meta = typeof proposalEntity.metadata === 'string'
+            ? JSON.parse(proposalEntity.metadata)
+            : proposalEntity.metadata;
+
+        const snapshotId = meta?.snapshot_id;
+
+        if (snapshotId && typeof snapshotId === 'string') {
+            console.log('[Registry] Extracted snapshot_id from metadata:', snapshotId);
+            return snapshotId;
+        }
+
+        return null;
+    } catch (error) {
+        console.error('[Registry] Failed to parse metadata for snapshot_id:', error.message);
+        return null;
+    }
+}
+
+/**
  * Extract display configurations from ProposalEntity metadata
  * Dynamically finds any properties starting with 'display_' (e.g. 'display_main')
  * and returns them as a nested object (e.g. { main: 1 })

@@ -2619,6 +2619,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     useSupabase: useSupabaseSnapshot,
     autoFetch: true,
     refreshInterval: 60000, // Refresh every 60 seconds
+    registrySnapshotId: config?._registryMetadata?.snapshot_id || null,
   });
 
   // Process the market title with regex to extract components

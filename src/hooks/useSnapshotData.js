@@ -18,6 +18,7 @@ export function useSnapshotData(marketEventIdOrProposalId, options = {}) {
     autoFetch = true,
     refreshInterval = null,
     useSupabase = true,
+    registrySnapshotId = null, // Fallback snapshot ID from on-chain Registry metadata
   } = options;
 
   const [state, setState] = useState({
@@ -43,10 +44,13 @@ export function useSnapshotData(marketEventIdOrProposalId, options = {}) {
         if (fetchedId) {
           snapshotProposalId = fetchedId;
           console.log('[useSnapshotData] Using Snapshot proposal ID from Supabase:', snapshotProposalId);
+        } else if (registrySnapshotId) {
+          // Fallback to on-chain Registry metadata snapshot_id
+          snapshotProposalId = registrySnapshotId;
+          console.log('[useSnapshotData] Using Snapshot proposal ID from on-chain Registry:', snapshotProposalId);
         } else {
-          // NO FALLBACK - if no proposal ID found in Supabase, don't show widget
-          console.warn('[useSnapshotData] No Snapshot proposal ID found in Supabase for market_event_id:', marketEventIdOrProposalId);
-          console.warn('[useSnapshotData] Widget will not be displayed - add entry to market_event_proposal_links table');
+          // No fallback available
+          console.warn('[useSnapshotData] No Snapshot proposal ID found in Supabase or Registry for market_event_id:', marketEventIdOrProposalId);
           setState({
             loading: false,
             data: null,
@@ -96,7 +100,7 @@ export function useSnapshotData(marketEventIdOrProposalId, options = {}) {
     if (autoFetch) {
       fetchData();
     }
-  }, [marketEventIdOrProposalId, useMock, autoFetch, useSupabase]);
+  }, [marketEventIdOrProposalId, useMock, autoFetch, useSupabase, registrySnapshotId]);
 
   // Auto-refresh interval
   useEffect(() => {
@@ -107,7 +111,7 @@ export function useSnapshotData(marketEventIdOrProposalId, options = {}) {
     }, refreshInterval);
 
     return () => clearInterval(intervalId);
-  }, [refreshInterval, marketEventIdOrProposalId, useMock, useSupabase]);
+  }, [refreshInterval, marketEventIdOrProposalId, useMock, useSupabase, registrySnapshotId]);
 
   // Calculate highest result
   const highestResult = useMemo(() => {

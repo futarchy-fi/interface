@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { PRECISION_CONFIG } from '../components/futarchyFi/marketPage/constants/contracts';
 import { fetchMarketEventData, parseContractSource } from '../adapters/subgraphConfigAdapter';
-import { fetchProposalMetadataFromRegistry, extractChainFromMetadata, extractSpotPriceFromMetadata, extractStartCandleFromMetadata, extractCloseTimestampFromMetadata, extractTwapFromMetadata, extractResolutionFromMetadata, extractDisplayConfigFromMetadata } from '../adapters/registryAdapter';
+import { fetchProposalMetadataFromRegistry, extractChainFromMetadata, extractSpotPriceFromMetadata, extractStartCandleFromMetadata, extractCloseTimestampFromMetadata, extractTwapFromMetadata, extractResolutionFromMetadata, extractDisplayConfigFromMetadata, extractSnapshotIdFromMetadata } from '../adapters/registryAdapter';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co';
@@ -78,6 +78,7 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
         let registryCloseTimestamp = null; // Store closeTimestamp for countdown
         let registryTwap = null; // Store TWAP configuration
         let registryResolution = null; // Store resolution status/outcome
+        let registrySnapshotId = null; // Store snapshot_id for Snapshot link
         if (!useContractSource) {
           console.log('🔍 No explicit useContractSource, checking Registry for chain...');
           const registryData = await fetchProposalMetadataFromRegistry(extractedProposalId);
@@ -88,6 +89,7 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
           const detectedTwap = extractTwapFromMetadata(registryData);
           const detectedResolution = extractResolutionFromMetadata(registryData);
           const detectedDisplayConfig = extractDisplayConfigFromMetadata(registryData);
+          const detectedSnapshotId = extractSnapshotIdFromMetadata(registryData);
 
           if (detectedChain) {
             useContractSource = `subgraph-${detectedChain}`;
@@ -129,6 +131,11 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
             registryMetadata._displayConfig = detectedDisplayConfig;
             console.log('🔍 Auto-detected display config from Registry');
           }
+
+          if (detectedSnapshotId) {
+            registrySnapshotId = detectedSnapshotId;
+            console.log('🔍 Auto-detected snapshot_id from Registry:', detectedSnapshotId);
+          }
         }
 
         let data = null;
@@ -144,7 +151,7 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
             data = subgraphData;
 
             // Enrich with Registry metadata if available
-            if (registryMetadata || registrySpotPrice || registryStartCandle || registryTwap || registryResolution) {
+            if (registryMetadata || registrySpotPrice || registryStartCandle || registryTwap || registryResolution || registrySnapshotId) {
               console.log('📝 Enriching with Registry metadata:', {
                 displayNameQuestion: registryMetadata?.displayNameQuestion,
                 displayNameEvent: registryMetadata?.displayNameEvent,
@@ -152,7 +159,8 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
                 coingecko_ticker: registrySpotPrice ? registrySpotPrice.slice(0, 30) + '...' : null,
                 startCandleUnix: registryStartCandle,
                 closeTimestamp: registryCloseTimestamp,
-                twap: registryTwap
+                twap: registryTwap,
+                snapshot_id: registrySnapshotId
               });
               // Store registry display names in metadata for marketInfo
               data._registryMetadata = {
@@ -177,7 +185,9 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
                 resolution_status: registryResolution?.resolution_status || null,
                 resolution_outcome: registryResolution?.resolution_outcome || null,
                 // Nested display config from flat "display_*" fields
-                display: registryMetadata?._displayConfig || null
+                display: registryMetadata?._displayConfig || null,
+                // Snapshot proposal ID from on-chain metadata
+                snapshot_id: registrySnapshotId || null
               };
             }
           } else {
@@ -202,7 +212,7 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
           data = supabaseData;
 
           // Also enrich Supabase data with Registry metadata if available
-          if (data && (registryMetadata || registrySpotPrice || registryStartCandle || registryCloseTimestamp || registryTwap || registryResolution)) {
+          if (data && (registryMetadata || registrySpotPrice || registryStartCandle || registryCloseTimestamp || registryTwap || registryResolution || registrySnapshotId)) {
             console.log('📝 Enriching Supabase data with Registry metadata');
             data._registryMetadata = {
               displayNameQuestion: registryMetadata?.displayNameQuestion,
@@ -222,7 +232,8 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
               invertTwapPoolNo: registryTwap?.invertTwapPoolNo || false,
               resolution_status: registryResolution?.resolution_status || null,
               resolution_outcome: registryResolution?.resolution_outcome || null,
-              display: registryMetadata?._displayConfig || null
+              display: registryMetadata?._displayConfig || null,
+              snapshot_id: registrySnapshotId || null
             };
           }
         }
