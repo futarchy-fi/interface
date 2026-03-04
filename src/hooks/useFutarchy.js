@@ -539,11 +539,15 @@ export const useFutarchy = (config = {}) => {
 
         handleStatus(`V3 Router swap transaction submitted: ${tx.hash}`, true);
         if (onSwapComplete) onSwapComplete(tx);
-        
-        handleStatus(`Waiting for router swap confirmation...`, true);
-        swapReceipt = await tx.wait(TRANSACTION_SETTINGS.CONFIRMATION_BLOCKS);
-        
-        handleStatus(`V3 Router swap confirmed! Hash: ${swapReceipt.transactionHash}`, true);
+
+        if (tx.isCowSwapOrder) {
+          handleStatus(`CoW Swap order submitted. Order ID: ${tx.hash}`, true);
+          swapReceipt = { status: 1, transactionHash: tx.hash };
+        } else {
+          handleStatus(`Waiting for router swap confirmation...`, true);
+          swapReceipt = await tx.wait(TRANSACTION_SETTINGS.CONFIRMATION_BLOCKS);
+          handleStatus(`V3 Router swap confirmed! Hash: ${swapReceipt.transactionHash}`, true);
+        }
       } else {
         // Use SushiSwap V2 for the swap (original implementation)
         console.log('Using SushiSwap V2 for swap');

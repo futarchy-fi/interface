@@ -444,8 +444,17 @@ export const executeV3Swap = async ({ // Keep original signature for CoW path
         const signedOrder = await cowSdk.signOrder(order);
         const orderId = await cowSdk.cowApi.sendOrder({ order: { ...order, ...signedOrder }, owner: await signer.getAddress() });
         // -----
-        console.log('[CoW Swap Debug] Returning mock transaction object for Order ID:', orderId);
-        return { hash: orderId, wait: async () => { await new Promise(resolve => setTimeout(resolve, 100)); return { status: 1, transactionHash: orderId, confirmations: 1 }; }, confirmations: 0 };
+        console.log('[CoW Swap Debug] Returning CoW Swap order object for Order ID:', orderId);
+        return {
+          hash: orderId,
+          isCowSwapOrder: true,
+          wait: async () => {
+            throw new Error(
+              'Cannot call wait() on a CoW Swap order. Use CoW API polling to track order status.'
+            );
+          },
+          confirmations: 0
+        };
       }
     } catch (error) {
       // ... existing CoW Swap error handling (parsing specific API errors) ...
@@ -701,8 +710,17 @@ export const executeRedemptionSwap = async ({ // Keep signature focused on CoW p
       throw sendError;
     }
 
-    console.log('[CoW Swap Debug] Redemption Returning mock transaction object for Order ID:', orderId);
-    return { hash: orderId, wait: async () => { /* mock wait */ }, confirmations: 0 }; // Return mock tx
+    console.log('[CoW Swap Debug] Redemption returning CoW Swap order object for Order ID:', orderId);
+    return {
+      hash: orderId,
+      isCowSwapOrder: true,
+      wait: async () => {
+        throw new Error(
+          'Cannot call wait() on a CoW Swap order. Use CoW API polling to track order status.'
+        );
+      },
+      confirmations: 0
+    };
 
   } catch (error) {
     // ... existing CoW Swap redemption error handling ...
