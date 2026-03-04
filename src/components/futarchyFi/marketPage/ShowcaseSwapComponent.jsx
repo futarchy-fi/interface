@@ -419,8 +419,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             executionPrice,
             priceImpact: quoteResult.priceImpact,
             slippage: quoteResult.slippage,
-            // Add extra fields for UI if they exist (Price After)
-            priceAfter: quoteResult.priceAfter,
+            // Pool price after swap — FutarchyQuoteHelper returns it directly;
+            // Uniswap path computes it as executionPrice (from sqrtPriceX96After)
+            priceAfter: quoteResult.priceAfter ?? executionPrice,
             minimumReceived: quoteResult.minimumReceived,
             amountOutRaw: quoteResult.amountOutRaw, // [FIX] Ensure raw amount is saved to state
             chainId: chainId,
