@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getSubgraphEndpoint } from '../config/subgraphEndpoints';
 import { ENABLE_SUBGRAPH_FOR_ALL_PROPOSALS } from '../config/featureFlags';
 
-// Pool data subgraph endpoints are now dynamic per chain - see getSubgraphEndpoint(chainId)
+// Pool data subgraph endpoints are dynamic per chain - see getSubgraphEndpoint(chainId)
 
 // API base URL - avoid mixed content (upgrade http->https when page is https)
 const RAW_API_BASE_URL = process.env.NEXT_PUBLIC_POOL_API_URL || 'https://stag.api.tickspread.com';
