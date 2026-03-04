@@ -2204,8 +2204,8 @@ const ConfirmSwapModal = memo(({
                     let minOutputAmount = null;
                     if (transactionData.expectedReceiveAmount && parseFloat(transactionData.expectedReceiveAmount) > 0) {
                         try {
-                            // Parse expected amount (already includes 1% buffer from ShowcaseSwapComponent)
-                            // Apply user-configured slippage on top of the buffer
+                            // Fee-inclusive from on-chain simulation when available
+                            // Apply user-configured slippage on top
                             const expectedAmountWei = ethers.utils.parseUnits(transactionData.expectedReceiveAmount, 18);
                             const safeSlippage = getSafeSlippageTolerance();
                             const slippageBps = Math.round(safeSlippage * 100); // Convert percentage to basis points
@@ -3849,7 +3849,12 @@ const ConfirmSwapModal = memo(({
                                             </span>
                                         </div>
                                         <div className="flex justify-between">
-                                            <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Min. Receive ({getSafeSlippageTolerance()}% slippage)</span>
+                                            <span className="text-futarchyGray11 dark:text-futarchyGray112/80">
+                                                Min. Receive ({getSafeSlippageTolerance()}% slippage)
+                                                {transactionData.isApproximate && (
+                                                    <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 ml-1" title="Estimate based on spot price — does not account for pool fees or concentrated liquidity. Actual output may differ.">~ approx</span>
+                                                )}
+                                            </span>
                                             <span className="text-futarchyGray12 dark:text-futarchyGray3 font-medium">
                                                 {swapRouteData.isLoading ? (
                                                     <span className="inline-flex items-center gap-1">
@@ -4145,7 +4150,12 @@ const ConfirmSwapModal = memo(({
                                             </span>
                                         </div>
                                         <div className="flex justify-between">
-                                            <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Min. Receive ({getSafeSlippageTolerance()}% slippage)</span>
+                                            <span className="text-futarchyGray11 dark:text-futarchyGray112/80">
+                                                Min. Receive ({getSafeSlippageTolerance()}% slippage)
+                                                {transactionData.isApproximate && (
+                                                    <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 ml-1" title="Estimate based on spot price — does not account for pool fees or concentrated liquidity. Actual output may differ.">~ approx</span>
+                                                )}
+                                            </span>
                                             <span className="text-futarchyGray12 dark:text-futarchyGray3 font-medium">
                                                 {formatWith(parseFloat(transactionData.expectedReceiveAmount) * (1 - getSafeSlippageTolerance() / 100), 'amount')} {transactionData.receiveToken ||
                                                     (transactionData.action === 'Buy'

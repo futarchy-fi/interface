@@ -620,17 +620,16 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
           receiveToken = getCurrencySymbol();
         }
       } else if (currentPrice && currentPrice > 0) {
-        // Fallback to legacy calc
+        // Fallback to legacy calc — spot price estimate with conservative fee deduction
+        const APPROX_POOL_FEE = 0.01; // 1% conservative estimate for pool fees
         if (selectedAction === 'Buy') {
           // Buying company token with currency
-          // Calculate exact expected amount without slippage (slippage is handled by the swap itself)
-          const rawExpected = inputAmount / currentPrice;
+          const rawExpected = (inputAmount / currentPrice) * (1 - APPROX_POOL_FEE);
           expectedReceiveAmount = formatWith(rawExpected, 'balance');
           receiveToken = (selectedOutcome === 'approved' ? 'YES_' : 'NO_') + getCompanySymbol();
         } else {
           // Selling company token for currency
-          // Calculate exact expected amount without slippage
-          const rawExpected = inputAmount * currentPrice;
+          const rawExpected = (inputAmount * currentPrice) * (1 - APPROX_POOL_FEE);
           expectedReceiveAmount = formatWith(rawExpected, 'balance');
           receiveToken = getCurrencySymbol();
         }
@@ -668,7 +667,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
           : null,
 
         currentPrice: (USING_FUTARCHY_QUOTER && quoterPreview?.currentPrice) ? quoterPreview.currentPrice : null,
-        executionPrice: (USING_FUTARCHY_QUOTER && quoterPreview?.executionPrice) ? quoterPreview.executionPrice : null
+        executionPrice: (USING_FUTARCHY_QUOTER && quoterPreview?.executionPrice) ? quoterPreview.executionPrice : null,
+        isApproximate: !(USING_FUTARCHY_QUOTER && quoterPreview?.amountOut && !quoterPreview.error),
       };
       console.log("Opening ConfirmSwapModal directly with data:", directConfirmData);
       setConfirmModalData(directConfirmData);
