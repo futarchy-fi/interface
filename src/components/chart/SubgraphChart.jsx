@@ -42,6 +42,10 @@ const SubgraphChart = ({
 }) => {
     const chartContainerRef = useRef(null);
     const chartInstanceRef = useRef(null);
+    const yesLineRef = useRef(null);
+    const noLineRef = useRef(null);
+    const spotLineRef = useRef(null);
+    const hasInitiallyFit = useRef(false);
     const [containerWidth, setContainerWidth] = useState(0);
     const [isDarkMode, setIsDarkMode] = useState(
         () => typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
@@ -167,9 +171,9 @@ const SubgraphChart = ({
         return () => resizeObserver.disconnect();
     }, []);
 
-    // Chart creation and data update
+    // Chart creation effect — only runs when structural props change
     useEffect(() => {
-        if (!chartContainerRef.current || containerWidth === 0 || !hasData) {
+        if (!chartContainerRef.current || containerWidth === 0) {
             return;
         }
 
@@ -177,6 +181,10 @@ const SubgraphChart = ({
         if (chartInstanceRef.current) {
             chartInstanceRef.current.remove();
             chartInstanceRef.current = null;
+            yesLineRef.current = null;
+            noLineRef.current = null;
+            spotLineRef.current = null;
+            hasInitiallyFit.current = false;
         }
 
         // Same colors as TripleChart
@@ -275,35 +283,56 @@ const SubgraphChart = ({
         };
 
         // Create YES line - SAME BLUE as TripleChart: rgb(0, 144, 255)
-        const yesLine = chart.addSeries(LineSeries, {
+        yesLineRef.current = chart.addSeries(LineSeries, {
             color: 'rgb(0, 144, 255)',
             lineWidth: 2,
             title: 'YES',
             priceFormat: priceFormat,
-            visible: lineVisibility.yes,
         });
 
         // Create NO line - SAME YELLOW as TripleChart: rgb(245, 196, 0)
-        const noLine = chart.addSeries(LineSeries, {
+        noLineRef.current = chart.addSeries(LineSeries, {
             color: 'rgb(245, 196, 0)',
             lineWidth: 2,
             title: 'NO',
             priceFormat: priceFormat,
-            visible: lineVisibility.no,
         });
 
-        const closeTimestamp = config?.closeTimestamp || config?.metadata?.closeTimestamp || config?.marketInfo?.closeTimestamp;
-        const isMarketClosedLocally = closeTimestamp && typeof closeTimestamp === 'number' && (Date.now() / 1000) > closeTimestamp;
-
         // Create SPOT line - dashed, semi-transparent (same as TripleChart)
-        const spotLine = chart.addSeries(LineSeries, {
+        spotLineRef.current = chart.addSeries(LineSeries, {
             color: isDarkMode ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)',
             lineWidth: 2,
             lineStyle: 2, // Dashed
             title: 'SPOT',
             priceFormat: priceFormat,
-            visible: !isMarketClosedLocally && showSpot && spotData && spotData.length > 0 && lineVisibility.spot,
         });
+
+        // Cleanup
+        return () => {
+            if (chartInstanceRef.current) {
+                chartInstanceRef.current.remove();
+                chartInstanceRef.current = null;
+                yesLineRef.current = null;
+                noLineRef.current = null;
+                spotLineRef.current = null;
+                hasInitiallyFit.current = false;
+            }
+        };
+    }, [containerWidth, height, isDarkMode, dynamicPrecision]);
+
+    // Data update effect — updates series data in-place without destroying the chart
+    useEffect(() => {
+        if (!chartInstanceRef.current || !yesLineRef.current || !noLineRef.current || !spotLineRef.current || !hasData) {
+            return;
+        }
+
+        const closeTimestamp = config?.closeTimestamp || config?.metadata?.closeTimestamp || config?.marketInfo?.closeTimestamp;
+        const isMarketClosedLocally = closeTimestamp && typeof closeTimestamp === 'number' && (Date.now() / 1000) > closeTimestamp;
+
+        // Update series visibility
+        yesLineRef.current.applyOptions({ visible: lineVisibility.yes });
+        noLineRef.current.applyOptions({ visible: lineVisibility.no });
+        spotLineRef.current.applyOptions({ visible: !isMarketClosedLocally && showSpot && spotData && spotData.length > 0 && lineVisibility.spot });
 
         // Forward-fill: extend YES/NO lines to match SPOT time range
         // 1. Find where ALL THREE start (max of mins) - only show where all have data
@@ -489,28 +518,23 @@ const SubgraphChart = ({
             console.log(`[SubgraphChart] No alignment (disabled or no overlap), showing: YES=${filteredYes.length}, NO=${filteredNo.length}, SPOT=${filteredSpot.length}`);
         }
 
-        // Set data
+        // Set data in-place (no chart destruction)
         if (filteredYes.length > 0) {
-            yesLine.setData(filteredYes);
+            yesLineRef.current.setData(filteredYes);
         }
         if (filteredNo.length > 0) {
-            noLine.setData(filteredNo);
+            noLineRef.current.setData(filteredNo);
         }
         if (showSpot && filteredSpot.length > 0) {
-            spotLine.setData(filteredSpot);
+            spotLineRef.current.setData(filteredSpot);
         }
 
-        // Fit content
-        chart.timeScale().fitContent();
-
-        // Cleanup
-        return () => {
-            if (chartInstanceRef.current) {
-                chartInstanceRef.current.remove();
-                chartInstanceRef.current = null;
-            }
-        };
-    }, [containerWidth, height, isDarkMode, hasData, yesData, noData, dynamicPrecision, showSpot, spotData, config, lineVisibility]);
+        // Fit content only on first data load
+        if (!hasInitiallyFit.current) {
+            chartInstanceRef.current.timeScale().fitContent();
+            hasInitiallyFit.current = true;
+        }
+    }, [yesData, noData, spotData, showSpot, config, lineVisibility, hasData]);
 
     // Calculate impact - use spotPrice when available (better formula)
     let impact = 0;
