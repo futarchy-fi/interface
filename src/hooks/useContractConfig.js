@@ -519,7 +519,10 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
           // TWAP configuration (from Registry metadata)
           twapDurationHours: data._registryMetadata?.twapDurationHours || null,
           twapStartTimestamp: data._registryMetadata?.twapStartTimestamp || null,
-          twapDescription: data._registryMetadata?.twapDescription || null
+          twapDescription: data._registryMetadata?.twapDescription || null,
+
+          // Full Registry metadata for direct access (e.g. snapshot_id)
+          _registryMetadata: data._registryMetadata || null
         };
 
         setConfig(transformedConfig);
