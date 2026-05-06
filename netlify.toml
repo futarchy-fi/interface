@@ -6,6 +6,7 @@
   NODE_VERSION = "20"
   NPM_FLAGS = "--legacy-peer-deps"
   NEXT_PUBLIC_API_URL = "https://api.futarchy.fi"
+  NEXT_PUBLIC_POOL_API_URL = "https://api.futarchy.fi"
   NEXT_PUBLIC_API_VERSION = "v1"
   NEXT_PUBLIC_RPC_URL = "https://rpc.gnosischain.com"
   NEXT_PUBLIC_SUPABASE_URL = "https://nvhqdqtlsdboctqjcelq.supabase.co"

@@ -5,7 +5,7 @@ import { ENABLE_SUBGRAPH_FOR_ALL_PROPOSALS } from '../config/featureFlags';
 // Pool data subgraph endpoints are now dynamic per chain - see getSubgraphEndpoint(chainId)
 
 // API base URL - avoid mixed content (upgrade http->https when page is https)
-const RAW_API_BASE_URL = process.env.NEXT_PUBLIC_POOL_API_URL || 'https://stag.api.tickspread.com';
+const RAW_API_BASE_URL = process.env.NEXT_PUBLIC_POOL_API_URL || 'https://api.futarchy.fi';
 const normalizeBaseUrl = (url) => {
   try {
     if (typeof window !== 'undefined' && window.location?.protocol === 'https:' && url.startsWith('http://')) {

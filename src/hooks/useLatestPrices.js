@@ -1,9 +1,5 @@
 import { useState, useEffect } from 'react';
 
-// Pool API endpoints for YES/NO position data (keep these for chart data)
-const YES_POOL_URL = 'https://stag.api.tickspread.com/v4/candles?pool_id=0x9a14d28909f42823Ee29847F87A15Fb3b6E8AEd3&interval=3600000';
-const NO_POOL_URL = 'https://stag.api.tickspread.com/v4/candles?pool_id=0x6E33153115Ab58dab0e0F1E3a2ccda6e67FA5cD7&interval=3600000';
-
 // Base token addresses for Balancer SDK
 const BASE_COMPANY_TOKEN_ADDRESS = "0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb"; // GNO
 const BASE_CURRENCY_TOKEN_ADDRESS = "0xaf204776c7245bF4147c2612BF6e5972Ee483701"; // sDAI
