@@ -11,69 +11,12 @@ import {
 } from "../../cards/Resources";
 import CustomDropdown from "../../components/CustomDropdown";
 import SearchBox from "../../components/SearchBox";
-import { fetchCompanyData } from "./ProposalsPageDataTransformer";
 import ProposalsListCarousel from "../../components/ProposalsListCarousel";
 import PageHeader from "../../../../layout/PageHeader";
 import PageLayout from "../../../../layout/PageLayout";
 import { useOrganization } from "../../../../../hooks/useOrganization";
 import { useChainId } from "wagmi";
 import OrganizationManagerModal from "../../../../debug/OrganizationManagerModal";
-import { SUBGRAPH_ENDPOINTS } from "../../../../../config/subgraphEndpoints";
-
-// Gnosis Chain ID
-const GNOSIS_CHAIN_ID = 100;
-
-/**
- * Fetch volume data from subgraph for a list of proposals and sort by total volume.
- * Each proposal must have a proposalID (contract address) field.
- */
-const fetchAndSortByVolume = async (proposals, chainId = 100) => {
-  const endpoint = SUBGRAPH_ENDPOINTS[chainId];
-  if (!endpoint) return proposals;
-
-  // Only fetch for proposals that have a proposal ID looking like an address
-  const addressProposals = proposals.filter(p => p.proposalID && p.proposalID.startsWith('0x'));
-  if (addressProposals.length === 0) return proposals;
-
-  // Batch fetch: query each proposal's pools for volume data
-  const volumeMap = {};
-  try {
-    await Promise.all(
-      addressProposals.map(async (p) => {
-        try {
-          const query = `{
-            proposal(id: "${p.proposalID.toLowerCase()}") {
-              pools { volumeToken0 volumeToken1 liquidity }
-            }
-          }`;
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
-          });
-          const result = await res.json();
-          const pools = result.data?.proposal?.pools || [];
-          volumeMap[p.proposalID] = pools.reduce((sum, pool) => {
-            return sum + (parseFloat(pool.volumeToken0) || 0) + (parseFloat(pool.volumeToken1) || 0);
-          }, 0);
-        } catch (e) {
-          volumeMap[p.proposalID] = 0;
-        }
-      })
-    );
-  } catch (e) {
-    console.warn('[ProposalsPage] Failed to batch-fetch volume data:', e);
-    return proposals;
-  }
-
-  // Attach volume and sort
-  const withVolume = proposals.map(p => ({
-    ...p,
-    totalVolume: volumeMap[p.proposalID] || 0
-  }));
-  withVolume.sort((a, b) => (b.totalVolume || 0) - (a.totalVolume || 0));
-  return withVolume;
-};
 
 const PROPOSAL_IMAGES = {
   "ethereum-budget": "/assets/ethereum-budget-picture.webp",
@@ -81,30 +24,10 @@ const PROPOSAL_IMAGES = {
   "protocol-upgrade": "/assets/protocol-update-picture.webp",
 };
 
-const getImageKey = (proposal) => {
-  // Default image
-  let imageKey = "gnosis-pay";
-
-  try {
-    const title = (proposal.proposalTitle || "").toLowerCase();
-    const id = (proposal.proposalID || "").toLowerCase();
-
-    if (title.includes("budget") || id.includes("budget")) {
-      imageKey = "ethereum-budget";
-    } else if (title.includes("buyback") || id.includes("buyback")) {
-      imageKey = "ethereum-buyback";
-    } else if (title.includes("protocol") || title.includes("upgrade")) {
-      imageKey = "protocol-upgrade";
-    }
-  } catch (error) {
-    console.warn("Error determining image key:", error);
-  }
-
-  return imageKey;
-};
+const DEFAULT_COMPANY_ID = "0x3Fd2e8E71f75eED4b5c507706c413E33e0661bBf"; // Gnosis DAO
 
 const ProposalsPage = ({
-  initialCompanyId = "gnosis",
+  initialCompanyId = DEFAULT_COMPANY_ID,
   preserveHash = false,
   useNewCards = false,
 }) => {
@@ -291,50 +214,14 @@ const ProposalsPage = ({
       };
 
       fetchProposalPools();
+    } else if (isAddressId && !subgraphLoading && !subgraphOrg) {
+      // Subgraph returned no org for this address — bail out cleanly.
+      setProposals([]);
+      setCompanyData(null);
+      setIsLoadingCompany(false);
+      setIsLoading(false);
     }
   }, [isAddressId, subgraphOrg, subgraphLoading]);
-
-  // Effect for backend-based data (numeric IDs)
-  useEffect(() => {
-    // Skip if using address-based ID (subgraph path)
-    if (isAddressId) return;
-
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        setIsLoadingCompany(true);
-        const data = await fetchCompanyData(initialCompanyId, false);
-        setCompanyData(data);
-
-        if (!data.proposals) {
-          console.warn("No proposals data received");
-          setProposals([]);
-        } else {
-          const proposalsWithImages = data.proposals.map((proposal) => ({
-            ...proposal,
-            image:
-              PROPOSAL_IMAGES[getImageKey(proposal)] ||
-              PROPOSAL_IMAGES["gnosis-pay"],
-          }));
-
-          // Sort by volume/liquidity from subgraph
-          const sorted = await fetchAndSortByVolume(proposalsWithImages, GNOSIS_CHAIN_ID);
-          setProposals(sorted);
-        }
-        setError(null);
-      } catch (err) {
-        setError(err.message || "Failed to load data");
-        console.error("Error loading data:", err);
-        setProposals([]);
-        setCompanyData(null);
-      } finally {
-        setIsLoading(false);
-        setIsLoadingCompany(false);
-      }
-    };
-
-    loadData();
-  }, [initialCompanyId, isAddressId]);
 
   // Update the filter options structure
   const filterOptions = [
