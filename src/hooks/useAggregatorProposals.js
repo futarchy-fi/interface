@@ -410,6 +410,12 @@ export async function fetchProposalsFromAggregator(aggregatorAddress, connectedW
     const allProposals = [];
     for (const org of aggregator.organizations || []) {
         for (const proposal of org.proposals || []) {
+            // Skip archived proposals (test/abandoned, never going live)
+            const proposalMeta = parseMetadata(proposal.metadata);
+            if (proposalMeta.archived === true) {
+                console.log(`[🗄️ ARCHIVED] Skipping "${proposal.displayNameEvent?.slice(0, 40)}..."`);
+                continue;
+            }
             allProposals.push(transformProposalToEvent(proposal, org, connectedWallet));
         }
     }
