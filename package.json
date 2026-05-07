@@ -14,12 +14,7 @@
     "build-storybook": "storybook build",
     "copy-structure": "node copyStructure.mjs",
     "getpoolprice": "node getAlgebraPoolPrice.js",
-    "get-trade-history": "node getTradeHistory.js",
-    "start-proposal": "node scripts/proposal-cli.js",
-    "send-to-supabase": "node send-to-supabase.js",
-    "send-pool": "node send-to-supabase.js pool-request.json create_pool",
-    "send-request": "node send-to-supabase.js request.json create_pool",
-    "send-request-clean": "node send-to-supabase.js request-clean.json create_pool"
+    "start-proposal": "node scripts/proposal-cli.js"
   },
   "dependencies": {
     "@balancer-labs/sdk": "^1.1.6",

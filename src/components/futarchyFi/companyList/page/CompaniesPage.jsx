@@ -166,7 +166,7 @@ const CompaniesPage = ({ useStorybookUrl = false }) => {
 
         {/* Companies Carousel (Mobile Fallback) */}
         <div className="md:hidden">
-          <CompaniesListCarousel useStorybookUrl={useStorybookUrl} aggregatorAddress={aggregatorAddress} />
+          <CompaniesListCarousel useStorybookUrl={useStorybookUrl} />
         </div>
       </PageLayout>
 
