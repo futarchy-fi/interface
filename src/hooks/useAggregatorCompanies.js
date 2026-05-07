@@ -67,9 +67,11 @@ function transformOrgToCard(org) {
     // Extract chainId from metadata (stored as string "1" or "100")
     const chainId = meta.chain ? parseInt(meta.chain, 10) : 100; // Default to Gnosis (100)
 
-    // Count active proposals (visibility !== 'hidden' AND not resolved)
-    // If no visibility is set, proposal is considered active (public)
-    const proposals = org.proposals || [];
+    // Count active proposals (not archived, not hidden, not resolved)
+    const proposals = (org.proposals || []).filter(p => {
+        const meta = parseMetadata(p.metadata);
+        return meta.archived !== true;
+    });
     const activeProposals = proposals.filter(proposal => {
         // Check metadataEntries for visibility key
         const visibilityEntry = proposal.metadataEntries?.find(e => e.key === 'visibility');
