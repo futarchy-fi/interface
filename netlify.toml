@@ -15,7 +15,6 @@
   NEXT_PUBLIC_DEBUG_MODE = "false"
   NEXT_PUBLIC_USE_DEFAULT_MOCK_METADATA = "true"
   NEXT_PUBLIC_USE_MOCK_SNAPSHOT = "false"
-  NEXT_PUBLIC_USE_SUPABASE_SNAPSHOT = "true"
 
 # Deploy previews on PRs
 [context.deploy-preview]

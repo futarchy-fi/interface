@@ -2579,7 +2579,6 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
 
   // Snapshot integration - fetch Snapshot proposal ID from Supabase using MARKET_ADDRESS
   const useMockSnapshot = process.env.NEXT_PUBLIC_USE_MOCK_SNAPSHOT === 'true';
-  const useSupabaseSnapshot = process.env.NEXT_PUBLIC_USE_SUPABASE_SNAPSHOT !== 'false'; // Default to true
 
   const {
     loading: snapshotLoading,
@@ -2588,12 +2587,10 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     source: snapshotSource,
     highestResult: snapshotHighestResult,
     snapshotProposalId,
-  } = useSnapshotData(MARKET_ADDRESS, {
+  } = useSnapshotData(config?._registryMetadata?.snapshot_id || null, {
     useMock: useMockSnapshot,
-    useSupabase: useSupabaseSnapshot,
     autoFetch: true,
     refreshInterval: 60000, // Refresh every 60 seconds
-    registrySnapshotId: config?._registryMetadata?.snapshot_id || null,
   });
 
   // Process the market title with regex to extract components
