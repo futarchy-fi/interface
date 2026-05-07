@@ -1,18 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { CheckIcon, CancelIcon, NewspaperIcon, EyeIcon } from "./Resources";
 import Image from 'next/image';
-import { createSupabasePoolFetcher } from "../../../../../SupabasePoolFetcher";
+import { createSubgraphPoolFetcher } from "../../../../utils/SubgraphPoolFetcher";
 import { generateFallbackImage } from "../../../../utils/imageUtils";
 import { getMarketUrl } from "../../../../utils/urlUtils";
 
-// Create Supabase pool fetcher instance
-const supabasePoolFetcher = createSupabasePoolFetcher(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'your-supabase-url',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-supabase-key'
-);
+// Subgraph-backed pool fetcher (replaces SupabasePoolFetcher)
+const poolFetcher = createSubgraphPoolFetcher();
 
-// Simple hook for fetching latest pool prices from Supabase
-const useSimplePoolPrices = (proposalID, poolAddresses, predictionPools) => {
+// Simple hook for fetching latest pool prices from the subgraph
+const useSimplePoolPrices = (proposalID, poolAddresses, predictionPools, chainId = 100) => {
   const [prices, setPrices] = useState({ yes: null, no: null, eventProbability: null });
   const [loading, setLoading] = useState(true);
 
@@ -25,13 +22,13 @@ const useSimplePoolPrices = (proposalID, poolAddresses, predictionPools) => {
 
         // Fetch YES/NO prices from conditional pools
         const [yesResult, noResult] = await Promise.all([
-          poolAddresses?.yes ? supabasePoolFetcher.fetch('pools.candle', {
+          poolAddresses?.yes ? poolFetcher.fetch('pools.price', {
             id: poolAddresses.yes,
-            limit: 1
+            chainId
           }) : Promise.resolve(null),
-          poolAddresses?.no ? supabasePoolFetcher.fetch('pools.candle', {
+          poolAddresses?.no ? poolFetcher.fetch('pools.price', {
             id: poolAddresses.no,
-            limit: 1
+            chainId
           }) : Promise.resolve(null)
         ]);
 
@@ -53,13 +50,13 @@ const useSimplePoolPrices = (proposalID, poolAddresses, predictionPools) => {
         let eventProbability = null;
         if (predictionPools?.yes?.address && predictionPools?.no?.address) {
           const [predYesResult, predNoResult] = await Promise.all([
-            supabasePoolFetcher.fetch('pools.candle', {
+            poolFetcher.fetch('pools.price', {
               id: predictionPools.yes.address,
-              limit: 1
+              chainId
             }),
-            supabasePoolFetcher.fetch('pools.candle', {
+            poolFetcher.fetch('pools.price', {
               id: predictionPools.no.address,
-              limit: 1
+              chainId
             })
           ]);
 
@@ -92,12 +89,10 @@ const useSimplePoolPrices = (proposalID, poolAddresses, predictionPools) => {
     } else {
       setLoading(false);
     }
-  }, [proposalID, poolAddresses?.yes, poolAddresses?.no, predictionPools?.yes?.address, predictionPools?.no?.address]);
+  }, [proposalID, poolAddresses?.yes, poolAddresses?.no, predictionPools?.yes?.address, predictionPools?.no?.address, chainId]);
 
   return { prices, loading };
 };
-
-// All RPC complexity removed - using simple Supabase fetcher
 
 // Loading Spinner Component (copied from EventHighlightCard, adjusted class if needed)
 const LoadingSpinner = ({ className = "h-4 w-4 text-futarchyGray12 dark:text-white" }) => (
@@ -423,7 +418,8 @@ export const ProposalsCard = ({
   const { prices: fetchedPrices, loading: isLoadingPrices } = useSimplePoolPrices(
     hasInitialPrices ? null : proposalID, // Skip fetch if we have initial prices
     hasInitialPrices ? null : poolAddresses,
-    hasInitialPrices ? null : predictionPools
+    hasInitialPrices ? null : predictionPools,
+    metadata?.chain || 100
   );
 
   // Use initial prices if provided, otherwise use fetched prices
@@ -629,7 +625,8 @@ export const MobileProposalsCard = ({
   const { prices: fetchedPrices, loading: isLoadingPrices } = useSimplePoolPrices(
     hasInitialPrices ? null : proposalID,
     hasInitialPrices ? null : poolAddresses,
-    hasInitialPrices ? null : predictionPools
+    hasInitialPrices ? null : predictionPools,
+    metadata?.chain || 100
   );
 
   // Use initial prices if provided, otherwise use fetched prices

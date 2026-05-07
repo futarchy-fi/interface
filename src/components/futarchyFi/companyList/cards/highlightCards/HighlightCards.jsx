@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useMemo } from "react";
 import CircularProgressBar from "../../components/CircularProgressBar";
-import { createSupabasePoolFetcher } from "../../../../../../SupabasePoolFetcher";
+import { createSubgraphPoolFetcher } from "../../../../../utils/SubgraphPoolFetcher";
 import { generateMarketUrl } from "../../constants/staticPaths";
 import ChainBadge from "../../components/ChainBadge";
 
-// Create Supabase pool fetcher instance (same as EventHighlightCard)
-const supabasePoolFetcher = createSupabasePoolFetcher(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'your-supabase-url',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-supabase-key'
-);
+// Subgraph-backed pool fetcher (replaces SupabasePoolFetcher)
+const poolFetcher = createSubgraphPoolFetcher();
 
-// Simple hook for fetching latest pool prices from Supabase (same as EventHighlightCard)
-// Now accepts optional prefetchedPrices to skip Supabase fetch when bulk-fetched prices are available
+// Simple hook for fetching latest pool prices from the subgraph (same shape as EventHighlightCard).
+// Accepts optional prefetchedPrices to skip the per-pool fetch when bulk-fetched prices are available.
 const useLatestPoolPrices = (poolAddresses, eventId, metadata, prefetchedPrices = null) => {
   const [prices, setPrices] = useState({ yes: null, no: null });
   const [loading, setLoading] = useState(true);
@@ -32,17 +29,19 @@ const useLatestPoolPrices = (poolAddresses, eventId, metadata, prefetchedPrices 
       setLoading(true);
 
       try {
-        console.log(`[SIMPLE FETCH] Getting latest candles for event ${eventId}`);
+        console.log(`[SIMPLE FETCH] Getting latest pool prices for event ${eventId}`);
 
-        // Fetch latest candles in parallel - much simpler!
+        const chainId = metadata?.chain || 100;
+
+        // Fetch latest pool prices in parallel
         const [yesResult, noResult] = await Promise.all([
-          poolAddresses?.yes ? supabasePoolFetcher.fetch('pools.candle', {
+          poolAddresses?.yes ? poolFetcher.fetch('pools.price', {
             id: poolAddresses.yes,
-            limit: 1
+            chainId
           }) : Promise.resolve(null),
-          poolAddresses?.no ? supabasePoolFetcher.fetch('pools.candle', {
+          poolAddresses?.no ? poolFetcher.fetch('pools.price', {
             id: poolAddresses.no,
-            limit: 1
+            chainId
           }) : Promise.resolve(null)
         ]);
 
