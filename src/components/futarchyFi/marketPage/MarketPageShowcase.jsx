@@ -56,8 +56,8 @@ import { getRealityQuestionUrl } from '../../debug/constants/chainConfig';
 import WrongNetworkModal from "../../common/WrongNetworkModal";
 import { retryRpcCall } from '../../../utils/retryWithBackoff';
 import CreatePoolModal from './CreatePoolModal';
-// Import Supabase pool fetcher for getting latest prices from pool_candles
-import { createSupabasePoolFetcher } from "../../../../SupabasePoolFetcher";
+// Subgraph-backed pool fetcher for latest prices (replaces SupabasePoolFetcher)
+import { createSubgraphPoolFetcher } from "../../../utils/SubgraphPoolFetcher";
 // POOL_CONFIG_THIRD is now available in useContractConfig
 
 //lets import from contract.js 
@@ -72,8 +72,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdb
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Create Supabase pool fetcher instance
-const supabasePoolFetcher = createSupabasePoolFetcher(supabaseUrl, supabaseKey);
+// Subgraph pool fetcher instance for latest prices
+const subgraphPoolFetcher = createSubgraphPoolFetcher();
 
 const GNOSIS_DEFAULT_RPC = process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com';
 const ALGEBRA_TWAP_ABI = [
@@ -2639,26 +2639,29 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
           return;
         }
 
-        // Fetch latest candles from Supabase (much simpler!)
+        const subgraphChainId = config?.chainId || 100;
+
+        // Fetch latest pool prices + THIRD pool candle history in parallel
         const [yesResult, noResult, thirdResult, baseResult] = await Promise.all([
-          supabasePoolFetcher.fetch('pools.candle', {
+          subgraphPoolFetcher.fetch('pools.price', {
             id: config.POOL_CONFIG_YES.address,
-            limit: 1
+            chainId: subgraphChainId
           }),
-          supabasePoolFetcher.fetch('pools.candle', {
+          subgraphPoolFetcher.fetch('pools.price', {
             id: config.POOL_CONFIG_NO.address,
-            limit: 1
+            chainId: subgraphChainId
           }),
           config.POOL_CONFIG_THIRD?.address
-            ? supabasePoolFetcher.fetch('pools.candle', {
+            ? subgraphPoolFetcher.fetch('pools.candles', {
               id: config.POOL_CONFIG_THIRD.address,
-              limit: 500
+              limit: 500,
+              chainId: subgraphChainId
             })
             : Promise.resolve(null),
           config.BASE_POOL_CONFIG?.address
-            ? supabasePoolFetcher.fetch('pools.candle', {
+            ? subgraphPoolFetcher.fetch('pools.price', {
               id: config.BASE_POOL_CONFIG.address,
-              limit: 1
+              chainId: subgraphChainId
             })
             : Promise.resolve(null)
         ]);

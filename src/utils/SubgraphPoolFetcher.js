@@ -179,9 +179,69 @@ export async function fetchPoolsBatch(poolAddresses, chainId = 100) {
 }
 
 /**
- * Factory function to create a fetcher instance with default chain
- * Matches the pattern of createSupabasePoolFetcher for easy drop-in replacement
- * 
+ * Fetch historical candles for a pool from the subgraph.
+ *
+ * Returns candles in `{ timestamp, price }` shape (same as the legacy
+ * SupabasePoolFetcher pool_candles table) so call sites that consumed
+ * Supabase candles can swap with minimal changes.
+ *
+ * @param {Object} params
+ * @param {string} params.poolAddress - Pool contract address
+ * @param {number} params.limit - Max candles to return (most-recent first, then sorted asc)
+ * @param {number} params.periodSeconds - Candle period in seconds (3600 = 1h)
+ * @param {number} params.chainId - Chain ID
+ * @returns {Promise<Array<{ timestamp: number, price: number }>>}
+ */
+export async function fetchPoolCandles({ poolAddress, limit = 500, periodSeconds = 3600, chainId = 100 }) {
+    const endpoint = getSubgraphEndpoint(chainId);
+    if (!endpoint || !poolAddress) return [];
+
+    const poolId = poolAddress.toLowerCase();
+    const query = `query GetCandles($poolId: String!, $limit: Int!, $period: BigInt!) {
+        candles(
+            where: { pool: $poolId, period: $period }
+            first: $limit
+            orderBy: periodStartUnix
+            orderDirection: desc
+        ) {
+            periodStartUnix
+            close
+        }
+    }`;
+
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query,
+                variables: { poolId, limit, period: String(periodSeconds) }
+            })
+        });
+        const result = await response.json();
+        if (result.errors) {
+            console.error('[SubgraphPoolFetcher] candles GraphQL errors:', result.errors);
+            return [];
+        }
+        const candles = result.data?.candles || [];
+        // Map to { timestamp, price } and sort ascending by time so consumers can
+        // index `[length-1]` as the latest candle (matches old Supabase shape after sort).
+        return candles
+            .map(c => ({
+                timestamp: Number(c.periodStartUnix),
+                price: parseFloat(c.close)
+            }))
+            .filter(c => !Number.isNaN(c.price))
+            .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+        console.error('[SubgraphPoolFetcher] candle fetch error:', error);
+        return [];
+    }
+}
+
+/**
+ * Factory function to create a fetcher instance with default chain.
+ *
  * @param {number} defaultChainId - Default chain ID for all operations
  * @returns {Object} Fetcher instance with fetch method
  */
@@ -193,36 +253,50 @@ export function createSubgraphPoolFetcher(defaultChainId = 100) {
         defaultChainId,
 
         /**
-         * Fetch operation compatible with SupabasePoolFetcher interface
-         * 
-         * @param {string} operation - 'pools.price' or 'pools.batch'
-         * @param {Object} args - { id, chainId } or { ids, chainId }
+         * @param {string} operation - 'pools.price' | 'pools.batch' | 'pools.candles'
+         * @param {Object} args - operation-specific args; chainId optional
          */
         async fetch(operation, args = {}) {
             const chainId = args.chainId || defaultChainId;
 
             switch (operation) {
-                case 'pools.price':
+                case 'pools.price': {
                     const result = await fetchPoolPrice(args.id, chainId);
                     return {
                         status: result ? 'success' : 'error',
                         data: result ? [result] : [],
                         source: 'SubgraphPoolFetcher'
                     };
+                }
 
-                case 'pools.batch':
+                case 'pools.batch': {
                     const poolMap = await fetchPoolsBatch(args.ids, chainId);
                     return {
                         status: poolMap.size > 0 ? 'success' : 'error',
                         data: Array.from(poolMap.entries()).map(([id, data]) => ({ id, ...data })),
                         source: 'SubgraphPoolFetcher'
                     };
+                }
+
+                case 'pools.candles': {
+                    const candles = await fetchPoolCandles({
+                        poolAddress: args.id,
+                        limit: args.limit ?? 500,
+                        periodSeconds: args.periodSeconds ?? 3600,
+                        chainId
+                    });
+                    return {
+                        status: candles.length > 0 ? 'success' : 'error',
+                        data: candles,
+                        source: 'SubgraphPoolFetcher'
+                    };
+                }
 
                 default:
                     return {
                         status: 'error',
                         reason: `Operation '${operation}' not supported`,
-                        supportedOperations: ['pools.price', 'pools.batch']
+                        supportedOperations: ['pools.price', 'pools.batch', 'pools.candles']
                     };
             }
         }

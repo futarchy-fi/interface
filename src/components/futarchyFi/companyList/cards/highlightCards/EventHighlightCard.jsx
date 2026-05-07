@@ -2,18 +2,15 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import CircularProgressBar from "../../components/CircularProgressBar";
-import { createSupabasePoolFetcher } from "../../../../../../SupabasePoolFetcher";
+import { createSubgraphPoolFetcher } from "../../../../../utils/SubgraphPoolFetcher";
 import ChainBadge from "../../components/ChainBadge";
 import { USE_QUERY_PARAM_URLS } from "../../../../../config/featureFlags";
 
-// Create Supabase pool fetcher instance (you'd get these from env vars)
-const supabasePoolFetcher = createSupabasePoolFetcher(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'your-supabase-url',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-supabase-key'
-);
+// Subgraph-backed pool fetcher (replaces SupabasePoolFetcher)
+const poolFetcher = createSubgraphPoolFetcher();
 
-// Simple hook for fetching latest pool prices from Supabase including event probability
-// Now accepts optional prefetchedPrices to skip Supabase fetch when bulk-fetched prices are available
+// Simple hook for fetching latest pool prices from the subgraph including event probability.
+// Accepts optional prefetchedPrices to skip the per-pool fetch when bulk-fetched prices are available.
 const useLatestPoolPrices = (poolAddresses, eventId, metadata, prefetchedPrices = null) => {
   const [prices, setPrices] = useState({ yes: null, no: null, eventProbability: null });
   const [loading, setLoading] = useState(true);
@@ -35,17 +32,19 @@ const useLatestPoolPrices = (poolAddresses, eventId, metadata, prefetchedPrices 
       setLoading(true);
 
       try {
-        console.log(`[SIMPLE FETCH] Getting latest candles for event ${eventId}`);
+        console.log(`[SIMPLE FETCH] Getting latest pool prices for event ${eventId}`);
+
+        const chainId = metadata?.chain || 100;
 
         // Fetch conditional pool prices in parallel
         const [yesResult, noResult] = await Promise.all([
-          poolAddresses?.yes ? supabasePoolFetcher.fetch('pools.candle', {
+          poolAddresses?.yes ? poolFetcher.fetch('pools.price', {
             id: poolAddresses.yes,
-            limit: 1
+            chainId
           }) : Promise.resolve(null),
-          poolAddresses?.no ? supabasePoolFetcher.fetch('pools.candle', {
+          poolAddresses?.no ? poolFetcher.fetch('pools.price', {
             id: poolAddresses.no,
-            limit: 1
+            chainId
           }) : Promise.resolve(null)
         ]);
 
@@ -77,9 +76,9 @@ const useLatestPoolPrices = (poolAddresses, eventId, metadata, prefetchedPrices 
         if (predictionPools?.yes?.address) {
           console.log(`[PREDICTION POOLS DEBUG] Fetching YES prediction pool for ${eventId}:`, predictionPools.yes.address);
 
-          const predYesResult = await supabasePoolFetcher.fetch('pools.candle', {
+          const predYesResult = await poolFetcher.fetch('pools.price', {
             id: predictionPools.yes.address,
-            limit: 1
+            chainId
           });
 
           console.log(`[PREDICTION POOLS DEBUG] Fetch result for ${eventId}:`, {
