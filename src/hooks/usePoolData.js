@@ -108,28 +108,41 @@ const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
     }
   }
 
-  // Calculate Liquidity Value using Tick
-  // Price p = 1.0001^tick. SqrtPrice = 1.0001^(tick/2).
-  // Valued Liquidity ~ L * SqrtPrice (if quote is token 1).
+  // Convert Algebra V3 raw L to a currency-denominated TVL approximation.
+  //
+  // For a full-range position at the current price, the underlying token
+  // reserves are roughly amount0 ≈ L / sqrtPrice and amount1 ≈ L × sqrtPrice
+  // (in raw 1e18-scaled units when both tokens have 18 decimals). The total
+  // TVL valued in the currency token is therefore:
+  //
+  //   TVL_currency_wei ≈ amount_currency + amount_company × price
+  //                    = L × sqrtPrice + (L / sqrtPrice) × price
+  //                    = 2 × L × sqrtPrice         (since price = sqrtPrice²)
+  //
+  // We then divide by 1e18 to express it in currency-token units.
   let adjustedLiquidity = parseFloat(pool.liquidity || 0);
 
   try {
     if (pool.tick) {
-      // Calculate SqrtPrice from tick
       const tick = parseFloat(pool.tick);
-      // 1.0001 ^ (tick/2)
       const sqrtPrice = Math.pow(1.0001, tick / 2);
-
-      if (currencyIsToken0) {
-        // If currency is token 0, we divide by sqrtPrice? 
-        if (sqrtPrice > 0) adjustedLiquidity = adjustedLiquidity / sqrtPrice;
+      if (sqrtPrice > 0) {
+        const liquidityScaled = currencyIsToken0
+          ? adjustedLiquidity / sqrtPrice
+          : adjustedLiquidity * sqrtPrice;
+        // Both reserves at center → roughly 2× the single-side estimate;
+        // /1e18 to convert from raw token-scaled wei to currency units.
+        adjustedLiquidity = (liquidityScaled * 2) / 1e18;
       } else {
-        // Default (Token 1 is currency/quote)
-        adjustedLiquidity = adjustedLiquidity * sqrtPrice;
+        adjustedLiquidity = 0;
       }
+    } else {
+      // No tick available — fall back to raw-L /1e18 (best effort).
+      adjustedLiquidity = adjustedLiquidity / 1e18;
     }
   } catch (e) {
     console.warn('Error calculating tick-adjusted liquidity:', e);
+    adjustedLiquidity = 0;
   }
 
   // Derive company-token price from tick (price of company token in currency units)
@@ -154,9 +167,10 @@ const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
   return {
     volume: volumeTotal,
     liquidity: {
-      amount: adjustedLiquidity.toLocaleString('fullwide', { useGrouping: false }),
-      token: 'Raw',
-      isRaw: true
+      // Currency-denominated TVL (already normalized to token units, not wei).
+      amount: adjustedLiquidity.toString(),
+      token: proposalCurrencySymbol || 'sDAI',
+      isRaw: false
     },
     price
   };
