@@ -62,7 +62,7 @@ export default function OrganizationManagerModal({
             try {
                 const query = mode === MODE.AGGREGATOR
                     ? `{ aggregator(id: "${entityId.toLowerCase()}") { id name description metadata owner editor organizations { id name } } }`
-                    : `{ organization(id: "${entityId.toLowerCase()}") { id name description metadata owner editor proposals { id metadataContract } } }`;
+                    : `{ organization(id: "${entityId.toLowerCase()}") { id name description metadata owner editor proposals { metadataContract: id proposalAddress title } } }`;
 
                 const response = await fetch(SUBGRAPH_URL, {
                     method: 'POST',
