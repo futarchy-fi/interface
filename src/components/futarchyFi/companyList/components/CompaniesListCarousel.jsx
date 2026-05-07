@@ -7,10 +7,8 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import { useAccount } from 'wagmi';
 
-import { fetchAndTransformCompanies } from '../page/CompaniesDataTransformer';
 import { CompaniesCard } from '../cards/deafultCards/CompaniesCard';
 import { useAggregatorCompanies } from '../../../../hooks/useAggregatorCompanies';
-import { ENABLE_V2_SUBGRAPH } from '../../../../config/featureFlags';
 import { DEFAULT_AGGREGATOR } from '../../../../config/subgraphEndpoints';
 
 // Re-using NavigationButton component from EventsHighlightCarousel
@@ -38,76 +36,18 @@ const NavigationButton = ({ direction, onClick, className }) => (
   </button>
 );
 
-const CompaniesListCarousel = ({ useStorybookUrl = false, aggregatorAddress = null }) => {
+const CompaniesListCarousel = ({ useStorybookUrl = false }) => {
   const [swiper, setSwiper] = useState(null);
-  const [companies, setCompanies] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [showPrev, setShowPrev] = useState(false);
   const [showNext, setShowNext] = useState(false);
 
   // Get connected wallet
   const { address: connectedAddress } = useAccount();
 
-  // Use default aggregator when V2 subgraph is enabled
-  const effectiveAggregator = ENABLE_V2_SUBGRAPH ? DEFAULT_AGGREGATOR : aggregatorAddress;
-
-  // Use subgraph hook if effectiveAggregator is available
   const {
-    companies: subgraphCompanies,
-    loading: subgraphLoading,
-    error: subgraphError
-  } = useAggregatorCompanies(effectiveAggregator);
-
-  useEffect(() => {
-    const loadCompanies = async () => {
-      try {
-        setLoading(true);
-        console.log(`[Carousel] ENABLE_V2_SUBGRAPH=${ENABLE_V2_SUBGRAPH}, aggregator=${effectiveAggregator || 'none'}`);
-
-        // V2 Mode: Only use subgraph companies, skip Supabase entirely
-        if (ENABLE_V2_SUBGRAPH) {
-          if (!subgraphLoading) {
-            console.log(`[Carousel] V2-MODE: Using ${subgraphCompanies.length} subgraph companies only (skipping Supabase)`);
-            setCompanies(subgraphCompanies);
-            setLoading(false);
-          }
-          return;
-        }
-
-        // Legacy mode: Fetch from backend (Supabase)
-        const backendData = await fetchAndTransformCompanies();
-
-        // If aggregator provided and subgraph loaded, merge them
-        if (effectiveAggregator && !subgraphLoading) {
-          // Subgraph companies come first, then backend companies
-          // Exclude backend duplicates that might also be in subgraph
-          const subgraphIds = new Set(subgraphCompanies.map(c => c.companyID?.toLowerCase()));
-          const filteredBackend = backendData.filter(c =>
-            !subgraphIds.has(c.companyID?.toString()?.toLowerCase())
-          );
-          setCompanies([...subgraphCompanies, ...filteredBackend]);
-          console.log(`[Carousel] Merged: ${subgraphCompanies.length} subgraph + ${filteredBackend.length} backend = ${subgraphCompanies.length + filteredBackend.length} total`);
-        } else if (!effectiveAggregator) {
-          // No aggregator, just use backend
-          setCompanies(backendData);
-        }
-        // If aggregator but still loading subgraph, wait
-        if (effectiveAggregator && subgraphLoading) {
-          return; // Don't set loading false yet
-        }
-      } catch (error) {
-        console.error('Error loading companies:', error);
-      } finally {
-        if (ENABLE_V2_SUBGRAPH) {
-          // V2 mode loading is handled above
-        } else if (!effectiveAggregator || !subgraphLoading) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadCompanies();
-  }, [effectiveAggregator, subgraphCompanies, subgraphLoading]);
+    companies,
+    loading
+  } = useAggregatorCompanies(DEFAULT_AGGREGATOR);
 
   useEffect(() => {
     if (swiper) {

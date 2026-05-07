@@ -11,18 +11,15 @@ const fetchCustomSpotPrice = async (fetchSpotPriceUrl) => {
   try {
     console.log('[SPOT] Starting custom spot price fetch from:', fetchSpotPriceUrl);
     
-    const bearerToken = process.env.NEXT_PUBLIC_SPOT_PRICE_TOKEN || 
-                        process.env.SPOT_PRICE_TOKEN || 
-                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
+    const bearerToken = process.env.NEXT_PUBLIC_SPOT_PRICE_TOKEN ||
+                        process.env.SPOT_PRICE_TOKEN;
+
     console.log('[SPOT] Bearer token check:', {
       hasSpotPriceToken: !!process.env.NEXT_PUBLIC_SPOT_PRICE_TOKEN,
       hasRegularSpotToken: !!process.env.SPOT_PRICE_TOKEN,
-      hasSupabaseAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       finalToken: bearerToken ? 'found' : 'not found',
       tokenSource: process.env.NEXT_PUBLIC_SPOT_PRICE_TOKEN ? 'dedicated spot price token' :
-                   process.env.SPOT_PRICE_TOKEN ? 'regular spot price token' :
-                   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'supabase anon key fallback' : 'none'
+                   process.env.SPOT_PRICE_TOKEN ? 'regular spot price token' : 'none'
     });
     
     if (!bearerToken) {
