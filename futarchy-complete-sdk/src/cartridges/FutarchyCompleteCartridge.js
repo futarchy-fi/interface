@@ -261,7 +261,7 @@ export class FutarchyCompleteCartridge {
         const SUBGRAPH_URL = getCandleSubgraph(chainId);
 
         const query = `{
-            proposals(first: 50, orderBy: id, orderDirection: desc) {
+            proposals(first: 1000, orderBy: id, orderDirection: desc) {
                 id
                 marketName
                 companyToken { symbol }
