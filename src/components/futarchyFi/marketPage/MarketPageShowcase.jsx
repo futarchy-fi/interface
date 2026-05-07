@@ -64,9 +64,6 @@ import { createSubgraphPoolFetcher } from "../../../utils/SubgraphPoolFetcher";
 import { UNISWAP_V3_POOL_ABI } from "./constants/contracts";
 // Swap Configuration
 
-// Import fetchCompanyData for getting market end time
-import { fetchCompanyData } from '../../futarchyFi/proposalsList/page/proposalsPage/ProposalsPageDataTransformer';
-
 // Initialize Supabase client for realtime and fetching
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -2522,8 +2519,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
   // Extract proposalId from config for passing to child components
   const proposalId = config?.proposalId;
 
-  // Add state for company data
-  const [companyData, setCompanyData] = useState(null);
+  // Token images for trade history rows; populated from on-chain metadata when available
   const [tokenImages, setTokenImages] = useState({
     company: null,
     currency: null
@@ -2543,25 +2539,17 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     }
   }, [config]);
 
-  // Fetch company data
+  // Pull token images from the on-chain proposal metadata when present
   useEffect(() => {
-    const getCompanyData = async () => {
-      try {
-        const data = await fetchCompanyData();
-        setCompanyData(data);
-
-        // Extract token images from the first proposal
-        if (data?.proposals && data.proposals[0]?.tokenImages) {
-          console.log('Found token images in company data:', data.proposals[0].tokenImages);
-          setTokenImages(data.proposals[0].tokenImages);
-        }
-      } catch (error) {
-        console.error('Error fetching company data:', error);
-      }
-    };
-
-    getCompanyData();
-  }, []);
+    const meta = config?._registryMetadata || config?.marketInfo?.metadata;
+    const images = meta?.token_images || meta?.tokenImages;
+    if (images?.company || images?.currency) {
+      setTokenImages({
+        company: images.company || null,
+        currency: images.currency || null
+      });
+    }
+  }, [config?._registryMetadata, config?.marketInfo?.metadata]);
 
   // Extract config values from useContractConfig (with fallbacks only for essential router addresses)
   const MARKET_ADDRESS = config?.MARKET_ADDRESS; // This comes from the extracted proposal ID
@@ -4681,33 +4669,13 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     });
   }, [latestPrices]);
 
-  // Fetch market end time from company data
-  useEffect(() => {
-    const fetchMarketEndTime = async () => {
-      try {
-        const companyData = await fetchCompanyData("gnosis");
-
-        if (companyData && companyData.proposals && companyData.proposals.length > 0) {
-          // Find the relevant proposal (you may need to adjust this logic to find the right one)
-          const proposal = companyData.proposals.find(p =>
-            p.proposalTitle.includes("GnosisPay") ||
-            p.proposalTitle.includes("$5mil")
-          );
-
-          if (proposal && proposal.endTime) {
-            setMarketEndTime(proposal.endTime);
-            console.log("Market end time fetched:", new Date(proposal.endTime * 1000));
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching market end time:", error);
-      }
-    };
-
-    fetchMarketEndTime();
-  }, []);
-
-  const [marketEndTime, setMarketEndTime] = useState(null);
+  // Market end time falls back to the on-chain closeTimestamp when
+  // config.marketInfo.endTime is not set.
+  const marketEndTime = useMemo(() => {
+    const meta = config?._registryMetadata || config?.marketInfo?.metadata;
+    const close = meta?.closeTimestamp;
+    return close ? Number(close) : null;
+  }, [config?._registryMetadata, config?.marketInfo?.metadata]);
 
   // ---> State for pending order check (count instead of ID) <---
   const [isLoadingPendingOrder, setIsLoadingPendingOrder] = useState(false);

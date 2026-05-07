@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAccount } from 'wagmi';
 import RootLayout from "../../../layout/RootLayout";
-import { fetchHighlightData } from "./HighlightDataTransformer";
 import { fetchEventHighlightData } from "./EventsHighlightDataTransformer";
 
 import CompaniesListCarousel from "../components/CompaniesListCarousel";
@@ -24,7 +23,6 @@ const HIDE_RECENTLY_RESOLVED = false;
 
 const CompaniesPage = ({ useStorybookUrl = false }) => {
   const { address: connectedWallet } = useAccount();
-  const [isCarouselLoading, setIsCarouselLoading] = useState(true);
   const [isEventsCarouselLoading, setIsEventsCarouselLoading] = useState(true);
   const [isResolvedCarouselLoading, setIsResolvedCarouselLoading] = useState(true);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -52,41 +50,21 @@ const CompaniesPage = ({ useStorybookUrl = false }) => {
     }
   }, []);
 
-  // Load highlights data
+  // Load highlights data — the carousels render their own data internally;
+  // the page just flips loading flags so the spinners disappear once mounted.
   useEffect(() => {
-    const loadHighlights = async () => {
-      try {
-        await fetchHighlightData();
-        setIsCarouselLoading(false);
-      } catch (error) {
-        console.error("Error loading highlights:", error);
-        setIsCarouselLoading(false);
-      }
-    };
-
     const loadEventHighlights = async () => {
       try {
-        await fetchEventHighlightData("all"); // Fetch highlights from all companies
-        setIsEventsCarouselLoading(false);
+        await fetchEventHighlightData("all");
       } catch (error) {
         console.error("Error loading event highlights:", error);
+      } finally {
         setIsEventsCarouselLoading(false);
       }
     };
 
-    const loadResolvedEventHighlights = async () => {
-      try {
-        // Don't need to import since it will be imported by the ResolvedEventsCarousel component
-        setIsResolvedCarouselLoading(false);
-      } catch (error) {
-        console.error("Error loading resolved event highlights:", error);
-        setIsResolvedCarouselLoading(false);
-      }
-    };
-
-    loadHighlights();
     loadEventHighlights();
-    loadResolvedEventHighlights();
+    setIsResolvedCarouselLoading(false);
   }, []);
 
 

@@ -45,33 +45,41 @@ export default function MilestonesPage() {
         setShowMarket(true);
       }
 
-      // Determine the company ID to use
+      // Map legacy numeric/slug company IDs to the on-chain Organization
+      // contract address used by the aggregator subgraph.
+      const LEGACY_ID_TO_ORG_ADDRESS = {
+        '9': '0x3Fd2e8E71f75eED4b5c507706c413E33e0661bBf',     // Gnosis DAO
+        '10': '0xaAB097ead5c2Db1Ca7b1E5034224A2118EDAbe36',    // Kleros DAO
+        '11': '0x2F345ce868Cc7840A89472F2503944E4ef8F797c',    // VeloraDAO
+        gnosis: '0x3Fd2e8E71f75eED4b5c507706c413E33e0661bBf',
+        kleros: '0xaAB097ead5c2Db1Ca7b1E5034224A2118EDAbe36',
+        velora: '0x2F345ce868Cc7840A89472F2503944E4ef8F797c',
+        aave: '0xb84b41518806b70FeE6dAE06982aBD9526cb59C7',
+        cow: '0xe071734B1cE5332Da778fb1FFD79456375d420D9',
+      };
+      const DEFAULT_COMPANY_ID = LEGACY_ID_TO_ORG_ADDRESS.gnosis;
+
       let companyIdToUse = company_id;
 
-      // If no company_id provided, default to gnosis (9) for backward compatibility
       if (!companyIdToUse) {
-        console.warn('No company_id provided, defaulting to Gnosis (9)');
-        companyIdToUse = '9';
-      }
-
-      // Check if it's an Ethereum address (0x + 40 hex chars)
-      const isAddress = typeof companyIdToUse === 'string' &&
+        console.warn('No company_id provided, defaulting to Gnosis');
+        companyIdToUse = DEFAULT_COMPANY_ID;
+      } else if (
+        typeof companyIdToUse === 'string' &&
         companyIdToUse.startsWith('0x') &&
-        companyIdToUse.length === 42;
-
-      if (isAddress) {
-        // Pass address as-is for subgraph lookup
-        console.log('[Milestones] Using address-based ID (subgraph path):', companyIdToUse);
+        companyIdToUse.length === 42
+      ) {
+        // Already an address — pass through
+        console.log('[Milestones] Using address-based ID:', companyIdToUse);
       } else {
-        // Convert string IDs to the format expected by the backend
-        if (companyIdToUse === 'gnosis' || companyIdToUse === '9') {
-          companyIdToUse = 9;
-        } else if (companyIdToUse === 'kleros' || companyIdToUse === '10') {
-          companyIdToUse = 10;
+        const key = String(companyIdToUse).toLowerCase();
+        const mapped = LEGACY_ID_TO_ORG_ADDRESS[key];
+        if (mapped) {
+          console.log(`[Milestones] Mapped legacy ID "${companyIdToUse}" → ${mapped}`);
+          companyIdToUse = mapped;
         } else {
-          // Try to parse as number
-          const numericId = parseInt(companyIdToUse);
-          companyIdToUse = isNaN(numericId) ? 9 : numericId;
+          console.warn(`[Milestones] Unknown company_id "${companyIdToUse}", falling back to Gnosis`);
+          companyIdToUse = DEFAULT_COMPANY_ID;
         }
       }
 
