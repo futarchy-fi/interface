@@ -44,8 +44,10 @@ export async function getSwapQuote({ proposal, amount, isYesPool, isInputCompany
     const inputType = isInputCompanyToken ? 0 : 1;
 
     // 3. Simulate (StaticCall is CRITICAL)
-    // We add gasLimit to be safe, though usually not needed if logic is clean.
-    const txOverrides = { gasLimit: 30000000 };
+    // The simulate call uses ~6.8M gas in practice. Stay below the Gnosis
+    // block gas limit (~17M) — public RPCs like gnosis-rpc.publicnode.com
+    // reject eth_call with gas > block limit ("Block gas limit exceeded").
+    const txOverrides = { gasLimit: 12_000_000 };
 
     let result;
     try {
