@@ -541,6 +541,9 @@ const ConfirmSwapModal = memo(({
 
     // Approval preference state (for Uniswap SDK on mainnet)
     const [useUnlimitedApproval, setUseUnlimitedApproval] = useState(false);
+    // True when input-token allowances for the spenders this swap will hit
+    // are already at (effectively) MaxUint256, so the approval section is moot.
+    const [hideApprovalSection, setHideApprovalSection] = useState(false);
 
     // ---> Add State for UI-controlled explorer config <---
     const [uiExplorerUrl, setUiExplorerUrl] = useState(DEFAULT_EXPLORER_CONFIG.url);
@@ -695,6 +698,75 @@ const ConfirmSwapModal = memo(({
     // Ref for polling retries and max attempts
     const pollingRetryCountRef = useRef(0);
     const MAX_POLLING_ATTEMPTS = 5;
+
+    // Hide the "Max Approval" section when input-token allowances for the
+    // spenders this swap will touch are already effectively unlimited — the
+    // toggle has no effect because no `approve` tx will be sent.
+    useEffect(() => {
+        if (!publicClient || !account || !transactionData?.action) return;
+        const baseTokenConfig = config?.BASE_TOKENS_CONFIG || BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG;
+        const mergeConfig = config?.MERGE_CONFIG || MERGE_CONFIG || DEFAULT_MERGE_CONFIG;
+        const futarchyRouter = config?.FUTARCHY_ROUTER_ADDRESS || FUTARCHY_ROUTER_ADDRESS;
+        if (!baseTokenConfig?.currency?.address || !mergeConfig?.currencyPositions || !futarchyRouter) return;
+
+        const isYes = transactionData.outcome === 'Event Will Occur';
+        const condCurrency = isYes
+            ? mergeConfig.currencyPositions?.yes?.wrap?.wrappedCollateralTokenAddress
+            : mergeConfig.currencyPositions?.no?.wrap?.wrappedCollateralTokenAddress;
+        const condCompany = isYes
+            ? mergeConfig.companyPositions?.yes?.wrap?.wrappedCollateralTokenAddress
+            : mergeConfig.companyPositions?.no?.wrap?.wrappedCollateralTokenAddress;
+
+        // Pairs the swap path will need allowance for, by action.
+        // Buy:  base currency → futarchyRouter (split), conditional currency → swap router.
+        // Sell: conditional company → swap router, conditional currency → futarchyRouter (merge).
+        let pairs = [];
+        if (transactionData.action === 'Buy') {
+            pairs = [
+                { token: baseTokenConfig.currency.address, spender: futarchyRouter },
+                { token: condCurrency, spender: SWAPR_V3_ROUTER },
+            ];
+        } else if (transactionData.action === 'Sell') {
+            pairs = [
+                { token: condCompany, spender: SWAPR_V3_ROUTER },
+                { token: condCurrency, spender: futarchyRouter },
+            ];
+        } else {
+            setHideApprovalSection(false);
+            return;
+        }
+        pairs = pairs.filter(p => p.token && p.spender);
+        if (pairs.length === 0) {
+            setHideApprovalSection(false);
+            return;
+        }
+
+        let cancelled = false;
+        const ALLOWANCE_ABI = [{
+            name: 'allowance', type: 'function', stateMutability: 'view',
+            inputs: [{ name: '', type: 'address' }, { name: '', type: 'address' }],
+            outputs: [{ type: 'uint256' }],
+        }];
+        const HALF_MAX = ethers.constants.MaxUint256.div(2);
+
+        (async () => {
+            try {
+                const allowances = await Promise.all(pairs.map(p =>
+                    publicClient.readContract({
+                        address: p.token,
+                        abi: ALLOWANCE_ABI,
+                        functionName: 'allowance',
+                        args: [account, p.spender],
+                    }).catch(() => 0n)
+                ));
+                const allMax = allowances.every(a => ethers.BigNumber.from(a.toString()).gte(HALF_MAX));
+                if (!cancelled) setHideApprovalSection(allMax);
+            } catch {
+                if (!cancelled) setHideApprovalSection(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [publicClient, account, transactionData?.action, transactionData?.outcome, config, FUTARCHY_ROUTER_ADDRESS]);
 
     // Define backdrop variants for Framer Motion
     const backdropVariants = {
@@ -4348,28 +4420,28 @@ const ConfirmSwapModal = memo(({
                             </div>
                         </div>
 
-                        {/* Approval Settings - Show for all swap methods on all chains */}
-                        <div className="px-4 pb-4">
-                            <label className="flex items-start gap-3 cursor-pointer group">
-                                <input
-                                    type="checkbox"
-                                    checked={useUnlimitedApproval}
-                                    onChange={(e) => setUseUnlimitedApproval(e.target.checked)}
-                                    className="mt-1 w-4 h-4 text-futarchyBlue9 bg-futarchyGray3 border-futarchyGray7 rounded focus:ring-futarchyBlue9 focus:ring-2 dark:bg-futarchyDarkGray4 dark:border-futarchyGray112"
-                                />
-                                <div className="flex-1">
-                                    <span className="text-sm font-medium text-futarchyGray12 dark:text-futarchyGray3 group-hover:text-futarchyBlue11 dark:group-hover:text-futarchyBlue9 transition-colors">
-                                        Max Approval
-                                    </span>
-                                    <p className="text-xs text-futarchyGray11 dark:text-futarchyGray112 mt-1">
-                                        {useUnlimitedApproval
-                                            ? "Will request max allowance. Useful for saving gas on future requests."
-                                            : "Will request max allowance. Useful for saving gas on future requests."
-                                        }
-                                    </p>
-                                </div>
-                            </label>
-                        </div>
+                        {/* Approval Settings - Show for all swap methods on all chains.
+                            Hidden when input-token allowances for this swap's spenders are already at max. */}
+                        {!hideApprovalSection && (
+                            <div className="px-4 pb-4">
+                                <label className="flex items-start gap-3 cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        checked={useUnlimitedApproval}
+                                        onChange={(e) => setUseUnlimitedApproval(e.target.checked)}
+                                        className="mt-1 w-4 h-4 text-futarchyBlue9 bg-futarchyGray3 border-futarchyGray7 rounded focus:ring-futarchyBlue9 focus:ring-2 dark:bg-futarchyDarkGray4 dark:border-futarchyGray112"
+                                    />
+                                    <div className="flex-1">
+                                        <span className="text-sm font-medium text-futarchyGray12 dark:text-futarchyGray3 group-hover:text-futarchyBlue11 dark:group-hover:text-futarchyBlue9 transition-colors">
+                                            Max Approval
+                                        </span>
+                                        <p className="text-xs text-futarchyGray11 dark:text-futarchyGray112 mt-1">
+                                            Will request max allowance. Useful for saving gas on future requests.
+                                        </p>
+                                    </div>
+                                </label>
+                            </div>
+                        )}
 
                         {/* Error Display */}
                         {error && (
