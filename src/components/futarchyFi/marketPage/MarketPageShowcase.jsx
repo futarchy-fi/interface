@@ -536,16 +536,18 @@ const TwapCountdown = ({
     return providerRef.current;
   }, []);
 
-  const fetchPoolTwap = useCallback(async (poolConfig, secondsAgoStart, shouldInvert = null) => {
+  const fetchPoolTwap = useCallback(async (poolConfig, secondsAgoStart, shouldInvert = null, secondsAgoEnd = 0) => {
     if (!poolConfig?.address) {
       throw new Error('Missing pool address');
     }
-    const secondsWindow = Math.max(1, Math.floor(secondsAgoStart));
+    const aStart = Math.max(0, Math.floor(secondsAgoStart));
+    const aEnd = Math.max(0, Math.floor(secondsAgoEnd));
+    const secondsWindow = Math.max(1, aStart - aEnd);
     const provider = ensureProvider();
     const poolContract = new ethers.Contract(poolConfig.address, ALGEBRA_TWAP_ABI, provider);
-    const { tickCumulatives } = await poolContract.getTimepoints([secondsWindow, 0]);
-    const latest = BigInt(tickCumulatives[1].toString());
+    const { tickCumulatives } = await poolContract.getTimepoints([aStart, aEnd]);
     const oldest = BigInt(tickCumulatives[0].toString());
+    const latest = BigInt(tickCumulatives[1].toString());
     const tickDelta = latest - oldest;
     const averageTick = Number(tickDelta) / secondsWindow;
     const rawPrice = Math.pow(1.0001, averageTick);
@@ -628,12 +630,14 @@ const TwapCountdown = ({
         setTwapLoading(true);
         setTwapError(null);
         const now = Math.floor(Date.now() / 1000);
-        const timeSinceStart = Math.min(Math.max(now - twapStartTimestamp, 1), twapDurationSeconds);
-        const secondsAgoStart = hasEnded ? twapDurationSeconds : timeSinceStart;
+        const twapEndTimestamp = twapStartTimestamp + twapDurationSeconds;
+        // Active: [twapStart..now]. Ended: historical [twapStart..twapEnd], not the trailing 24h.
+        const secondsAgoStart = Math.max(1, now - twapStartTimestamp);
+        const secondsAgoEnd = hasEnded ? Math.max(0, now - twapEndTimestamp) : 0;
 
         const [yesPrice, noPrice] = await Promise.all([
-          fetchPoolTwap(yesPoolConfig, secondsAgoStart, invertTwapPoolYes),
-          fetchPoolTwap(noPoolConfig, secondsAgoStart, invertTwapPoolNo)
+          fetchPoolTwap(yesPoolConfig, secondsAgoStart, invertTwapPoolYes, secondsAgoEnd),
+          fetchPoolTwap(noPoolConfig, secondsAgoStart, invertTwapPoolNo, secondsAgoEnd)
         ]);
 
         if (cancelled) return;
