@@ -40,9 +40,24 @@ export default function MilestonesPage() {
       const currentHash = window.location.hash;
       setHash(currentHash);
 
-      // If the hash matches specific milestone patterns, show MarketPageShowcase instead
+      // If the hash matches specific milestone patterns, show MarketPageShowcase instead.
+      // Also extract the proposal address from `#milestone:0x...` / `#market:0x...` and
+      // surface it as `?proposalId=0x...`, since useContractConfig only reads the proposal
+      // ID from the path or query string — without it the swap quoter falls back to v1
+      // defaults and shows "Insufficient liquidity".
       if (currentHash.includes('milestone') || currentHash.includes('market')) {
         setShowMarket(true);
+
+        const hashAddrMatch = currentHash.match(/0x[a-fA-F0-9]{40}/);
+        const urlParams = new URLSearchParams(window.location.search);
+        if (hashAddrMatch && !urlParams.get('proposalId')) {
+          urlParams.set('proposalId', hashAddrMatch[0]);
+          window.history.replaceState(
+            {},
+            '',
+            window.location.pathname + '?' + urlParams.toString() + currentHash
+          );
+        }
       }
 
       // Map legacy numeric/slug company IDs to the on-chain Organization
@@ -110,7 +125,21 @@ export default function MilestonesPage() {
       const handleHashChange = () => {
         const newHash = window.location.hash;
         setHash(newHash);
-        setShowMarket(newHash.includes('milestone') || newHash.includes('market'));
+        const isMilestone = newHash.includes('milestone') || newHash.includes('market');
+        setShowMarket(isMilestone);
+
+        if (isMilestone) {
+          const hashAddrMatch = newHash.match(/0x[a-fA-F0-9]{40}/);
+          const urlParams = new URLSearchParams(window.location.search);
+          if (hashAddrMatch && urlParams.get('proposalId') !== hashAddrMatch[0]) {
+            urlParams.set('proposalId', hashAddrMatch[0]);
+            window.history.replaceState(
+              {},
+              '',
+              window.location.pathname + '?' + urlParams.toString() + newHash
+            );
+          }
+        }
       };
 
       window.addEventListener('hashchange', handleHashChange);
