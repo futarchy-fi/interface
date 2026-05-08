@@ -4969,15 +4969,27 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                     });
                   }
 
-                  // Prediction Market badge
-                  if (config?.BASE_TOKENS_CONFIG?.currency?.address && (
-                    config?.MERGE_CONFIG?.currencyPositions?.yes?.wrap?.wrappedCollateralTokenAddress ||
-                    config?.MERGE_CONFIG?.currencyPositions?.no?.wrap?.wrappedCollateralTokenAddress
-                  )) {
+                  // Prediction Market badge — opt-in via metadata flag (default off).
+                  if (
+                    config?.marketInfo?.showPredictionMarket === true &&
+                    config?.BASE_TOKENS_CONFIG?.currency?.address && (
+                      config?.MERGE_CONFIG?.currencyPositions?.yes?.wrap?.wrappedCollateralTokenAddress ||
+                      config?.MERGE_CONFIG?.currencyPositions?.no?.wrap?.wrappedCollateralTokenAddress
+                    )
+                  ) {
                     badges.push({
                       text: 'Prediction Market',
                       colorScheme: 'default',
                       onClick: () => setIsPredictionMarketModalOpen(true)
+                    });
+                  }
+
+                  // Arbitrage Contract badge — links to Gnosisscan when set in metadata.
+                  if (config?.marketInfo?.arbitrageContractAddress) {
+                    badges.push({
+                      text: 'Arbitrage Contract',
+                      colorScheme: 'default',
+                      link: `https://gnosisscan.io/address/${config.marketInfo.arbitrageContractAddress}`
                     });
                   }
 

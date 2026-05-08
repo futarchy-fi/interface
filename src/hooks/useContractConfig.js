@@ -484,6 +484,10 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
             closeTimestamp: data._registryMetadata?.closeTimestamp || null,
             // Include track progress link from metadata
             trackProgressLink: metadata?.trackProgressLink || null,
+            // Off-by-default: only show the Prediction Market badge when explicitly enabled
+            showPredictionMarket: metadata?.showPredictionMarket === true,
+            // Optional arbitrage contract for this proposal — exposed as a Gnosisscan link
+            arbitrageContractAddress: metadata?.arbitrageContractAddress || null,
             // Include question link from metadata (check both nested and direct paths)
             questionLink: metadata?.metadata?.question_link || metadata?.questionLink || null,
             // Add resolved status - only resolved if there's an actual outcome or resolution_status indicates completion
