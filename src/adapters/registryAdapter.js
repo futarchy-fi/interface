@@ -22,14 +22,13 @@ export async function fetchProposalMetadataFromRegistry(proposalAddress) {
 
     const normalizedAddress = proposalAddress.toLowerCase();
 
-    // Filter by proposalAddress AND organization must be in Default Aggregator
+    // Checkpoint indexer: lowercased type name and no nested-relation
+    // filter syntax (`organization_: { aggregator: ... }`). We instead
+    // filter by proposalAddress, then verify the aggregator client-side.
     const query = `{
-    proposalEntities(
-      where: { 
-        proposalAddress: "${normalizedAddress}",
-        organization_: { aggregator: "${DEFAULT_AGGREGATOR}" }
-      }, 
-      first: 1
+    proposalentities(
+      where: { proposalAddress: "${normalizedAddress}" },
+      first: 5
     ) {
       id
       proposalAddress
@@ -42,9 +41,7 @@ export async function fetchProposalMetadataFromRegistry(proposalAddress) {
       organization {
         id
         name
-        aggregator {
-          id
-        }
+        aggregator { id }
       }
     }
   }`;
@@ -59,7 +56,10 @@ export async function fetchProposalMetadataFromRegistry(proposalAddress) {
         });
 
         const result = await response.json();
-        const entity = result.data?.proposalEntities?.[0] || null;
+        const matchingAgg = DEFAULT_AGGREGATOR.toLowerCase();
+        const entity = (result.data?.proposalentities || []).find(
+            e => e.organization?.aggregator?.id?.toLowerCase() === matchingAgg
+        ) || null;
 
         if (entity) {
             console.log('[Registry] Found ProposalMetadata:', entity.id);
