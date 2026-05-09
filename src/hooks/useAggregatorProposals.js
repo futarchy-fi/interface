@@ -13,30 +13,48 @@ import { useState, useEffect } from 'react';
 // Subgraph endpoint for futarchy-complete (metadata hierarchy)
 import { AGGREGATOR_SUBGRAPH_URL as SUBGRAPH_URL } from '../config/subgraphEndpoints';
 
-/**
- * GraphQL query to get all proposals under an aggregator
- */
-const AGGREGATOR_PROPOSALS_QUERY = `
-  query GetAggregatorProposals($aggregatorId: ID!) {
-    aggregator(id: $aggregatorId) {
+// The Checkpoint indexer doesn't auto-generate reverse relation fields,
+// so we issue three flat queries and assemble the legacy nested shape
+// in JS. The downstream code already expects { aggregator, organizations,
+// proposals } as nested objects.
+
+const AGGREGATOR_QUERY = `
+  query($id: String!) {
+    aggregator(id: $id) {
       id
-      organizations {
-        id
-        name
-        description
-        metadata
-        owner
-        proposals {
-          id
-          displayNameEvent
-          displayNameQuestion
-          description
-          metadata
-          metadataURI
-          proposalAddress
-          owner
-        }
-      }
+      name
+      description
+      metadata
+    }
+  }
+`;
+
+const ORGANIZATIONS_QUERY = `
+  query($aggregatorId: String!) {
+    organizations(where: { aggregator: $aggregatorId }, first: 1000) {
+      id
+      name
+      description
+      metadata
+      metadataURI
+      owner
+      editor
+    }
+  }
+`;
+
+const PROPOSALS_QUERY = `
+  query($orgIds: [String!]!) {
+    proposalentities(where: { organization_in: $orgIds }, first: 1000) {
+      id
+      displayNameEvent
+      displayNameQuestion
+      description
+      metadata
+      metadataURI
+      proposalAddress
+      owner
+      organization { id }
     }
   }
 `;
@@ -184,130 +202,128 @@ function transformProposalToEvent(proposal, org, connectedWallet) {
     };
 }
 
-/**
- * Fetch proposals from subgraph
- */
-async function fetchAggregatorProposals(aggregatorAddress) {
-    const response = await fetch(SUBGRAPH_URL, {
+async function gqlPost(url, query, variables) {
+    const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            query: AGGREGATOR_PROPOSALS_QUERY,
-            variables: { aggregatorId: aggregatorAddress.toLowerCase() }
-        })
+        body: JSON.stringify({ query, variables }),
     });
-
     const result = await response.json();
-
     if (result.errors) {
-        throw new Error(result.errors[0]?.message || 'Subgraph query failed');
+        throw new Error(result.errors[0]?.message || 'GraphQL query failed');
     }
+    return result.data;
+}
 
-    if (!result.data?.aggregator) {
+/**
+ * Fetch the aggregator + its organizations + their proposals from the
+ * Checkpoint registry indexer (3 flat queries, joined into the legacy
+ * nested shape downstream code expects).
+ */
+async function fetchAggregatorProposals(aggregatorAddress) {
+    const aggregatorId = aggregatorAddress.toLowerCase();
+
+    const aggResult = await gqlPost(SUBGRAPH_URL, AGGREGATOR_QUERY, { id: aggregatorId });
+    const aggregator = aggResult?.aggregator;
+    if (!aggregator) {
         throw new Error(`Aggregator not found: ${aggregatorAddress}`);
     }
 
-    return result.data.aggregator;
+    const orgsResult = await gqlPost(SUBGRAPH_URL, ORGANIZATIONS_QUERY, { aggregatorId });
+    const organizations = orgsResult?.organizations || [];
+
+    let proposalsByOrg = new Map();
+    if (organizations.length > 0) {
+        const orgIds = organizations.map(o => o.id);
+        const propResult = await gqlPost(SUBGRAPH_URL, PROPOSALS_QUERY, { orgIds });
+        for (const p of propResult?.proposalentities || []) {
+            const orgId = p.organization?.id;
+            if (!orgId) continue;
+            if (!proposalsByOrg.has(orgId)) proposalsByOrg.set(orgId, []);
+            proposalsByOrg.get(orgId).push(p);
+        }
+    }
+
+    return {
+        ...aggregator,
+        organizations: organizations.map(org => ({
+            ...org,
+            proposals: proposalsByOrg.get(org.id) || [],
+        })),
+    };
 }
 
-// Market subgraph endpoints by chain
-const MARKET_SUBGRAPH_ENDPOINTS = {
-    1: 'https://api.studio.thegraph.com/query/1718249/uniswap-proposal-candles/version/latest',
-    100: 'https://d3ugkaojqkfud0.cloudfront.net/subgraphs/name/algebra-proposal-candles-v1'
-};
+// Candles checkpoint indexer — single endpoint serves both chains;
+// IDs use the form "<chainId>-<address>" so we can query in one shot.
+const CANDLES_GRAPHQL_URL = 'https://api.futarchy.fi/candles/graphql';
 
 /**
- * Bulk fetch pool addresses from market subgraphs grouped by chain
- * 
- * Example: 5 proposals (2 on chain 1, 3 on chain 100)
- * → 1 query to Mainnet subgraph with 2 proposal IDs
- * → 1 query to Gnosis subgraph with 3 proposal IDs
- * → Total: 2 calls instead of 5
- * 
- * @param {Array} proposals - Array of proposal objects with chainId and proposalAddress
- * @returns {Object} Map of proposalAddress → { yesPool, noPool }
+ * Bulk fetch CONDITIONAL pool addresses for a list of proposals.
+ *
+ * Issues a single query against the candles indexer:
+ *   pools(where: { proposal_in: ["100-0x…", "1-0x…"] })
+ * The Checkpoint schema has no reverse Proposal.pools field, so we
+ * query Pool directly and group by proposal id.
+ *
+ * Returns a map keyed by lowercased proposalAddress (no chain prefix)
+ * so callers don't need to know the ID format.
  */
 async function bulkFetchPoolsByChain(proposals) {
-    // Group proposals by chain
-    const proposalsByChain = {};
+    const ids = [];
     for (const p of proposals) {
+        if (!p.proposalAddress) continue;
         const chainId = p.chainId || 100;
-        if (!proposalsByChain[chainId]) {
-            proposalsByChain[chainId] = [];
-        }
-        if (p.proposalAddress) {
-            proposalsByChain[chainId].push(p.proposalAddress.toLowerCase());
-        }
+        ids.push(`${chainId}-${p.proposalAddress.toLowerCase()}`);
     }
 
-    console.log('[🔗 REGISTRY-POOLS] Grouped proposals by chain:',
-        Object.entries(proposalsByChain).map(([chain, ids]) => `Chain ${chain}: ${ids.length} proposals`).join(', ')
-    );
+    if (ids.length === 0) return {};
 
-    // Make one query per chain
+    console.log(`[🔗 REGISTRY-POOLS] Bulk-fetching pools for ${ids.length} proposals`);
+
+    const query = `
+        query GetProposalPools($ids: [String!]!) {
+            pools(where: { proposal_in: $ids }, first: 1000) {
+                id
+                proposal
+                type
+                outcomeSide
+            }
+        }
+    `;
+
+    let result;
+    try {
+        const response = await fetch(CANDLES_GRAPHQL_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, variables: { ids } }),
+        });
+        result = await response.json();
+    } catch (e) {
+        console.warn('[🔗 REGISTRY-POOLS] candles fetch failed:', e.message);
+        return {};
+    }
+
+    if (result?.errors) {
+        console.warn('[🔗 REGISTRY-POOLS] candles query error:', result.errors[0]?.message);
+        return {};
+    }
+
     const poolMap = {};
-
-    for (const [chainId, proposalIds] of Object.entries(proposalsByChain)) {
-        const endpoint = MARKET_SUBGRAPH_ENDPOINTS[parseInt(chainId)];
-        if (!endpoint || proposalIds.length === 0) continue;
-
-        try {
-            console.log(`[🔗 REGISTRY-POOLS] Querying market subgraph chain ${chainId} for ${proposalIds.length} proposals...`);
-
-            const query = `
-                query GetProposalPools($ids: [ID!]!) {
-                    proposals(where: { id_in: $ids }) {
-                        id
-                        pools {
-                            id
-                            type
-                            outcomeSide
-                        }
-                    }
-                }
-            `;
-
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query,
-                    variables: { ids: proposalIds }
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.errors) {
-                console.warn(`[🔗 REGISTRY-POOLS] Chain ${chainId} query error:`, result.errors[0]?.message);
-                continue;
-            }
-
-            // Map proposal ID → pools
-            for (const proposal of result.data?.proposals || []) {
-                const pools = { yes: null, no: null };
-
-                for (const pool of proposal.pools || []) {
-                    // Look for CONDITIONAL pools (the ones used for price display)
-                    if (pool.type === 'CONDITIONAL' || pool.type === 'conditional') {
-                        if (pool.outcomeSide === 'YES' || pool.outcomeSide === 'yes') {
-                            pools.yes = pool.id;
-                        } else if (pool.outcomeSide === 'NO' || pool.outcomeSide === 'no') {
-                            pools.no = pool.id;
-                        }
-                    }
-                }
-
-                poolMap[proposal.id.toLowerCase()] = pools;
-            }
-
-            console.log(`[🔗 REGISTRY-POOLS] Chain ${chainId}: Got CONDITIONAL pools for ${result.data?.proposals?.length || 0} proposals`);
-
-        } catch (e) {
-            console.warn(`[🔗 REGISTRY-POOLS] Chain ${chainId} fetch failed:`, e.message);
+    for (const pool of result?.data?.pools || []) {
+        if (pool.type !== 'CONDITIONAL' && pool.type !== 'conditional') continue;
+        // Strip "<chainId>-" prefix to key by plain proposal address
+        const propAddr = (pool.proposal || '').split('-').slice(1).join('-').toLowerCase();
+        if (!propAddr) continue;
+        if (!poolMap[propAddr]) poolMap[propAddr] = { yes: null, no: null };
+        if (pool.outcomeSide === 'YES' || pool.outcomeSide === 'yes') {
+            poolMap[propAddr].yes = pool.id;
+        } else if (pool.outcomeSide === 'NO' || pool.outcomeSide === 'no') {
+            poolMap[propAddr].no = pool.id;
         }
     }
 
+    console.log(`[🔗 REGISTRY-POOLS] Got CONDITIONAL pools for ${Object.keys(poolMap).length} proposals`);
     return poolMap;
 }
 

@@ -1,19 +1,23 @@
 /**
  * Subgraph Endpoints Configuration
- * 
- * Endpoints for fetching Futarchy proposal data from The Graph
+ *
+ * Endpoints for fetching Futarchy proposal data.
+ *
+ * After the AWS → GCP migration both the registry and candles
+ * subgraphs are hosted by the Checkpoint indexers behind
+ * api.futarchy.fi. The Checkpoint schema differs from the old
+ * Graph Node schema (no auto-generated reverse fields), so callers
+ * must issue flat queries and join in JS.
  */
 
+// Aggregator/Organization hierarchy — Checkpoint registry indexer
+export const AGGREGATOR_SUBGRAPH_URL = 'https://api.futarchy.fi/registry/graphql';
+
+// Candles/pools — Checkpoint candles indexer (serves both chains)
 export const SUBGRAPH_ENDPOINTS = {
-    // Ethereum Mainnet - Uniswap V3 pools
-    1: 'https://api.studio.thegraph.com/query/1718249/uniswap-proposal-candles/version/latest',
-
-    // Gnosis Chain - Algebra/Swapr pools (CloudFront)
-    100: 'https://d3ugkaojqkfud0.cloudfront.net/subgraphs/name/algebra-proposal-candles-v1'
+    1:   'https://api.futarchy.fi/candles/graphql',
+    100: 'https://api.futarchy.fi/candles/graphql',
 };
-
-// Aggregator/Organization hierarchy subgraph (CloudFront) - v2 has metadataEntries
-export const AGGREGATOR_SUBGRAPH_URL = 'https://d3ugkaojqkfud0.cloudfront.net/subgraphs/name/futarchy-complete-new-v3';
 
 // Default Aggregator Contract (same as futarchy-complete-sdk)
 export const DEFAULT_AGGREGATOR = '0xC5eB43D53e2FE5FddE5faf400CC4167e5b5d4Fc1';
