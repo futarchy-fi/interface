@@ -1,159 +1,178 @@
 /**
  * useAggregatorCompanies Hook
- * 
- * Fetches organizations (companies) from the futarchy-complete subgraph
- * based on an aggregator address.
- * 
- * Usage:
- *   const { companies, loading, error } = useAggregatorCompanies(aggregatorAddress);
+ *
+ * Fetches organizations (companies) for an aggregator, with their
+ * total + active proposal counts, from the Checkpoint registry indexer.
+ *
+ * Hides organizations whose metadata contains `archived: true` or
+ * `visibility: "hidden"` (the latter unless the connected wallet is
+ * the org owner/editor — same convention used per proposal).
  */
 
 import { useState, useEffect } from 'react';
 
-// Subgraph endpoint for futarchy-complete (metadata hierarchy)
 import { AGGREGATOR_SUBGRAPH_URL as SUBGRAPH_URL } from '../config/subgraphEndpoints';
 
-/**
- * GraphQL query to get all organizations under an aggregator
- * Includes proposal metadata to check visibility (active = not hidden)
- */
-const AGGREGATOR_COMPANIES_QUERY = `
-  query GetAggregatorCompanies($aggregatorId: ID!) {
-    aggregator(id: $aggregatorId) {
+// Three flat queries — Checkpoint has no auto-generated reverse fields.
+const AGGREGATOR_QUERY = `
+  query($id: String!) {
+    aggregator(id: $id) {
       id
       name
       description
-      organizations {
-        id
-        name
-        description
-        metadata
-        metadataURI
-        owner
-        proposals {
-          id
-          proposalAddress
-          metadata
-          metadataEntries {
-            key
-            value
-          }
-        }
-      }
     }
   }
 `;
 
+const ORGANIZATIONS_QUERY = `
+  query($aggregatorId: String!) {
+    organizations(where: { aggregator: $aggregatorId }, first: 1000) {
+      id
+      name
+      description
+      metadata
+      metadataURI
+      owner
+      editor
+    }
+  }
+`;
 
-/**
- * Parse organization metadata JSON safely
- */
+const PROPOSALS_QUERY = `
+  query($orgIds: [String!]!) {
+    proposalentities(where: { organization_in: $orgIds }, first: 1000) {
+      id
+      metadata
+      organization { id }
+    }
+  }
+`;
+
+async function gqlPost(query, variables) {
+    const response = await fetch(SUBGRAPH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, variables }),
+    });
+    const result = await response.json();
+    if (result.errors) {
+        throw new Error(result.errors[0]?.message || 'GraphQL query failed');
+    }
+    return result.data;
+}
+
 function parseMetadata(metadataString) {
     if (!metadataString) return {};
-    try {
-        return JSON.parse(metadataString);
-    } catch (e) {
-        console.warn('[useAggregatorCompanies] Failed to parse metadata:', e);
+    try { return JSON.parse(metadataString); }
+    catch (e) {
+        console.warn('[useAggregatorCompanies] metadata JSON parse failed:', e);
         return {};
     }
 }
 
 /**
- * Transform subgraph organization to CompaniesCard format
+ * @param {Object} org - Raw organization row from Checkpoint
+ * @param {Array<Object>} proposalsForOrg - Raw proposalentity rows whose organization === org
  */
-function transformOrgToCard(org) {
+function transformOrgToCard(org, proposalsForOrg) {
     const meta = parseMetadata(org.metadata);
+    const chainId = meta.chain ? parseInt(meta.chain, 10) : 100;
 
-    // Extract chainId from metadata (stored as string "1" or "100")
-    const chainId = meta.chain ? parseInt(meta.chain, 10) : 100; // Default to Gnosis (100)
-
-    // Count active proposals (not archived, not hidden, not resolved)
-    const proposals = (org.proposals || []).filter(p => {
-        const meta = parseMetadata(p.metadata);
-        return meta.archived !== true;
-    });
-    const activeProposals = proposals.filter(proposal => {
-        // Check metadataEntries for visibility key
-        const visibilityEntry = proposal.metadataEntries?.find(e => e.key === 'visibility');
-        const visibility = visibilityEntry?.value || 'public'; // Default to public
-        if (visibility === 'hidden') return false;
-
-        // Check metadata for resolution status — resolved proposals are not active
-        const proposalMeta = parseMetadata(proposal.metadata);
-        if (proposalMeta.resolution_status === 'resolved' || proposalMeta.resolution_outcome) {
-            return false;
-        }
-
+    // "Total proposals" excludes archived ones (treat archive as a delete).
+    // "Active proposals" further excludes hidden + resolved.
+    const nonArchived = proposalsForOrg.filter(p => parseMetadata(p.metadata).archived !== true);
+    const active = nonArchived.filter(p => {
+        const pm = parseMetadata(p.metadata);
+        if (pm.visibility === 'hidden') return false;
+        if (pm.resolution_status === 'resolved' || pm.resolution_outcome) return false;
         return true;
     });
 
     return {
-        companyID: org.id,                                    // Use contract address as ID
+        companyID: org.id,
         title: org.name || 'Unknown Organization',
         description: org.description || '',
         image: meta.coverImage || meta.logo || '/assets/fallback-company.png',
-        colors: meta.colors || { primary: '#6b21a8' },        // Default purple
-        proposals: proposals.length,                          // Total proposals
-        proposalsCount: proposals.length,                     // Alias for table (total)
-        activeProposals: activeProposals.length,              // ✅ Active (public) proposals
-        fromSubgraph: true,                                   // ✅ Flag for badge display
-        chainId,                                              // ✅ Chain from metadata
-
-        // Additional metadata for extended use
+        colors: meta.colors || { primary: '#6b21a8' },
+        proposals: nonArchived.length,
+        proposalsCount: nonArchived.length,
+        activeProposals: active.length,
+        fromSubgraph: true,
+        chainId,
         owner: org.owner,
+        editor: org.editor,
         website: meta.website,
         twitter: meta.twitter,
-        metadataURI: org.metadataURI
+        metadataURI: org.metadataURI,
+        // Surface the parsed org metadata so downstream filters can
+        // check archived/visibility without re-parsing.
+        _orgMetadata: meta,
     };
 }
 
-
-
 /**
- * Fetch organizations from subgraph
+ * Fetch + assemble all visible organizations under an aggregator.
+ * Hidden/archived orgs are filtered out (hidden ones are still shown
+ * if the connected wallet is the org owner/editor).
  */
-async function fetchAggregatorCompanies(aggregatorAddress) {
-    const response = await fetch(SUBGRAPH_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            query: AGGREGATOR_COMPANIES_QUERY,
-            variables: { aggregatorId: aggregatorAddress.toLowerCase() }
-        })
-    });
+async function fetchAggregatorCompanies(aggregatorAddress, connectedWallet = null) {
+    const aggregatorId = aggregatorAddress.toLowerCase();
+    const wallet = connectedWallet?.toLowerCase() || null;
 
-    const result = await response.json();
-
-    if (result.errors) {
-        throw new Error(result.errors[0]?.message || 'Subgraph query failed');
-    }
-
-    if (!result.data?.aggregator) {
+    const aggData = await gqlPost(AGGREGATOR_QUERY, { id: aggregatorId });
+    if (!aggData?.aggregator) {
         throw new Error(`Aggregator not found: ${aggregatorAddress}`);
     }
 
-    return result.data.aggregator;
+    const orgsData = await gqlPost(ORGANIZATIONS_QUERY, { aggregatorId });
+    const orgs = orgsData?.organizations || [];
+
+    // Visibility filter at org level
+    const visible = orgs.filter(o => {
+        const m = parseMetadata(o.metadata);
+        if (m.archived === true) return false;
+        if (m.visibility === 'hidden') {
+            const isOwner = wallet && o.owner?.toLowerCase() === wallet;
+            const isEditor = wallet && o.editor && o.editor !== '0x0000000000000000000000000000000000000000'
+                && o.editor.toLowerCase() === wallet;
+            return isOwner || isEditor;
+        }
+        return true;
+    });
+
+    // Group proposals by org
+    const propsByOrg = new Map();
+    if (visible.length > 0) {
+        const orgIds = visible.map(o => o.id);
+        const propData = await gqlPost(PROPOSALS_QUERY, { orgIds });
+        for (const p of propData?.proposalentities || []) {
+            const oid = p.organization?.id;
+            if (!oid) continue;
+            if (!propsByOrg.has(oid)) propsByOrg.set(oid, []);
+            propsByOrg.get(oid).push(p);
+        }
+    }
+
+    return {
+        ...aggData.aggregator,
+        organizations: visible.map(o => transformOrgToCard(o, propsByOrg.get(o.id) || [])),
+    };
 }
 
 /**
- * React hook to fetch companies from an aggregator
- * 
- * @param {string|null} aggregatorAddress - The aggregator contract address
- * @returns {{ 
- *   companies: Array, 
- *   aggregatorName: string,
- *   loading: boolean, 
- *   error: Error|null 
- * }}
+ * React hook: fetch companies (organizations) for an aggregator.
+ *
+ * @param {string|null} aggregatorAddress
+ * @param {string|null} connectedWallet  optional — used to surface
+ *   hidden orgs to their own owner/editor
  */
-export function useAggregatorCompanies(aggregatorAddress) {
+export function useAggregatorCompanies(aggregatorAddress, connectedWallet = null) {
     const [companies, setCompanies] = useState([]);
     const [aggregatorName, setAggregatorName] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Skip if no aggregator address provided
         if (!aggregatorAddress) {
             setCompanies([]);
             setAggregatorName('');
@@ -161,54 +180,36 @@ export function useAggregatorCompanies(aggregatorAddress) {
         }
 
         let cancelled = false;
-
-        async function loadCompanies() {
+        async function run() {
             setLoading(true);
             setError(null);
-
             try {
-                const aggregator = await fetchAggregatorCompanies(aggregatorAddress);
-
+                const aggregator = await fetchAggregatorCompanies(aggregatorAddress, connectedWallet);
                 if (cancelled) return;
-
                 setAggregatorName(aggregator.name || 'Unknown Aggregator');
-
-                const transformedCompanies = (aggregator.organizations || [])
-                    .map(transformOrgToCard);
-
-                setCompanies(transformedCompanies);
-
-                console.log(`[useAggregatorCompanies] Loaded ${transformedCompanies.length} companies from ${aggregator.name}`);
+                setCompanies(aggregator.organizations);
+                console.log(`[useAggregatorCompanies] Loaded ${aggregator.organizations.length} companies from ${aggregator.name}`);
             } catch (e) {
                 if (cancelled) return;
                 console.error('[useAggregatorCompanies] Error:', e);
                 setError(e);
                 setCompanies([]);
             } finally {
-                if (!cancelled) {
-                    setLoading(false);
-                }
+                if (!cancelled) setLoading(false);
             }
         }
-
-        loadCompanies();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [aggregatorAddress]);
+        run();
+        return () => { cancelled = true; };
+    }, [aggregatorAddress, connectedWallet]);
 
     return { companies, aggregatorName, loading, error };
 }
 
-/**
- * Standalone function to fetch companies (for non-React usage)
- */
-export async function fetchCompaniesFromAggregator(aggregatorAddress) {
-    const aggregator = await fetchAggregatorCompanies(aggregatorAddress);
+export async function fetchCompaniesFromAggregator(aggregatorAddress, connectedWallet = null) {
+    const aggregator = await fetchAggregatorCompanies(aggregatorAddress, connectedWallet);
     return {
         aggregatorName: aggregator.name,
-        companies: (aggregator.organizations || []).map(transformOrgToCard)
+        companies: aggregator.organizations,
     };
 }
 

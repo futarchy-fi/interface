@@ -15,11 +15,16 @@ export const fetchResolvedEventHighlightData = async (_companyId = "all", limit 
   try {
     const { proposals } = await fetchProposalsFromAggregator(aggregatorAddress, connectedWallet);
 
-    const resolvedProposals = proposals.filter(p =>
-      p.resolution_status === 'resolved' &&
-      p.resolution_outcome !== null &&
-      p.resolution_outcome !== undefined
-    );
+    const resolvedProposals = proposals.filter(p => {
+      // Skip proposals from archived/hidden orgs (same rule as Active Milestones)
+      const orgMeta = p.orgMetadata || {};
+      if (orgMeta.archived === true) return false;
+      if (orgMeta.visibility === 'hidden' && !p.isEditor) return false;
+
+      return p.resolution_status === 'resolved'
+        && p.resolution_outcome !== null
+        && p.resolution_outcome !== undefined;
+    });
 
     console.log(`[ResolvedEventsDataTransformer] Found ${resolvedProposals.length} resolved proposals from subgraph (of ${proposals.length} total)`);
     if (resolvedProposals.length === 0) return [];

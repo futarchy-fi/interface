@@ -21,8 +21,16 @@ export const fetchEventHighlightData = async (_companyId = "all", options = {}) 
         p.proposalAddress && p.proposalAddress !== '0x0000000000000000000000000000000000000000'
       );
 
-      // Visibility filter: 'public' (default) is shown to everyone; 'hidden' only to owner/editor.
+      // Visibility filter:
+      //   - org-level archived/hidden takes precedence (no proposals from a
+      //     dead org should appear)
+      //   - then the per-proposal 'visibility' flag ('public' default; 'hidden'
+      //     only to its own owner/editor)
       subgraphEvents = validProposals.filter(p => {
+        const orgMeta = p.orgMetadata || {};
+        if (orgMeta.archived === true) return false;
+        if (orgMeta.visibility === 'hidden' && !p.isEditor) return false;
+
         const visibility = p.visibility || 'public';
         if (visibility === 'hidden') {
           return p.isOwner || p.isEditor;
