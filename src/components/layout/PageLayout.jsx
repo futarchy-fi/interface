@@ -2,7 +2,7 @@ import React from 'react';
 
 const PageLayout = ({ hero, children, contentClassName = '' }) => {
   return (
-    <div className="flex flex-col select-none flex-grow">
+    <div className="flex flex-col flex-grow">
       {/* 1. Hero Section (Optional) */}
       {hero && (
         <header>
