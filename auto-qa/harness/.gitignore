@@ -1,0 +1,23 @@
+# Local node deps (we keep harness deps separate from the interface repo deps)
+node_modules/
+
+# Playwright artifacts
+.playwright/
+playwright-report/
+test-results/
+*.video
+*.trace.zip
+*.har
+
+# Browser binaries (Playwright pulls them on install)
+.browsers/
+
+# Local Next.js dev server state when run from harness
+.next-harness/
+
+# Local wallet keys for the harness (anvil dev keys; never real)
+.wallet-state/
+
+# Editor / OS
+.DS_Store
+*.log

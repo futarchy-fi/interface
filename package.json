@@ -17,7 +17,8 @@
     "start-proposal": "node scripts/proposal-cli.js",
     "auto-qa:extract-graphql": "node auto-qa/tools/extract-graphql.mjs",
     "auto-qa:probe-graphql": "node auto-qa/tools/probe-graphql.mjs",
-    "auto-qa:test": "node --test 'auto-qa/tests/**/*.test.mjs'"
+    "auto-qa:test": "node --test 'auto-qa/tests/**/*.test.mjs'",
+    "auto-qa:e2e": "npm --prefix auto-qa/harness run phase-status"
   },
   "dependencies": {
     "@balancer-labs/sdk": "^1.1.6",

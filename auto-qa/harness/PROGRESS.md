@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 0 — not started |
+| Phase | 0 — in progress (scaffold slice 1: README + package.json + npm script wiring) |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -112,4 +112,21 @@ Single docker-compose starts all four services. Orchestrator owns the clock.
 
 ## Iteration log
 
-_(updated as phases land — currently empty; Phase 0 not started)_
+### Phase 0 — Scaffold
+
+- **slice 1** (this commit) — README, harness package.json with stub
+  scripts, .gitignore, root `npm run auto-qa:e2e` wired through
+  `npm --prefix auto-qa/harness run phase-status`. Verified the stub
+  prints the phase status from the repo root. No deps installed yet.
+
+**Next slices for Phase 0:**
+
+- slice 2 — `playwright.config.mjs` skeleton (no install yet — placeholder
+  config that documents the eventual browser matrix)
+- slice 3 — `fixtures/wallet-stub.mjs` placeholder (interface-only stub
+  documenting the eventual EIP-1193 surface we need to mock)
+- slice 4 — Sister-repo handshake: top-level `harness/ARCHITECTURE.md`
+  in each repo with the cross-repo invariant table + a "how to clone
+  the sister repo" snippet
+- slice 5 — Decision doc: pick Synpress vs custom wallet stub (write a
+  1-page ADR-style note in `docs/`)
