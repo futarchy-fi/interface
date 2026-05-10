@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 14 |
+| Iterations completed | 15 |
 | PRs catalogued | 31 / ~65 |
 | PRs classified | 31 |
-| Tests added | 47 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap — all passing) |
+| Tests added | 53 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window — all passing) |
 | Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -118,7 +118,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: TWAP (time-weighted average price) calculation used `now` as the upper bound even when the proposal had ended. For ended proposals the window should clamp to `endTime`, otherwise TWAP includes empty no-trade time after the market closed and the price drifts incorrectly toward the last trade.
 - **Ideal test**: For an ended proposal, the TWAP value at `t > endTime` equals the TWAP at `endTime` exactly (window is clamped).
 - **Tools needed**: TWAP API + a known ended proposal fixture.
-- **Test status**: not-started
+- **Test status**: **landed-passing** (`auto-qa/tests/twap-window.test.mjs` — 6 cases on the pure window calculation. Spec mirrors `MarketPageShowcase.jsx:632-636`. Includes the high-level invariant: TWAP window length stays equal to twapDuration once proposal has ended, regardless of how much wall-clock time passes.)
 
 ### PR #53 — Lower FutarchyQuoteHelper gasLimit below Gnosis block cap
 - **Class**: bug-fix
