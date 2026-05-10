@@ -80,6 +80,21 @@ jobs:
         working-directory: auto-qa/harness
         run: npm run ui:full
 
-      # Slice 3d will add `actions/upload-artifact@v4` here,
-      # conditional on `failure()`, to capture playwright-report/
-      # + test-results/ for debugging.
+      - name: Upload Playwright artifacts on failure
+        # Slice 3d. Captures the on-failure debugging payload that
+        # playwright.config.mjs already produces (`trace:
+        # retain-on-failure`, `screenshot: only-on-failure`,
+        # `video: retain-on-failure`) and the HTML report.
+        # `github.run_attempt` keeps each retry's artifacts
+        # distinct (Playwright is configured for `retries: 2` in CI).
+        # `if-no-files-found: ignore` because a clean pass leaves
+        # the report dir empty and an empty `test-results/` dir.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-scenarios-results-${{ github.run_attempt }}
+          path: |
+            auto-qa/harness/playwright-report/
+            auto-qa/harness/test-results/
+          retention-days: 14
+          if-no-files-found: ignore

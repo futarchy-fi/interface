@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c** STAGED. `auto-qa/harness/ci/auto-qa-harness.yml.staged` (drift check, fast) and `auto-qa-harness-scenarios.yml.staged` (full Playwright scenarios suite, heavier) both await maintainer promotion to `.github/workflows/` (the bot's OAuth token lacks workflow scope). 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED. `auto-qa/harness/ci/auto-qa-harness.yml.staged` (drift check, fast) + `auto-qa-harness-scenarios.yml.staged` (full Playwright scenarios suite + on-failure artifact upload via `actions/upload-artifact@v4`) both await maintainer promotion to `.github/workflows/` (the bot's OAuth token lacks workflow scope). 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1364,5 +1364,74 @@ Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
 Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
 + scenarios:catalog drift check (CI workflow + local)  ✓ <1s
 + scenarios suite CI workflow (STAGED, awaits promote)  ⏳
++ on-failure artifact upload (slice 3d, same staged file) ⏳
                                        TOTAL: 30 pass + 0 skip
 ```
+
+- **slice 3d** (this iteration) — **on-failure artifact upload
+  STAGED**. Single new step appended to slice 3c's staged
+  scenarios workflow (not a new file — same workflow, one more
+  step). When the scenarios suite fails in CI, you NEED the
+  trace/screenshots/video to debug; without this step, that
+  payload would die in the runner's ephemeral filesystem.
+
+  - **What landed**: edit to
+    `auto-qa/harness/ci/auto-qa-harness-scenarios.yml.staged`
+    appending one `actions/upload-artifact@v4` step after the
+    `npm run ui:full` step.
+
+  - **The step shape**:
+    ```yaml
+    - name: Upload Playwright artifacts on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-scenarios-results-${{ github.run_attempt }}
+        path: |
+          auto-qa/harness/playwright-report/
+          auto-qa/harness/test-results/
+        retention-days: 14
+        if-no-files-found: ignore
+    ```
+
+  - **Why these two paths**: `playwright.config.mjs` already
+    configures the on-failure capture (`trace: retain-on-failure`,
+    `screenshot: only-on-failure`, `video: retain-on-failure`)
+    plus the HTML report (`outputFolder: 'playwright-report'`).
+    All the bot needs to do is hoist them out of the runner's
+    `/__w/...` workspace before it gets torn down.
+
+  - **Why `${{ github.run_attempt }}` in the name**: the
+    Playwright config sets `retries: 2` in CI mode. Without the
+    suffix, retry #2 would clobber retry #1's artifacts (or
+    fail with "name already exists"). With it, you get
+    `playwright-scenarios-results-1`, `-2`, `-3` for a
+    fully-retried failed run — all visible in the workflow's
+    Artifacts tab.
+
+  - **Why `if-no-files-found: ignore`**: covers a corner case
+    where the workflow fails BEFORE Playwright produces any
+    output (e.g. `npm ci` fails). Without it, the upload step
+    itself would fail, masking the real error in the run log.
+
+  - **Why STAGED together with 3c (not as a separate file)**:
+    3d is one more step in 3c's job — same workflow file, same
+    runtime, same trigger. Splitting them would require a second
+    promote and a second smoke-test for what's effectively a
+    feature flag on 3c's debugging output. Promoted together,
+    they form one coherent "run scenarios + capture failures"
+    workflow.
+
+  - **Local validation**: js-yaml parses the file cleanly
+    (`npx js-yaml@4 ...`); upload-artifact step shows up at the
+    right point in the parsed structure with `if: failure()`
+    and the two correct paths.
+
+  - **What's left in Phase 7 slice 3** (per CHECKLIST):
+    * 3b — broaden triggers (schedule + paths gate). Gated on
+      slice 3a being smoke-tested live. Bot can stage a v2 of
+      the drift-check workflow but the smoke-test step is
+      human.
+    * Maintainer-only: 3a-promote + 3c-promote (which now
+      includes 3d's step automatically).
+    * Then slice 4 — full-stack docker-compose (the big one).
