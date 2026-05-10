@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slices 1+2+3+4 (mechanism) landed. Slice 1: browser-injection smoke. Slice 2: in-page signing via `setupSigningTunnel` exposeBinding. Slice 3: futarchy Next.js dev server in the loop + RainbowKit modal lists "Futarchy Harness Wallet". Slice 4 v1: DOM↔API invariant mechanism — `flows/dom-api-invariant.spec.mjs` mocks the futarchy app's GraphQL POSTs to `api.futarchy.fi/registry/graphql`, returns probe org "HARNESS-PROBE-ORG-001", and asserts the probe renders in the DOM (in two independent rendering paths). 12/12 browser tests green. Numeric-price sub-slices still ahead. |
+| Phase | 5 slices 1+2+3+4a+4b landed. Slice 1: browser-injection smoke. Slice 2: in-page signing via `setupSigningTunnel` exposeBinding. Slice 3: futarchy Next.js dev server in the loop + RainbowKit modal lists "Futarchy Harness Wallet". Slice 4a: DOM↔API mechanism — mock GraphQL → assert probe org name renders in DOM. Slice 4b: first NUMERIC value through the pipeline — mock 8-active + 3-hidden proposals → assert `OrgRow` cells show "8" / "11" (verifies the visibility-filter logic in `transformOrgToCard`). 13/13 browser tests green. Currency-formatted price + cross-protocol reconciliation still ahead. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -588,7 +588,46 @@ Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
   - **Validated end-to-end**: 1 test, 3.3s. Wall-clock with
     warm dev server: 12.6s.
 
-**Smoke summary (UI side, post-Phase 5 slice 4 v1):**
+- **slice 4b** (this iteration) — first NUMERIC value through
+  the mock → DOM-cell pipeline. Uses the same
+  `flows/dom-api-invariant.spec.mjs` test file and the same
+  `/companies` data path as 4a, so we get pure numeric-vs-string
+  isolation: only the proposalentities mock changes between the
+  two tests.
+
+  - **Refactor**: extracted `makeGraphqlMockHandler({proposals,
+    onCall})` into a parameterized helper. Tests pass different
+    proposal lists; the handler dispatches identically. Shared
+    `fakeProposal(idSuffix, metadataExtra)` builds a stub row in
+    the shape `useAggregatorCompanies` expects.
+
+  - **Test setup**: 8 proposals with empty metadata + 3 with
+    `metadata = JSON.stringify({visibility: 'hidden'})`. Per
+    `transformOrgToCard`:
+    * `nonArchived` = `proposals.filter(!archived)` → 11
+    * `active` = `nonArchived.filter(!hidden && !resolved)` → 8
+    So `org.activeProposals` = 8 and `org.proposalsCount` = 11.
+
+  - **Assertion**: scope to the row containing PROBE_ORG_NAME
+    (must be unique — `toHaveCount(1)`), then assert
+    `td.nth(2)` (Active column) = "8" and `td.nth(3)` (Total) =
+    "11". Column indices come from
+    `OrganizationsTable.jsx::<thead>` (Logo | Name | Active |
+    Proposals | Chain).
+
+  - **Validated end-to-end**: 1 test, 2.3s. Both 4a + 4b
+    together: 15s wall-clock with warm dev server.
+
+  - **Bug-shape this catches**: a regression in
+    `transformOrgToCard`'s visibility filter (e.g. flipping the
+    `!hidden` predicate, or accidentally including resolved
+    proposals in active count) would surface as the active-cell
+    showing "11" instead of "8". A regression in the underlying
+    `parseMetadata` (e.g. crashing on JSON-stringified metadata
+    instead of treating the missing field as undefined) would
+    surface as both cells showing "0".
+
+**Smoke summary (UI side, post-Phase 5 slice 4b):**
 
 ```
 Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
@@ -596,20 +635,21 @@ Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
 Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
 Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
 Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
-Phase 5 dom-api-invariant (1 case, chromium + Next.js) ✓ ~3.3s
-                                       TOTAL: 21 pass + 0 skip
+Phase 5 dom-api-invariant (2 cases, chromium + Next.js) ✓ ~5.5s
+                                       TOTAL: 22 pass + 0 skip
 ```
 
 **Phase 5 — remaining sub-slices:**
 
-- **4b** — mock a NUMERIC value (e.g., a pool spot price) and
-  assert the formatted DOM cell matches. Picks a concrete
-  endpoint (usePoolData / ChartPage / candle aggregates), traces
-  the formatter (decimals/currency/rounding), and asserts the
-  exact rendered string. This is the "price" half of slice 4
-  that v1 deferred.
+- **4c** — currency-formatted price (e.g., usePoolData /
+  candle aggregates → "$0.42" style format). 4b proved the
+  pipeline carries integer counts; 4c should pin a value like
+  `0.42424242` and assert the DOM shows the formatter's exact
+  rendering. Will need to pick a concrete pool/price endpoint
+  and trace the formatter (decimals/currency/rounding) to know
+  what string to assert against.
 
-- **4c** — cross-protocol price reconciliation: when multiple
+- **4d** — cross-protocol price reconciliation: when multiple
   sources (Algebra / CoW / Sushi) should agree, mock each to
   slightly-different values and assert the UI either flags the
   divergence or picks the right canonical source. Catches the

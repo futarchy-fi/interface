@@ -64,7 +64,12 @@ const PROBE_ORG_ID = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 // Build a route handler that dispatches on the GraphQL operation
 // embedded in the POST body. Returns the canned response for each
 // operation and 200/empty for anything unrecognized.
-function makeGraphqlMockHandler({ onCall } = {}) {
+//
+// `proposals` parameter lets each test seed a different
+// proposalentities response — slice 4a uses [], slice 4b uses a
+// list with mixed active/hidden metadata so the count cells
+// resolve to distinctive non-zero numbers.
+function makeGraphqlMockHandler({ proposals = [], onCall } = {}) {
     return async (route) => {
         const body = JSON.parse(route.request().postData() || '{}');
         const q = body.query || '';
@@ -93,7 +98,7 @@ function makeGraphqlMockHandler({ onCall } = {}) {
                 }],
             };
         } else if (q.includes('proposalentities(where:')) {
-            data = { proposalentities: [] };
+            data = { proposalentities: proposals };
         } else {
             data = {};
         }
@@ -103,6 +108,18 @@ function makeGraphqlMockHandler({ onCall } = {}) {
             contentType: 'application/json',
             body: JSON.stringify({ data }),
         });
+    };
+}
+
+// Build a stub `proposalentity` row matching the shape
+// useAggregatorCompanies expects (id + metadata + organization{id}).
+// `metadataExtra` overrides on top of the base metadata object so
+// callers can pin `archived: true` / `visibility: 'hidden'` / etc.
+function fakeProposal(idSuffix, metadataExtra = {}) {
+    return {
+        id: `0xprop${String(idSuffix).padStart(40, '0').slice(-40)}`,
+        metadata: JSON.stringify(metadataExtra),
+        organization: { id: PROBE_ORG_ID },
     };
 }
 
@@ -156,5 +173,44 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         // something broke the chain — useful breadcrumb in failure logs.
         expect(calls).toContain('aggregator');
         expect(calls).toContain('organizations');
+    });
+
+    test('slice 4b — mocked proposal counts flow into OrgRow active/total cells', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Build 8 active + 3 hidden = 11 total nonArchived. Per
+        // useAggregatorCompanies::transformOrgToCard:
+        //   - nonArchived = filter !archived → 11
+        //   - active = nonArchived.filter !hidden && !resolved → 8
+        // So the OrgRow should render activeProposals=8,
+        // proposalsCount=11. 8 + 11 are distinctive enough that
+        // they're vanishingly unlikely to appear elsewhere in the
+        // (mostly-empty under our mock) page.
+        const proposals = [];
+        for (let i = 0; i < 8; i++) proposals.push(fakeProposal(`a${i}`));
+        for (let i = 0; i < 3; i++) proposals.push(fakeProposal(`h${i}`, { visibility: 'hidden' }));
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({ proposals }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Wait for our org to render so the table row exists.
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        // The OrganizationsTable column layout (per
+        // src/components/futarchyFi/companyList/table/OrganizationsTable.jsx
+        // + OrgRow.jsx) is:
+        //   td[0]=logo, td[1]=name+badges, td[2]=active, td[3]=total, td[4]=chain
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        await expect(row.locator('td').nth(2)).toHaveText('8');
+        await expect(row.locator('td').nth(3)).toHaveText('11');
     });
 });
