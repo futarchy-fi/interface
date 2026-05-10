@@ -13,9 +13,9 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 3 |
-| PRs catalogued | 5 / ~65 |
-| PRs classified | 5 |
+| Iterations completed | 4 |
+| PRs catalogued | 20 / ~65 |
+| PRs classified | 20 |
 | Tests added | 6 (4 extractor-sanity + 2 graphql-compat — all passing) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -68,6 +68,111 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: After the Checkpoint migration the orgs table loader either returned `null`/empty for the listing query, or didn't filter out archived/hidden orgs (so 9 stale test orgs leaked into the page). Symptom was either "No organizations found" or a list dominated by stale entries.
 - **Ideal test**: Companies-page contract test — `GET /companies` should render at least one org card, and every visible card's underlying metadata must satisfy `archived !== true` and `(visibility !== 'hidden' || isEditor)`.
 - **Tools needed**: Playwright + ability to seed/lookup org metadata. Org metadata comes from the on-chain registry, so the test reads it via the live Checkpoint indexer.
+- **Test status**: not-started
+
+### PR #60 — fix(companies): query Checkpoint indexer instead of dead AWS subgraphs
+- **Class**: bug-fix
+- **Hypothesis**: Frontend hardcoded the AWS CloudFront subgraph URLs that died with the GCP migration. The dead URLs returned `database unavailable`, so aggregator queries failed silently and the Companies page rendered empty ("No upcoming events", "No resolved markets yet"). Fix: point endpoints at the new `api.futarchy.fi/registry/graphql` and `/candles/graphql` passthroughs and rewrite affected queries for the Checkpoint schema.
+- **Ideal test**: Endpoint-liveness invariant — for every URL in `src/config/subgraphEndpoints.js`, send a trivial introspection query and assert HTTP 200 + parseable response. Catches both "endpoint dead" and "endpoint URL typo'd" regressions.
+- **Tools needed**: HTTP client + a glob/grep over the config file for URL constants.
+- **Test status**: not-started
+
+### PR #59 — fix(ui): allow text selection across all pages
+- **Class**: bug-fix
+- **Hypothesis**: A global CSS rule (likely `user-select: none` on `body` or a high-up wrapper) blocked text selection across pages, frustrating debugging and copying. Fix: remove the blanket rule, allow selection where it makes sense.
+- **Ideal test**: Snapshot CSS lint — assert no global stylesheet contains `user-select: none` outside of explicit interactive widgets (buttons, draggable handles).
+- **Tools needed**: CSS parser (PostCSS) walking `src/**/*.css` and Tailwind utilities.
+- **Test status**: not-started
+
+### PR #58 — HOTFIX: TDZ crash on every market page
+- **Class**: bug-fix (hotfix)
+- **Hypothesis**: A `let`/`const` was referenced before its declaration in module-top-level scope (Temporal Dead Zone). Symptom: every market page crashed at module init, white screen.
+- **Ideal test**: Smoke test — load every page route in a headless browser, assert no uncaught error in the console. Catches TDZ, undefined-imports, and module-init crashes regardless of root cause.
+- **Tools needed**: Playwright + a sitemap/route enumerator.
+- **Test status**: not-started
+
+### PR #57 — Hide Max Approval section in swap modal when allowances are already max
+- **Class**: feature/UX
+- **Hypothesis**: n/a (UX polish, not a correctness bug)
+- **Ideal test**: When `allowance >= MaxUint256 / 2`, swap modal does NOT render the Max Approval section.
+- **Tools needed**: Component test (Storybook or React Testing Library) with controlled allowance prop.
+- **Test status**: not-started
+
+### PR #56 — Add Arbitrage Contract badge; default-hide Prediction Market behind metadata flag
+- **Class**: feature
+- **Hypothesis**: n/a
+- **Ideal test**: For each metadata flag in the proposal, the corresponding badge/section in the market page renders or hides as configured.
+- **Tools needed**: Component test with mocked metadata.
+- **Test status**: not-started
+
+### PR #55 — Add 404 redirect: /market/<addr> -> /market?proposalId=<addr>
+- **Class**: feature (URL compat)
+- **Hypothesis**: n/a
+- **Ideal test**: `GET /market/0xabc…` returns a 3xx redirect (or client-side rewrite) to `/market?proposalId=0xabc…`. Catches removal of the redirect rule.
+- **Tools needed**: HTTP client against the deployed site.
+- **Test status**: not-started
+
+### PR #54 — Fix TWAP window for ended proposals
+- **Class**: bug-fix
+- **Hypothesis**: TWAP (time-weighted average price) calculation used `now` as the upper bound even when the proposal had ended. For ended proposals the window should clamp to `endTime`, otherwise TWAP includes empty no-trade time after the market closed and the price drifts incorrectly toward the last trade.
+- **Ideal test**: For an ended proposal, the TWAP value at `t > endTime` equals the TWAP at `endTime` exactly (window is clamped).
+- **Tools needed**: TWAP API + a known ended proposal fixture.
+- **Test status**: not-started
+
+### PR #53 — Lower FutarchyQuoteHelper gasLimit below Gnosis block cap
+- **Class**: bug-fix
+- **Hypothesis**: The gas estimate sent to FutarchyQuoteHelper exceeded Gnosis Chain's per-block gas cap (~30M gas). Quoter call reverted with out-of-gas before any RPC could even simulate. Fix: cap the gas at a value the chain accepts.
+- **Ideal test**: Build the quoter call with current params and assert `tx.gasLimit < 30_000_000`. Catches "we bumped the limit too high" regression.
+- **Tools needed**: ethers.js to construct the call without sending it.
+- **Test status**: not-started
+
+### PR #52 — Extract proposalId from milestones URL hash to fix swap quoter
+- **Class**: bug-fix
+- **Hypothesis**: Milestones URL uses fragment (`#proposalId=…`) rather than search params. Swap quoter parsed only `?proposalId=…` and got undefined, so the quote call hit the wrong (or null) market.
+- **Ideal test**: Given a URL of each known shape (`?proposalId=`, `#proposalId=`, `/market/<addr>`, etc.), the quoter receives the same proposal ID.
+- **Tools needed**: Pure-JS URL parser test.
+- **Test status**: not-started
+
+### PR #51 — Fix nonsense Liquidity widget value on market page
+- **Class**: bug-fix
+- **Hypothesis**: Liquidity widget displayed raw Algebra V3 `liquidity` field (~1e18-scaled units) without conversion to currency-denominated TVL. Showed numbers like "4.9e21 sDAI" — nonsense. Fix: derive currency TVL from `L × sqrtPrice × 2 / 1e18`.
+- **Ideal test**: Snapshot test of `formatLiquidity()` for known pool tick + liquidity values, assert output is in plausible currency units (1 < value < 1e9).
+- **Tools needed**: Pure unit test of the formatter (input pool data, expected formatted string range).
+- **Test status**: not-started
+
+### PR #50 — Migrate per-company milestones page to subgraph
+- **Class**: refactor (migration to subgraph data source)
+- **Hypothesis**: Same family as #60 — moves another data source off the dead AWS subgraph onto Checkpoint.
+- **Ideal test**: Endpoint-liveness invariant for the milestones data source (subsumed by #60's test).
+- **Tools needed**: same as #60.
+- **Test status**: not-started
+
+### PR #49 — Replace SupabasePoolFetcher with subgraph-based fetcher
+- **Class**: refactor (Supabase → subgraph)
+- **Hypothesis**: Pool data was being fetched from Supabase (a stale data warehouse) which got out of sync with chain reality. Replace with direct subgraph queries.
+- **Ideal test**: Pool prices returned by `SubgraphPoolFetcher.fetch()` match `eth_call` to `pool.slot0()` within 1% for a fixture pool.
+- **Tools needed**: ethers.js for on-chain comparison + subgraph.
+- **Test status**: not-started
+
+### PR #48 — Read Snapshot proposal ID from on-chain metadata only
+- **Class**: refactor / bug-fix
+- **Hypothesis**: Snapshot proposal ID was being read from a hardcoded mapping or env var. Some proposals had it but the value was wrong/stale. Fix: read from on-chain metadata as single source of truth.
+- **Ideal test**: For a fixture proposal, `extractSnapshotProposalId(proposal)` returns the same value as `proposal.metadata.snapshot_proposal_id` from the registry.
+- **Tools needed**: Pure unit test with a metadata fixture.
+- **Test status**: not-started
+
+### PR #47 — Remove dead Supabase code and unreachable fallbacks
+- **Class**: refactor / cleanup
+- **Hypothesis**: n/a (no behavior change; deleted dead code paths)
+- **Ideal test**: Lint rule asserting no remaining `import .*supabase` statements across `src/**`. Prevents regression.
+- **Tools needed**: grep + assertion in a node:test.
+- **Test status**: not-started
+
+### PR #46 — Filter archived proposals from companies and proposals lists
+- **Class**: bug-fix
+- **Hypothesis**: Listing endpoints didn't filter `metadata.archived === true`. Stale test proposals leaked into Companies and Proposals page lists.
+- **Ideal test**: For every listing endpoint, no card renders if its metadata has `archived === true`. Already partially covered by PR #61's ideal test.
+- **Tools needed**: subsumed by #61.
 - **Test status**: not-started
 
 ## Tooling backlog
