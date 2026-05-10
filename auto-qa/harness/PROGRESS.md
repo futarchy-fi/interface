@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slices 1+2+3 landed. Slice 1: browser-injection smoke. Slice 2: in-page signing via `setupSigningTunnel` exposeBinding. Slice 3: futarchy Next.js dev server in the loop + RainbowKit Connect modal lists "Futarchy Harness Wallet" (EIP-6963 discovery confirmed end-to-end against the real app, not a synthetic listener). 11/11 browser tests green. Phase 4 slices 1+2+3 prior. Slice 4 (DOM↔API price invariant) is the canonical remaining Phase 5 deliverable. |
+| Phase | 5 slices 1+2+3+4 (mechanism) landed. Slice 1: browser-injection smoke. Slice 2: in-page signing via `setupSigningTunnel` exposeBinding. Slice 3: futarchy Next.js dev server in the loop + RainbowKit modal lists "Futarchy Harness Wallet". Slice 4 v1: DOM↔API invariant mechanism — `flows/dom-api-invariant.spec.mjs` mocks the futarchy app's GraphQL POSTs to `api.futarchy.fi/registry/graphql`, returns probe org "HARNESS-PROBE-ORG-001", and asserts the probe renders in the DOM (in two independent rendering paths). 12/12 browser tests green. Numeric-price sub-slices still ahead. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -548,8 +548,69 @@ Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
     scenario work where we actually need a connected wallet to
     drive a real swap.
 
-**Phase 5 — remaining slices:**
+- **slice 4 v1** (this iteration) — DOM↔API invariant
+  **mechanism** proven end-to-end against the real futarchy app.
+  Slice 4 v1 deliberately scopes down to a non-numeric value
+  (an org name) so the mechanism lands first; numeric-price
+  sub-slices follow once we know which formatter to assert
+  against.
 
-- slice 4 — the canonical Phase 5 invariant: navigate to a
-  proposal page, scrape the visible price, compare to the api
-  response that produced it.
+  - **Path picked**: `/companies` → `useAggregatorCompanies` hook
+    → 3 GraphQL POSTs to `https://api.futarchy.fi/registry/graphql`
+    (aggregator → organizations → proposalentities) →
+    `transformOrgToCard(org).title = org.name` → renders in both
+    `<CompaniesListCarousel>` (card) and `<OrganizationsTable>`
+    (row). Found by reading
+    `src/hooks/useAggregatorCompanies.js` +
+    `src/config/subgraphEndpoints.js`.
+
+  - **`flows/dom-api-invariant.spec.mjs`**:
+    - `context.route('https://api.futarchy.fi/registry/graphql')`
+      with a handler that parses POST body, dispatches on
+      whether `query` contains `aggregator(id:` /
+      `organizations(where:` / `proposalentities(where:`, and
+      returns the canned response for each (probe values for
+      aggregator + org, empty list for proposalentities)
+    - Records call sequence so a future failure where the page
+      DIDN'T issue the expected query is easy to diagnose
+    - Navigates to `/companies`, asserts probe name visible in
+      the DOM within 30s
+    - Bonus: asserts `count() >= 1` so a future regression that
+      drops one of the rendering paths still surfaces here
+
+  - **First-run gotcha resolved**: assertion failed initially
+    with strict-mode "resolved to 2 elements" — the probe value
+    rendered in BOTH the card AND the table row. That's a feature,
+    not a bug (the mock propagated through two independent
+    consumers); switched to `.first()` + `count >= 1` and the
+    test passes.
+
+  - **Validated end-to-end**: 1 test, 3.3s. Wall-clock with
+    warm dev server: 12.6s.
+
+**Smoke summary (UI side, post-Phase 5 slice 4 v1):**
+
+```
+Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
+Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
+Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
+Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
+Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
+Phase 5 dom-api-invariant (1 case, chromium + Next.js) ✓ ~3.3s
+                                       TOTAL: 21 pass + 0 skip
+```
+
+**Phase 5 — remaining sub-slices:**
+
+- **4b** — mock a NUMERIC value (e.g., a pool spot price) and
+  assert the formatted DOM cell matches. Picks a concrete
+  endpoint (usePoolData / ChartPage / candle aggregates), traces
+  the formatter (decimals/currency/rounding), and asserts the
+  exact rendered string. This is the "price" half of slice 4
+  that v1 deferred.
+
+- **4c** — cross-protocol price reconciliation: when multiple
+  sources (Algebra / CoW / Sushi) should agree, mock each to
+  slightly-different values and assert the UI either flags the
+  divergence or picks the right canonical source. Catches the
+  BUY/SELL inversion / multi-RPC silent breakage bug shapes.
