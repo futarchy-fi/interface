@@ -689,24 +689,22 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 31 invariants (api side): 7 api-internal + 21
+      Now 32 invariants (api side): 8 api-internal + 21
       indexer probes + 3 chain-layer.
-      `apiUnifiedChartShape` added this slice — second
-      api data-PLANE check (paired with last iteration's
-      apiSpotCandlesHappyPath, but for a much heavier
-      data path). Calls /api/v2/proposals/:id/chart
-      expecting 200 + JSON with candles.{yes,no,spot}
-      all arrays. Touches registry indexer (proposal
-      resolve), candles indexer (pool + candle fetch),
-      and chain layer (rate provider) in one request,
-      so a regression anywhere in that chain bubbles up.
-      First step toward the documented chartShape
-      invariant (api unified-chart vs indexer raw match)
-      — that future invariant will reuse the same shape
-      probe and add cross-checks. 89 smoke tests green.
-      Still to add: probabilityBounds, candlesAggregation
-      (Candle.volume = sum of contained Swap amounts
-      within period), chartShape full match,
+      `apiMarketEventsShape` added this slice — third
+      and final api endpoint shape probe, closes the
+      api-endpoint-shape arc (3-of-3 documented /api/v*
+      endpoints covered). Calls /api/v1/market-events/
+      proposals/:id/prices expecting 200 + JSON with
+      conditional_yes/no/spot/timeline structure (the
+      minimal contract every consumer in interface/
+      depends on). Catches subtle envelope drift like
+      status-field rename that silently breaks every
+      "if (response.status === 'ok')" consumer branch.
+      93 smoke tests green. Still to add:
+      probabilityBounds, candlesAggregation (Candle.volume
+      = sum of contained Swap amounts within period),
+      chartShape full match (api vs indexer raw),
       conservation, cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`

@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **31 invariants**: 7 api-internal + 21 indexer + 3 chain-layer; second api data-PLANE check landed (apiSpotCandlesHappyPath + apiUnifiedChartShape now form a paired data-plane probe set); 89 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **32 invariants**: 8 api-internal + 21 indexer + 3 chain-layer; **all 3 documented /api/v* endpoints now have shape coverage** (closes the api-endpoint-shape arc); 93 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,9 +2313,68 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (apiMarketEventsShape)**
+  (this iteration, on the api side) — closes the
+  api-endpoint-shape arc:
+  * `apiMarketEventsShape` — calls
+    `/api/v1/market-events/proposals/harness-probe-
+    proposal/prices`, asserts 200 + JSON content-type
+    + the minimal contract every consumer in
+    interface/ depends on: status='ok',
+    conditional_yes/no.{price_usd, pool_id},
+    spot.price_usd, timeline.{start, end}.
+
+  - **Three-iteration arc complete**: the three
+    documented /api/v* endpoints now each have a
+    shape probe, picked to span the data-path
+    weight spectrum:
+    * `/api/v1/spot-candles?ticker=…` — light path
+      (1 indexer touch, candles only)
+    * `/api/v1/market-events/proposals/:id/prices`
+      — middle path (registry resolve + pool fetch
+      + currency rate, no candle aggregation)
+    * `/api/v2/proposals/:id/chart` — heavy path
+      (all 3 layers + parallel candle fetch +
+      transform)
+
+  - **Bug shapes caught**:
+    * Pool resolve returned null + error path emits
+      wrong shape (missing conditional_* keys → UI
+      dashboard crashes)
+    * status field renamed silently (the 'ok'
+      literal is the consumer branch point — every
+      "if (response.status === 'ok')" check breaks
+      without a single throw)
+    * Per-endpoint failure mode (test 2 verifies
+      apiUnifiedChartShape STILL passes when this
+      one fails)
+    * Status code regression
+
+  - **Fixture extension**: route `/api/v1/market-
+    events/proposals/<id>/prices` (regex match)
+    returns 200 + the minimal valid response by
+    default; new marketEventsStatus / marketEventsBody
+    knobs for drift simulation. Default body uses
+    representative numeric values (yes=0.55, no=0.45,
+    spot=1.05).
+
+  - **Smoke tests**: 4 new (happy with full shape,
+    data-plane error 500, status field renamed,
+    conditional_yes missing); 93/93 pass (was 89).
+    Now 32 invariants: 8 api-internal + 21 indexer +
+    3 chain-layer.
+
+  - Slice 4 progress: api-endpoint-shape arc COMPLETE
+    — every public /api/v* route has at least a
+    200-and-shape-correct check. Next focus: deeper
+    semantic invariants (probabilityBounds,
+    candlesAggregation, full chartShape match,
+    conservation, cross-run rate monotonicity).
+    Each addresses a different correctness dimension.
+
 - **slice 4d-scenarios-more (apiUnifiedChartShape)**
-  (this iteration, on the api side) — second api
-  data-PLANE check, paired with last iteration's
+  (previous iteration, on the api side) — second api
+  data-PLANE check, paired with the iteration before's
   apiSpotCandlesHappyPath:
   * `apiUnifiedChartShape` — calls
     `/api/v2/proposals/harness-probe-proposal/chart`,
