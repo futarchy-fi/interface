@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire** on api side (per-service `extends:` replaces `include:`; indexers dual-homed on harness-net + their own networks; api depends_on indexers declared). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep** on api side (interface-dev stub fixed: path/port/anvil-dep/install-command/Node-version; activation is now atomic 4c-activate). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1700,3 +1700,63 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
   - Slice 4 progress: ~42% done (6 of ~12 sub-slices). Next:
     slice 4b-verify (daemon smoke) OR slice 4c (interface-dev
     block in compose).
+
+- **slice 4c-prep** (this iteration, on the api side) — fixed
+  FIVE bugs in the Phase 0 `interface-dev` stub. Same pattern
+  as slice 4a-prep: stub couldn't be activated as-is; prep
+  fixes the stub in place (still commented) so 4c-activate
+  becomes a one-step uncomment.
+
+  - **Bug catalog** (interface-dev block):
+
+    (i) **Path bug**: stub had
+        `${INTERFACE_PATH:-../../../../interface}`. From
+        `auto-qa/harness/`, four levels up = `/`. Bind mount
+        would have failed at compose-up. Corrected to
+        `../../../interface` (= /Users/kas/interface). Same
+        "one too many ..s" issue as slice 4a's
+        `context: ../../..` bug.
+
+    (ii) **Port bug**: stub had `NEXT_PUBLIC_API_URL:
+        http://api:3000`. Api binds to 3031 (slice 4a-prep
+        finding). Corrected to `http://api:3031`.
+
+    (iii) **Missing anvil dep**: stub only had `depends_on:
+        api`. But Wagmi reads NEXT_PUBLIC_RPC_URL →
+        http://anvil:8545; needs anvil reachable too.
+        Added `depends_on: anvil` alongside the api dep.
+
+    (iv) **Bare `npm run dev` won't work in fresh container**:
+        bind mount has source but no node_modules. Replaced
+        with `sh -c` script: conditional `npm install` if
+        node_modules empty, then
+        `exec npx next dev --hostname 0.0.0.0 --port 3000`.
+        The `--hostname 0.0.0.0` is critical — `next dev`
+        defaults to localhost-only binding which isn't
+        reachable from outside the container.
+
+    (v) **Node version mismatch**: stub had
+        `image: node:20-bookworm-slim`. Harness convention
+        is node 22. Standardized on `node:22-alpine`.
+
+  - **Top-level addition**: `interface-node-modules` named
+    volume to keep container's Linux node_modules separate
+    from host's macOS-binary tree.
+
+  - **Why STAGED not active**: Next.js dev-in-container has
+    known caveats (file-watching across bind mounts can be
+    unreliable; HMR over docker network has quirks; first-
+    run npm install of ~1000+ deps takes minutes). Worth a
+    careful 4c-verify smoke after activation.
+
+  - **Validation**: `docker compose config --quiet` succeeds;
+    `--services` still returns 6 (interface-dev remains a
+    YAML comment). Top-level `interface-node-modules` volume
+    declared eagerly so 4c-activate is purely a service-block
+    uncomment.
+
+  - Slice 4 progress: ~50% done (7 of ~12+ sub-slices —
+    slice 4c now decomposes into 4c-prep + 4c-activate +
+    potentially 4c-verify). Next: 4c-activate (one-step
+    uncomment) OR return to 4b-verify (daemon-required
+    smoke).

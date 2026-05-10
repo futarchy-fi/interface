@@ -642,10 +642,26 @@ freshly-generated addresses as recipients; documented in
       Daemon-required: `docker compose up -d anvil
       registry-checkpoint` + probe `curl -s
       http://localhost:3003/graphql` for `{__typename}`.
-- [ ] **4c — uncomment compose interface-dev block.** Mounts
-      sibling interface clone at INTERFACE_PATH. Wires
-      NEXT_PUBLIC_RPC_URL → http://anvil:8545 and
-      NEXT_PUBLIC_API_URL → http://api:3031.
+- [x] **4c-prep — fixed FIVE bugs in the interface-dev stub
+      while keeping it commented out** (api side, commit
+      pending). Bugs surfaced + fixed: (i) path was
+      `../../../../interface` (4 levels up = `/`); corrected
+      to `../../../interface`. (ii) `NEXT_PUBLIC_API_URL`
+      pointed at `http://api:3000` but api binds to 3031 —
+      same port discovery as 4a-prep. (iii) Missing
+      `depends_on: anvil` (Wagmi reads NEXT_PUBLIC_RPC_URL).
+      (iv) Bare `npm run dev` won't work in fresh container;
+      replaced with conditional `npm install` + `next dev
+      --hostname 0.0.0.0 --port 3000` script. (v) Image was
+      node:20-bookworm-slim; standardized on node:22-alpine.
+      Also added `interface-node-modules` named volume to
+      keep Linux node_modules separate from host's macOS-
+      binary tree.
+- [ ] **4c-activate — uncomment the (now-correct)
+      interface-dev service block.** A one-step uncomment;
+      no edits needed thanks to 4c-prep. Activation gate:
+      `INTERFACE_PATH` env (defaults to `../../../interface`).
+      Adds a 7th service to the stack: `interface-dev`.
 - [ ] **4d — orchestrator service** (compose driver for the
       cross-layer assertions).
 - [ ] **4e — single `docker compose up -d`** brings the full
