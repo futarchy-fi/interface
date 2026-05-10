@@ -715,10 +715,24 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 42 invariants (api side)**: 11 api-internal +
-      26 indexer probes + 5 chain-layer. 134 smoke tests
+      **Now 43 invariants (api side)**: 11 api-internal +
+      26 indexer probes + 6 chain-layer. 139 smoke tests
       green.
-      `chartCandlesAreSubsetOfDirect` added this slice —
+      `anvilGasPricePresent` added this slice — chain-FEE-
+      MARKET probe (sixth chain-layer invariant). Companion
+      to anvilLatestBlockSensible + anvilChainId; those pin
+      "chain reachable + right network", this pins fee-
+      market state. Asserts eth_gasPrice returns 0x-prefixed
+      positive hex. Three named failure modes: null
+      (EIP-1559-only mode disabled legacy gas pricing),
+      0x0 (broken fee market — anvil --gas-price 0
+      misconfig — masks gas-accounting bugs in scenarios),
+      non-hex (RPC-layer regression breaks downstream
+      BigInt parsing). Without this probe, a scenario
+      reports "transaction failed at step N" with no
+      breadcrumb pointing to the fee-market issue.
+
+      `chartCandlesAreSubsetOfDirect` (previous slice) —
       first cross-layer per-row TIME-PAIR check for the
       unified-chart endpoint. STRENGTHENS
       chartCandleCountsBoundedByDirect (count-bound) into
