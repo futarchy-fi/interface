@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 9 |
+| Iterations completed | 10 |
 | PRs catalogued | 31 / ~65 |
 | PRs classified | 31 |
-| Tests added | 23 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references — all passing) |
+| Tests added | 29 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math — all passing) |
 | Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -139,7 +139,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: Liquidity widget displayed raw Algebra V3 `liquidity` field (~1e18-scaled units) without conversion to currency-denominated TVL. Showed numbers like "4.9e21 sDAI" — nonsense. Fix: derive currency TVL from `L × sqrtPrice × 2 / 1e18`.
 - **Ideal test**: Snapshot test of `formatLiquidity()` for known pool tick + liquidity values, assert output is in plausible currency units (1 < value < 1e9).
 - **Tools needed**: Pure unit test of the formatter (input pool data, expected formatted string range).
-- **Test status**: not-started
+- **Test status**: **landed-passing** (`auto-qa/tests/liquidity-math.test.mjs` — 6 cases: bounds-check on real GIP-150 pool data, futarchy YES≈NO invariant, degenerate-tick guard, null/zero-L guard. Spec mirrors `usePoolData.js:141-153` math.)
 
 ### PR #50 — Migrate per-company milestones page to subgraph
 - **Class**: refactor (migration to subgraph data source)
