@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **41 invariants**: 10 api-internal + 26 indexer + 5 chain-layer; chain-CLIENT identity pin landed; 130 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **42 invariants**: 11 api-internal + 26 indexer + 5 chain-layer; per-row time-pair check landed for unified-chart; 134 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,48 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (chartCandlesAreSubsetOfDirect)**
+  (this iteration, on the api side) — first cross-layer
+  per-row TIME-PAIR check for the unified-chart endpoint:
+
+  * STRENGTHENS the existing chartCandleCountsBoundedByDirect
+    (count-bound) into a per-row time-membership check.
+    Every candle time the api unified-chart endpoint
+    surfaces must correspond to a real candle the indexer
+    actually emitted; otherwise the api is fabricating
+    data (or mixing in another proposal's periods).
+
+  * Why time, not id: applyRateToCandles reshapes raw
+    indexer candles into {time, close, ...} and does not
+    expose the original ID. Both layers agree on `time`
+    (period-start unix timestamp) so we use that as the
+    matching key.
+
+  * Bug classes caught (NOT caught by count bound):
+    transform fills gaps with synthetic period-start
+    timestamps; cache key mismatch returns a different
+    proposal's candles where count happens to be ≤ direct;
+    time-bucket calculation off-by-one shifts every api
+    time by N seconds/hours; SPOT bleeds into yes/no
+    arrays (spot uses different time alignment).
+
+  * 42 invariants now: 11 api-internal (was 10) + 26
+    indexer + 5 chain-layer. Smoke tests: 4 new + 2
+    existing tests tweaked to align candleTimes with
+    api response (and reordered descending so
+    candleTimeMonotonic stays happy). 134/134 pass.
+    Api commit: `d927fc5`.
+
+  * Unified-chart endpoint now has THREE coverage layers:
+    shape (apiUnifiedChartShape — yes/no/spot are arrays),
+    count-bound (chartCandleCountsBoundedByDirect — api
+    total ≤ direct total), per-time-pair membership
+    (chartCandlesAreSubsetOfDirect — every api time
+    exists in direct set). Each catches a distinct bug
+    class; each alone would let the others slip.
+
 - **slice 3e (smoke-tests CI workflow STAGED on api side)**
-  (this iteration — docs-only mirror on interface side):
+  (previous iteration — docs-only mirror on interface side):
 
   - **Per maintainer's CI question**: api-side smoke-test
     workflow now staged in version control on the api repo
