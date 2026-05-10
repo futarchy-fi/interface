@@ -3,35 +3,45 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { SUBGRAPH_ENDPOINTS } from '../config/subgraphEndpoints';
 
-// GraphQL queries - combined into single query for efficiency
-const QUERIES = {
-    // Single query to get pools AND their candles in one request
-    // period: 3600 = 1 hour candles (60=1m, 300=5m, 900=15m, 3600=1h, 86400=1d)
-    GET_POOLS_WITH_CANDLES: `
-    query GetPoolsWithCandles($proposalId: String!, $limit: Int!, $period: BigInt!, $closeTimestamp: BigInt!) {
-      pools(where: { proposal: $proposalId, type: "CONDITIONAL" }) {
+// Build queries for the Checkpoint indexer (no BigInt scalar; candles aren't
+// a reverse field on Pool; proposal/pool are flat string IDs that the
+// /candles/graphql proxy chain-prefixes when matched as inline literals).
+//
+// We inline the proposal ID and pool IDs as string literals so the proxy
+// regex (which only rewrites literals like `proposal: "0x…"`) picks them
+// up — variables like $proposalId aren't in the proxy's prefix list.
+function buildPoolsQuery(proposalId) {
+    return `{
+      pools(where: { proposal: "${proposalId}", type: "CONDITIONAL" }) {
         id
         name
         type
         outcomeSide
         price
         isInverted
-        proposal {
-          id
-          marketName
-        }
-        candles(first: $limit, orderBy: periodStartUnix, orderDirection: desc, where: { period: $period, periodStartUnix_lte: $closeTimestamp }) {
-          periodStartUnix
-          period
-          open
-          high
-          low
-          close
-        }
       }
-    }
-  `
-};
+    }`;
+}
+
+function buildCandlesQuery(poolIds, limit, closeTimestamp) {
+    const idList = poolIds.map(id => `"${id}"`).join(', ');
+    return `{
+      candles(
+        first: ${limit},
+        orderBy: periodStartUnix,
+        orderDirection: desc,
+        where: { pool_in: [${idList}], period: 3600, periodStartUnix_lte: ${closeTimestamp} }
+      ) {
+        pool
+        periodStartUnix
+        period
+        open
+        high
+        low
+        close
+      }
+    }`;
+}
 
 // Module-level cache to prevent double fetches from React Strict Mode
 const fetchCache = new Map();
@@ -176,12 +186,11 @@ export function useSubgraphData(proposalId, chainId, candleLimit = 500, closeTim
         // Create promise and cache it
         const fetchPromise = (async () => {
             try {
-                const poolsData = await executeQuery(endpoint, QUERIES.GET_POOLS_WITH_CANDLES, {
-                    proposalId: proposalId.toLowerCase(),
-                    limit: candleLimit,
-                    period: "3600",  // 1 hour candles (BigInt passed as string)
-                    closeTimestamp: closeTimestamp ? closeTimestamp.toString() : Math.floor(Date.now() / 1000).toString()
-                });
+                // Step 1 — fetch CONDITIONAL pools for this proposal.
+                const poolsData = await executeQuery(
+                    endpoint,
+                    buildPoolsQuery(proposalId.toLowerCase())
+                );
 
                 const pools = poolsData.pools || [];
                 const yesPool = pools.find(p => p.outcomeSide === 'YES') || null;
@@ -201,9 +210,31 @@ export function useSubgraphData(proposalId, chainId, candleLimit = 500, closeTim
                     return emptyResult;
                 }
 
-                // Transform data from the pool's nested candles - PURE subgraph data, no artificial stretching
-                const yesData = yesPool ? adaptCandlesToChartFormat(yesPool.candles) : [];
-                const noData = noPool ? adaptCandlesToChartFormat(noPool.candles) : [];
+                // Step 2 — fetch candles for those pools in one batched query.
+                // Checkpoint has no Pool.candles reverse field, so we query
+                // candles directly and group by pool address.
+                const poolIds = [yesPool, noPool].filter(Boolean).map(p => p.id);
+                const candlesCutoff = closeTimestamp
+                    ? Number(closeTimestamp)
+                    : Math.floor(Date.now() / 1000);
+
+                const candlesData = await executeQuery(
+                    endpoint,
+                    buildCandlesQuery(poolIds, candleLimit, candlesCutoff)
+                );
+
+                const yesCandles = [];
+                const noCandles = [];
+                const yesId = (yesPool?.id || '').toLowerCase();
+                const noId = (noPool?.id || '').toLowerCase();
+                for (const c of candlesData.candles || []) {
+                    const poolAddr = (c.pool || '').toLowerCase();
+                    if (poolAddr === yesId) yesCandles.push(c);
+                    else if (poolAddr === noId) noCandles.push(c);
+                }
+
+                const yesData = adaptCandlesToChartFormat(yesCandles);
+                const noData = adaptCandlesToChartFormat(noCandles);
 
                 // Get latest prices from the last candle (pure data, no artificial live candle)
                 const yesPrice = yesData.length > 0
