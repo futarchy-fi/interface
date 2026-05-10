@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 1 — server-side slice 1 landed in futarchy-api (anvil fork, block clock, first smoke validated against Gnosis). UI side waits for Phase 4-5. |
+| Phase | 1 — COMPLETE on server side (futarchy-api). 4 smoke tests pass against Gnosis fork; 6/6 CHECKLIST items ticked. UI side waits for Phase 4-5. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
