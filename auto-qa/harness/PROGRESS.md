@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 14 invariants: 5 api-internal + 6 indexer + 3 chain-layer; 29 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 16 invariants: 5 api-internal + 8 indexer + 3 chain-layer; 33 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2216,3 +2216,53 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     reconciliation, the natural next step after the
     per-stage probes), chartShape, probabilityBounds,
     conservation, cross-run rateSanity monotonicity.
+
+- **slice 4d-scenarios-more (registryHasOrganizations +
+  registryHasAggregators)** (this iteration, on the api
+  side) — completes the registry-entity triplet alongside
+  `registryHasProposalEntities`, mirroring the structural
+  symmetry of the candles-pipeline triplet:
+  * `registryHasProposalEntities` (existing) — proposal
+    metadata indexed
+  * `registryHasOrganizations` (new) — organization
+    metadata indexed
+  * `registryHasAggregators` (new) — root-tree entity
+    indexed
+
+  - **Why these matter**: the registry schema has 3
+    hierarchically-nested entity types (Aggregator →
+    Organization → ProposalEntity), each populated from a
+    separate event handler. Each can independently fail to
+    sync. Concrete bug classes:
+    * Aggregator handler broken → no orgs/proposals can
+      resolve their parent (api joins fail silently)
+    * Organization handler broken → proposals exist but
+      lack org-level metadata
+    * ProposalEntity handler broken → no proposals visible
+
+  - **Production hint pinned**: `registryHasAggregators`'s
+    body comment notes futarchy.fi production has exactly
+    one Aggregator at
+    `0xc5eb43d53e2fe5fdde5faf400cc4167e5b5d4fc1` (per
+    src/routes/unified-chart.js); harness fork inherits it.
+
+  - **Symmetry with candles**: harness now has full
+    data-aware coverage of BOTH indexers' schema-discoverable
+    entities. 6 data-aware indexer invariants total (3 per
+    indexer, mirroring each other structurally).
+
+  - **Fixture extension**: registry-direct response now
+    returns proposalEntities + organizations + aggregators
+    in superset payload. Two new options:
+    registryOrganizationsCount, registryAggregatorsCount.
+
+  - **Smoke tests**: 4 new (happy + cross-entity failure
+    modes); 33/33 pass (was 29). Now 16 invariants: 5
+    api-internal + 8 indexer + 3 chain-layer.
+
+  - Slice 4 progress: ~90% (19 of ~21 sub-slices). Both
+    indexers now have full data-aware triplet coverage
+    (3 entities each). Next bot-doable invariants are
+    cross-layer reconciliations (candlesAggregation,
+    chartShape, probabilityBounds, conservation) — meatier
+    than the additive per-entity probes.
