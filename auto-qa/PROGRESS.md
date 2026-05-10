@@ -13,11 +13,11 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 8 |
+| Iterations completed | 9 |
 | PRs catalogued | 31 / ~65 |
 | PRs classified | 31 |
-| Tests added | 21 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes — all passing) |
-| Known gaps documented | 1 (uppercase-`0X` prefix in proposalId param — see `url-shapes.test.mjs`) |
+| Tests added | 23 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references — all passing) |
+| Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
 | **Real bugs surfaced** | **16 broken GraphQL queries** (see `auto-qa/fixtures/known-graphql-failures.json`) |
@@ -167,7 +167,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: n/a (no behavior change; deleted dead code paths)
 - **Ideal test**: Lint rule asserting no remaining `import .*supabase` statements across `src/**`. Prevents regression.
 - **Tools needed**: grep + assertion in a node:test.
-- **Test status**: not-started
+- **Test status**: **landed-passing** (`auto-qa/tests/dead-references.test.mjs` PR #47 case). **Surfaced an unfinished cleanup**: 10 supabase imports still exist in `src/` (baseline locked in). Files: `app/new-design/page.jsx`, `chart/TripleChart.jsx`, `marketPage/{MarketHistoryViewModel,MarketPageShowcase,MarketPageShowcaseViewModel,RecentTradesDataLayer}.jsx`, `useContractConfig.js`, `pages/{markets/[address],new-design/[marketId],new-design/index}.{js,jsx}`. Per /loop directive: NOT fixed. When real-fix work removes some, lower the baseline.
 
 ### PR #46 — Filter archived proposals from companies and proposals lists
 - **Class**: bug-fix
@@ -195,7 +195,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: n/a (no behavior change; removed dead links)
 - **Ideal test**: Lint rule asserting `tickspread.com` does not appear anywhere in `src/**`. Prevents re-introduction.
 - **Tools needed**: grep + assertion in node:test.
-- **Test status**: not-started
+- **Test status**: **landed-passing** (`auto-qa/tests/dead-references.test.mjs` PR #43 case — confirmed clean: 0 hits in src/)
 
 ### PR #42 — Point API URL to api.futarchy.fi
 - **Class**: infra / config
