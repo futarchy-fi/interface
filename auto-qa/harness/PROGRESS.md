@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan** on api side (compose api block UNCOMMENTED; ADR-002 → Accepted; indexer `include:` block staged; slice 4b expanded into 5 sub-slices). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env** on api side (`docker compose config` returns 6 services; api env corrected to REGISTRY_URL + CANDLES_URL). Slice 4b-network-wire blocked by compose v2 include-conflict; 3 alternatives documented for next iteration. CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1596,3 +1596,61 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     5). Next bot-doable: 4b-include (uncomment include block +
     add cross-network bridging) AND/OR 4b-network-wire
     (RPC_URL override).
+
+- **slice 4b-include + 4b-api-env** (this iteration, on the
+  api side) — uncommented the top-level `include:` block;
+  `docker compose config --services` now returns 6 services
+  (anvil + api + 4 indexer services). Also corrected the api
+  service env from the wrong Phase 0 `CHECKPOINT_URL` to the
+  real `REGISTRY_URL` + `CANDLES_URL` + `FUTARCHY_MODE` env
+  vars per `src/config/endpoints.js`.
+
+  - **Service-name reality vs Phase 0 stub assumptions**:
+    registry compose uses `registry-checkpoint` +
+    `registry-postgres` (prefixed); candles compose uses bare
+    `checkpoint` + `postgres` (NOT `candles-checkpoint` /
+    `candles-postgres` as the Phase 0 stub assumed). The
+    container_names ARE prefixed
+    (`futarchy-candles-checkpoint-1`) but the service names
+    aren't. Also: candles uses `GNOSIS_RPC_URL`, registry
+    uses `RPC_URL` — different env contracts.
+
+  - **Why depends_on on indexers NOT added yet**: the indexers
+    and api are on different networks (registry-net /
+    checkpoint-net vs harness-net), so the api can't actually
+    reach them via compose-internal name resolution yet.
+    Adding the depends_on would have compose wait forever for
+    cross-network healthchecks. Slice 4b-network-wire fixes
+    this; only then can the depends_on be added.
+
+  - **4b-network-wire BLOCKED**: naive override attempt
+    failed. Tried declaring same-name service blocks
+    (`registry-checkpoint:`, `checkpoint:`) in the parent
+    compose to extend the included services with `networks:
+    [registry-net, harness-net]` + RPC env override. Compose
+    rejected: `services.registry-checkpoint conflicts with
+    imported resource`. Compose v2.34's `include:` does NOT
+    allow same-name service redefinition in the parent file.
+    Three alternatives surfaced + documented:
+    (a) Override-list form: `include: - path: [base.yml,
+        overrides.yml]`. Compose merges base + overrides
+        BEFORE include.
+    (b) Per-service `extends:` (drop `include:`). Each
+        indexer service declared here with `extends: { file:
+        ..., service: ... }` plus harness overrides. Closest
+        fit for ADR-002's wrapper leg.
+    (c) Multi-file `docker compose -f base.yml -f
+        overrides.yml`. Rejected: breaks the single-compose
+        acceptance gate.
+    Decision deferred to slice 4b-network-wire next
+    iteration; approach (b) is the lead candidate.
+
+  - **What was learned**: compose v2's `include:` is for
+    IMPORTING, not OVERRIDING. The conflict error is
+    structurally equivalent to a TypeScript "duplicate
+    identifier" — there's no compose-level "override modifier"
+    for included services.
+
+  - Slice 4 progress: ~33% done (4a-prep + 4a + 4b-plan +
+    4b-include + 4b-api-env / ~12 sub-slices). Next:
+    4b-network-wire approach (b).

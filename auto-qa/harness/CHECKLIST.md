@@ -613,33 +613,34 @@ freshly-generated addresses as recipients; documented in
       block staged (commented out) referencing the two
       sibling indexer compose files — uncommenting is slice
       4b-include.
-- [ ] **4b-include — uncomment the top-level `include:`
-      block.** Once uncommented, `docker compose config`
-      should report 6 services: anvil + api + registry-
-      checkpoint + registry-postgres + candles-checkpoint +
-      candles-postgres. Pair with 4b-network-wire because
-      the included files default RPC_URL to real Gnosis.
-- [ ] **4b-network-wire — point indexers at compose anvil
-      via env override + bridge networks.** Included
-      compose files use `${RPC_URL:-https://rpc.gnosischain.com}`
-      so an env file or compose-level `environment:` override
-      can redirect them at `http://anvil:8545`. Networks need
-      a decision: bridge registry-net + candles-net into
-      harness-net, or declare them external.
-- [ ] **4b-api-env — update api service env from
-      `CHECKPOINT_URL` to `REGISTRY_URL` + `CANDLES_URL`.**
-      `src/config/endpoints.js` reads these two specific names
-      (Phase 0 stub had `CHECKPOINT_URL` — third path/port bug
-      surfaced by working through compose). Re-add the
-      depends_on on registry-checkpoint + candles-checkpoint
-      at the same time.
-- [ ] **4b-verify — full structural validation.**
-      `docker compose config --services` returns the 6
-      expected services; `docker compose build api` still
-      succeeds. Daemon-required smoke: `docker compose up -d
-      anvil registry-checkpoint` and probe
-      `curl -s http://localhost:3003/graphql` for
-      `{__typename}`.
+- [x] **4b-include — top-level `include:` UNCOMMENTED**
+      (api side). `docker compose config --services` returns
+      6: anvil + api + registry-checkpoint +
+      registry-postgres + checkpoint + postgres. Service-name
+      reality vs Phase 0 stub: candles uses bare names
+      (`checkpoint`, `postgres`), not `candles-` prefixed.
+      Candles env var is `GNOSIS_RPC_URL` not `RPC_URL`.
+- [x] **4b-api-env — api env corrected** (api side). Was
+      `CHECKPOINT_URL` (which `src/config/endpoints.js` never
+      reads). Now `REGISTRY_URL` + `CANDLES_URL` +
+      `FUTARCHY_MODE: checkpoint` wired to compose-internal
+      service names + container port 3000.
+- [ ] **4b-network-wire — BLOCKED (decision deferred).**
+      Naive override attempt FAILED in compose v2.34:
+      `services.registry-checkpoint conflicts with imported
+      resource`. `include:` rejects same-name service
+      redefinition in parent. Three alternatives documented
+      (in api compose comments + PROGRESS): (a) include's
+      override-list form; (b) per-service `extends:` + drop
+      `include:`; (c) multi-file `-f` (rejected — breaks the
+      single-compose acceptance gate). Approach (b) is the
+      lead candidate, ADR-002's "wrapper" leg.
+- [ ] **4b-verify — full smoke test** (post-network-wire).
+      `docker compose config --services` returns 6 (currently
+      passes); `docker compose build api` still succeeds.
+      Daemon-required: `docker compose up -d anvil
+      registry-checkpoint` + probe `curl -s
+      http://localhost:3003/graphql` for `{__typename}`.
 - [ ] **4c — uncomment compose interface-dev block.** Mounts
       sibling interface clone at INTERFACE_PATH. Wires
       NEXT_PUBLIC_RPC_URL → http://anvil:8545 and
