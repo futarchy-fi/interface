@@ -13,11 +13,11 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 20 |
+| Iterations completed | 21 |
 | PRs catalogued | **42 / 42 (full coverage)** — repo PRs span #23..#65 with one gap at #38; no PRs #1-22 exist |
 | PRs classified | 42 |
-| Tests added | 100 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window + 14 impact-formula + 11 proposal-resolution-bucketing + 6 footer-links + 16 format-number — all passing) |
-| Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
+| Tests added | 105 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window + 14 impact-formula + 11 proposal-resolution-bucketing + 6 footer-links + 16 format-number + 5 asset-refs — all passing) |
+| Known gaps documented | 3 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup partial — 10 imports remain**; **6 broken `/assets/*` refs in production callers — see asset-refs.test.mjs baseline**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
 | **Real bugs surfaced** | **16 broken GraphQL queries** (see `auto-qa/fixtures/known-graphql-failures.json`) |
