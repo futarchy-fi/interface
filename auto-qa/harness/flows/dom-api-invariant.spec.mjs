@@ -360,6 +360,62 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row.locator('td').nth(4)).toHaveText('Chain 999');
     });
 
+    test('slice 4c v3b — candles price flows through prefetchedPrices into EventHighlightCard\'s formatter ("0.4200 SDAI")', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // The full canonical Phase 5 invariant: a numeric value
+        // produced by an API endpoint is mocked, the real React app
+        // pulls it through its hooks + formatters, and the visible
+        // DOM string matches the formatter's exact output.
+        //
+        // Path:
+        //   registry/graphql → fetchProposalsFromAggregator → events
+        //   candles/graphql  → collectAndFetchPoolPrices → priceMap
+        //                      attachPrefetchedPrices → event.prefetchedPrices
+        //   carousel renders <EventHighlightCard prefetchedPrices=... />
+        //   useLatestPoolPrices short-circuits to prefetched values
+        //   EventHighlightCard formats:
+        //     `${prices.yes.toFixed(precision)} ${baseTokenSymbol}`
+        //     where precision=4 if any price<1, baseTokenSymbol='SDAI'
+        //     when metadata.currencyTokens.base.tokenSymbol unset.
+        //
+        // YES=0.42 (<1) → high-precision format → "0.4200 SDAI".
+
+        const richProposal = fakePoolBearingProposal({});
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        await context.route(CANDLES_GRAPHQL_URL, makeCandlesMockHandler({
+            prices: {
+                [PROBE_POOL_YES]: 0.42,
+                [PROBE_POOL_NO]:  0.58,
+            },
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Pre-flight: confirm the carousel rendered our event at all
+        // (proves the proposal passed the visibility/resolved/etc.
+        // filters and the carousel got far enough to mount the card).
+        await expect(
+            page.getByText('HARNESS-PROBE-EVENT-001').first(),
+        ).toBeVisible({ timeout: 30_000 });
+
+        // Now the actual canonical assertion: the formatter's output
+        // ("YES toFixed(4) = '0.4200', + ' SDAI'") is in the DOM.
+        await expect(
+            page.getByText('0.4200 SDAI').first(),
+        ).toBeVisible({ timeout: 15_000 });
+    });
+
     test('slice 4c v3a — candles GraphQL endpoint is hit with the proposal\'s pool addresses', async ({ context, page }) => {
         test.setTimeout(180_000);
 

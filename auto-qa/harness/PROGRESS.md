@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slices 1-3 + 4a + 4b + 4c (v1, v2, v3a) landed. Latest: 4c v3a — candles pipeline plumbing. Mocks both `api.futarchy.fi/{registry,candles}/graphql`; seeds a proposal with `metadata.conditional_pools.{yes,no}.address` matching probe pool addresses; asserts the candles endpoint gets POSTed with our pool address. Proves the carousel-side fetch chain reaches the network with the right inputs. Foundation for 4c v3b (DOM-level currency formatter assertion). 16/16 browser tests green. |
+| Phase | 5 slices 1-3 + 4a + 4b + 4c (v1, v2, v3a, **v3b**) landed. Latest: **4c v3b — THE CANONICAL PHASE 5 INVARIANT.** Mocked candles GraphQL returns YES=0.42 → flows through 6 layers of real React app code (`fetchProposalsFromAggregator` → `collectAndFetchPoolPrices` → `attachPrefetchedPrices` → carousel → `EventHighlightCard` → `useLatestPoolPrices` → `toFixed`-based formatter) → DOM string "0.4200 SDAI". 17/17 browser tests green. Phase 5 is now substantively done; remaining 4d (cross-protocol reconciliation) is a more advanced bug-shape probe. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -750,7 +750,66 @@ Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
     `proposalAddress`. v3b will trace which card path renders
     and which formatter's output is the visible string.
 
-**Smoke summary (UI side, post-Phase 5 slice 4c v3a):**
+- **slice 4c v3b** (this iteration) — **THE CANONICAL PHASE 5
+  INVARIANT, WIRED.** Built directly on v3a's plumbing: the
+  candles mock now returns a known YES price (0.42) for our
+  probe pool, and we assert the formatter's exact output string
+  appears in the visible DOM.
+
+  - **Path traced** (registry → candles → carousel → card →
+    formatter → DOM):
+    1. `EventsHighlightCarousel` calls
+       `fetchEventHighlightData('all', {connectedWallet})`
+    2. → `fetchProposalsFromAggregator(DEFAULT_AGGREGATOR)` →
+       hits REGISTRY → returns proposals (our mocked one,
+       enriched via `transformProposalToEvent` which derives
+       `poolAddresses: {yes, no}` from
+       `metadata.conditional_pools`)
+    3. → `collectAndFetchPoolPrices(events)` → groups pools by
+       chain, hits CANDLES with `pools(where: id_in: [...])` →
+       returns `priceMap`
+    4. → `attachPrefetchedPrices(events, priceMap)` mutates
+       each event: `event.prefetchedPrices = {yes, no, source}`
+    5. carousel renders `<EventHighlightCard prefetchedPrices=…/>`
+       (`useNewCard=false` is the CompaniesPage default — checked)
+    6. `useLatestPoolPrices` short-circuits to prefetched
+       values when present
+    7. Formatter: `${prices.yes.toFixed(precision)} ${baseTokenSymbol}`
+       — precision=4 because YES<1 triggers the high-precision
+       branch; baseTokenSymbol='SDAI' because
+       `metadata.currencyTokens.base.tokenSymbol` is unset →
+       DOM string **"0.4200 SDAI"**
+
+  - **Test "slice 4c v3b"**:
+    1. Mock REGISTRY with `fakePoolBearingProposal({})`
+       (proposalAddress / displayNames / conditional_pools all
+       set to PROBE_* constants)
+    2. Mock CANDLES with `prices: {[YES]: 0.42, [NO]: 0.58}`
+    3. Navigate to `/companies`
+    4. Pre-flight assertion: event title
+       "HARNESS-PROBE-EVENT-001" visible (proves the proposal
+       got past visibility/resolved/etc. filters)
+    5. Canonical assertion: "0.4200 SDAI" visible (proves the
+       full formatter chain renders the mocked price)
+
+  - **Validated end-to-end** — passed first try. Test runtime:
+    1.3s in parallel, 3.8s solo. Full 6-test
+    dom-api-invariant suite: 22.6s wall-clock with cold compile.
+
+  - **Bug-shapes this catches** (the load-bearing one):
+    * Stale-price-but-API-healthy class (PR #64 shape from
+      interface): if the prefetched-price path got short-
+      circuited or `attachPrefetchedPrices` no-op'd, the card
+      would fall back to its own per-pool fetch (which we DON'T
+      mock here) and show "0.00 SDAI" or LoadingSpinner. The
+      assert-on-"0.4200 SDAI" lights up that regression.
+    * Formatter precision regression: dropping the
+      `shouldUseHighPrecision` check would render "0.42 SDAI"
+      instead of "0.4200 SDAI" → fails immediately.
+    * baseTokenSymbol fallback regression: changing the default
+      from 'SDAI' to e.g. 'XDAI' → fails immediately.
+
+**Smoke summary (UI side, post-Phase 5 slice 4c v3b):**
 
 ```
 Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
@@ -758,22 +817,22 @@ Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
 Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
 Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
 Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
-Phase 5 dom-api-invariant (5 cases, chromium + Next.js) ✓ ~12s
-                                       TOTAL: 25 pass + 0 skip
+Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
+                                       TOTAL: 26 pass + 0 skip
 ```
 
-**Phase 5 — remaining sub-slices:**
+**Phase 5 status: substantively COMPLETE.** The CHECKLIST gate
+("First DOM↔API check: navigate to a proposal page, scrape the
+visible price, compare to the api response that produced it") is
+met — slice 4c v3b is exactly that, and v3a/v2/v1/4b/4a are the
+on-ramps to it.
 
-- **4c v3b** — DOM-level currency formatter assertion building
-  on v3a's plumbing. Return known prices for our probe pools,
-  then assert the formatted string ("0.42 SDAI" / "42% YES" /
-  whatever the carousel actually renders) appears in the
-  visible DOM. Will need to trace which card variant renders
-  for our mocked proposal and which of its fields is the
-  visible price.
+**Remaining sub-slice:**
 
 - **4d** — cross-protocol price reconciliation: when multiple
   sources (Algebra / CoW / Sushi) should agree, mock each to
   slightly-different values and assert the UI either flags the
   divergence or picks the right canonical source. Catches the
   BUY/SELL inversion / multi-RPC silent breakage bug shapes.
+  More advanced bug-probe; not strictly required for Phase 5
+  acceptance.
