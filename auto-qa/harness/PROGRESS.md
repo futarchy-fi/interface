@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 12 invariants: 5 api-internal + 4 indexer + 3 chain-layer; 25 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 14 invariants: 5 api-internal + 6 indexer + 3 chain-layer; 29 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2176,3 +2176,43 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
   - Slice 4 progress: ~89% (17 of ~19 sub-slices). Each
     iteration is now 1-2 invariants; the slice keeps
     expanding as new bug classes surface.
+
+- **slice 4d-scenarios-more (candlesHasSwaps + candlesHasCandles)**
+  (this iteration, on the api side) — completes the
+  candles-pipeline triplet alongside `candlesHasPools`. Each
+  catches a DISTINCT stage of sync:
+  * `candlesHasPools` (existing) — pool-deployment events
+  * `candlesHasSwaps` (new) — per-trade Swap events
+  * `candlesHasCandles` (new) — period-aggregator output
+
+  - **Why these matter as a triplet**: each represents a
+    different async failure mode. Pool exists w/o swaps =
+    no trades or sync caught up to deployment but not past;
+    swaps exist w/o candles = aggregator broken or behind.
+    Together the triplet fingerprints which stage is
+    unhealthy — better than a single "candles indexer
+    empty" check.
+
+  - **Concrete bug classes distinguished**:
+    * Indexer not started → all 3 fail
+    * Caught up to pool deployment but not past → pools=ok,
+      swaps+candles=fail
+    * Trades arriving but Checkpoint @aggregate job dead →
+      pools+swaps=ok, candles=fail (real bug; aggregate
+      jobs can silently die)
+
+  - **Fixture extension**: candles-direct response now
+    returns pools + swaps + candles arrays in one superset
+    payload. Two new options: candlesSwapsCount,
+    candlesCandlesCount.
+
+  - **Smoke tests**: 4 new (happy + cross-stage failure
+    modes); 29/29 pass (was 25). Now 14 invariants: 5
+    api-internal + 6 indexer + 3 chain-layer.
+
+  - Slice 4 progress: ~89% (18 of ~20 sub-slices —
+    4d-scenarios-more keeps expanding the invariant set).
+    Next bot-doable: candlesAggregation (cross-layer
+    reconciliation, the natural next step after the
+    per-stage probes), chartShape, probabilityBounds,
+    conservation, cross-run rateSanity monotonicity.
