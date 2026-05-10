@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **44 invariants**: 12 api-internal + 26 indexer + 6 chain-layer; X-Cache-TTL header now probed unconditionally on both HIT + MISS paths; 144 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **45 invariants**: 12 api-internal + 26 indexer + 7 chain-layer; chain-RPC-CONSISTENCY check landed (net_version ↔ eth_chainId); 149 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,47 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (anvilNetworkVersionMatchesChainId)**
+  (this iteration, on the api side) — chain-RPC-CONSISTENCY
+  check (seventh chain-layer invariant):
+
+  * Asserts net_version (decimal string) and eth_chainId
+    (hex) numerically agree. The two methods should report
+    the same chain ID by spec — net_version is the legacy
+    method, eth_chainId is the EIP-695 modern one.
+    Divergence silently breaks any consumer that picks
+    one or the other.
+
+  * Orthogonal to anvilChainId: that asserts eth_chainId
+    === 0x64 (the EXPECTED Gnosis value); this asserts
+    net_version === eth_chainId (CONSISTENCY regardless
+    of WHAT they equal). Demonstrated by the bare-anvil-
+    31337 test: both methods report 31337, this passes
+    (consistency intact), anvilChainId fails (wrong
+    network).
+
+  * Bug shapes caught (NOT caught by anvilChainId alone):
+    fork rebase updates one method but not the other;
+    reverse-proxy misconfig routes them to different
+    upstreams; mock fixture hardcodes one but not the
+    other; anvil version regression where one method
+    reads a stale cached config.
+
+  * 45 invariants now: 12 api-internal + 26 indexer +
+    7 chain-layer (was 6). Smoke tests: 5 new + 1
+    fixture knob (netVersion) + 1 RPC dispatch case
+    (net_version). 149/149 pass. Api commit: `af4fa09`.
+
+  * Chain layer now has SEVEN coverage points: existence
+    (anvilBlockNumber), identity-network-expected
+    (anvilChainId), identity-client (anvilClientVersionMentionsAnvil),
+    block shape (anvilLatestBlockSensible), fee market
+    (anvilGasPricePresent), RPC-method-consistency
+    (anvilNetworkVersionMatchesChainId — NEW), economic
+    anchor (rateSanity).
+
 - **slice 4d-scenarios-more (apiUnifiedChartXCacheTtlPresent)**
-  (this iteration, on the api side) — second response-
+  (previous iteration, on the api side) — second response-
   HEADER probe in the catalog:
 
   * Sister to apiUnifiedChartHasObservabilityHeaders

@@ -715,10 +715,21 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 44 invariants (api side)**: 12 api-internal +
-      26 indexer probes + 6 chain-layer. 144 smoke tests
+      **Now 45 invariants (api side)**: 12 api-internal +
+      26 indexer probes + 7 chain-layer. 149 smoke tests
       green.
-      `apiUnifiedChartXCacheTtlPresent` added this slice
+      `anvilNetworkVersionMatchesChainId` added this slice
+      — seventh chain-layer invariant; chain-RPC-CONSISTENCY
+      check. Asserts net_version (decimal) and eth_chainId
+      (hex) numerically agree. Orthogonal to anvilChainId
+      (which asserts the EXPECTED value 0x64); this asserts
+      CONSISTENCY between the two RPC methods regardless
+      of what they equal. Catches fork-rebase that updates
+      one but not the other; reverse-proxy misconfig
+      routing them to different upstreams; mock fixtures
+      hardcoding one but not the other.
+
+      `apiUnifiedChartXCacheTtlPresent` (previous slice)
       — second response-HEADER probe in the catalog.
       Sister to apiUnifiedChartHasObservabilityHeaders
       (X-Cache + X-Response-Time); this covers X-Cache-TTL.
