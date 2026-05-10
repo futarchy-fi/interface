@@ -13,12 +13,13 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 34 |
+| Iterations completed | 35 |
 | PRs catalogued | **42 / 42 (full coverage)** — repo PRs span #23..#65 with one gap at #38; no PRs #1-22 exist |
 | PRs classified | 42 |
-| Tests added | 343 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window + 14 impact-formula + 11 proposal-resolution-bucketing + 6 footer-links + 16 format-number + 5 asset-refs + 19 precision-formatter + 20 image-utils + 10 retry-backoff + 11 contract-addresses + 47 json-config-validity + 11 subgraph-endpoints + 16 rpc-config + 11 sqrt-price-x96 + 12 sdai-rate-config + 21 snapshot-api + 18 safe-tx-receipt + 18 is-safe-wallet + 24 best-rpc-cache — all passing) |
+| Tests added | 357 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window + 14 impact-formula + 11 proposal-resolution-bucketing + 6 footer-links + 16 format-number + 5 asset-refs + 19 precision-formatter + 20 image-utils + 10 retry-backoff + 11 contract-addresses + 47 json-config-validity + 11 subgraph-endpoints + 16 rpc-config + 11 sqrt-price-x96 + 12 sdai-rate-config + 21 snapshot-api + 18 safe-tx-receipt + 18 is-safe-wallet + 24 best-rpc-cache + 14 seeded-random — all passing) |
 | Misleading comments surfaced | `src/utils/snapshotApi.js` quorum-percent docstring claims `89.7014 → 89.6%` but actual code yields `89.7%` (floor at 1-decimal precision, not 0). Pinned in snapshot-api.test.mjs |
-| Dead-code surfaced | `src/utils/formatters.js` (formatForDisplay/formatPrice/formatBalance/formatPercentage) has zero callers; also uses ethers v5 `ethers.utils.parseUnits` API while the installed ethers is v6 — would silently throw if ever called (try/catch returns '0') |
+| Dead-code surfaced | `src/utils/formatters.js` (formatForDisplay/formatPrice/formatBalance/formatPercentage) has zero callers; also uses ethers v5 `ethers.utils.parseUnits` API while the installed ethers is v6 — would silently throw if ever called (try/catch returns '0'). **NEW (iter 35)**: `src/utils/MarkdownParser.js` has zero importers AND executes `console.log(html)` at module evaluation (lines 60-62); pinned in `seeded-random.test.mjs` as a hazard ratchet — if any code path ever imports it, console output runs in production. |
+| Code-smell surfaced (cross-file dup) | `src/components/futarchyFi/marketPage/MarketCharts.jsx:28-37` duplicates the `SeededRandom` class inline (the canonical lives at `src/utils/seededRandom.js`) — pinned cross-file equality in `seeded-random.test.mjs`; drift means two charts of the same proposal produce different visual jitter. |
 | Known gaps documented | 3 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup partial — 10 imports remain**; **6 broken `/assets/*` refs in production callers — see asset-refs.test.mjs baseline**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
