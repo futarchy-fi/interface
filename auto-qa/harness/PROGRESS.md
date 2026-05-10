@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep** on api side (interface-dev stub fixed: path/port/anvil-dep/install-command/Node-version; activation is now atomic 4c-activate). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate** on api side (`docker compose config --services` returns 7; full app stack — anvil + api + 4 indexer services + Next.js dev server — structurally validated). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1760,3 +1760,36 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     potentially 4c-verify). Next: 4c-activate (one-step
     uncomment) OR return to 4b-verify (daemon-required
     smoke).
+
+- **slice 4c-activate** (this iteration, on the api side) —
+  the interface-dev block is UNCOMMENTED.
+  `docker compose config --services` returns 7. Atomic
+  one-step uncomment per slice 4c-prep; no edits to the
+  block itself.
+
+  - **Merged config verified via `docker compose config`**:
+    depends_on (anvil healthy + api started); env
+    (NEXT_PUBLIC_RPC_URL=http://anvil:8545,
+    NEXT_PUBLIC_API_URL=http://api:3031); image
+    (node:22-alpine); command (sh -c conditional npm install
+    + `exec npx next dev --hostname 0.0.0.0 --port 3000`);
+    bind mount of `${INTERFACE_PATH:-../../../interface}` +
+    named volume `interface-node-modules` for Linux-isolated
+    node_modules.
+
+  - **What's still pending in slice 4**:
+    * 4c-verify (Docker daemon required, mostly human):
+      bring up the stack and curl http://localhost:3010 to
+      confirm next dev is reachable. CHOKIDAR_USEPOLLING=true
+      if HMR doesn't fire on host edits.
+    * 4d (orchestrator service): the Phase 0 stub has the
+      same kinds of bugs as 4c's stub, AND a deeper scope
+      issue — ARCHITECTURE.md envisions an orchestrator that
+      drives anvil's clock + sends txs + runs cross-layer
+      assertions, but the assertion scripts (orchestrator/
+      invariants.mjs) don't exist yet. Slice 4d will need
+      both compose wiring AND scenario script development.
+    * 4e (`docker compose up -d` acceptance gate): trivial
+      after 4c-verify + 4d.
+
+  - Slice 4 progress: ~58% done (8 of ~13+ sub-slices total).

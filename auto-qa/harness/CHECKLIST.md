@@ -657,11 +657,19 @@ freshly-generated addresses as recipients; documented in
       Also added `interface-node-modules` named volume to
       keep Linux node_modules separate from host's macOS-
       binary tree.
-- [ ] **4c-activate — uncomment the (now-correct)
-      interface-dev service block.** A one-step uncomment;
-      no edits needed thanks to 4c-prep. Activation gate:
-      `INTERFACE_PATH` env (defaults to `../../../interface`).
-      Adds a 7th service to the stack: `interface-dev`.
+- [x] **4c-activate — interface-dev block UNCOMMENTED**
+      (api side, commit pending). `docker compose config
+      --services` returns 7. Merged config verified:
+      depends_on (anvil healthy + api started), env
+      (NEXT_PUBLIC_*), command (conditional install + next
+      dev --hostname 0.0.0.0), bind mount + named-volume
+      isolation for node_modules.
+- [ ] **4c-verify — daemon-required smoke** (human task):
+      `docker compose up -d interface-dev` (multi-min npm
+      install on first run), then `curl
+      http://localhost:3010` should serve the futarchy app.
+      CHOKIDAR_USEPOLLING=true is the standard fallback if
+      HMR fails over the bind-mount FS layer.
 - [ ] **4d — orchestrator service** (compose driver for the
       cross-layer assertions).
 - [ ] **4e — single `docker compose up -d`** brings the full
