@@ -689,21 +689,18 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 39 invariants (api side): 9 api-internal + 26
-      indexer probes + 4 chain-layer.
-      `registryHasFutarchyProdAggregator` added this
-      slice — high-value PINNING check. Asserts the
-      indexer has the production futarchy aggregator
-      (0xc5eb43d5…d4fc1, hardcoded in 3 api source
-      files: registry-adapter.js, unified-chart.js,
-      market-events.js — the api literally cannot
-      function without this aggregator's data).
-      Registry-side analog of anvilChainId — chain
-      pin proves we forked Gnosis; this pin proves
-      the indexer was bootstrapped with the right
-      chain + start_block + contract config. Catches
-      indexer started against wrong block, wrong
-      chain, or data wipe missing re-sync. 121 smoke
+      **Now 40 invariants (milestone, api side)**: 10
+      api-internal + 26 indexer probes + 4 chain-layer.
+      `apiUnifiedChartHasObservabilityHeaders` added
+      this slice — first response-HEADER validation in
+      the catalog. Asserts X-Cache ∈ {HIT, MISS} AND
+      X-Response-Time matches /^\d+ms$/. New pattern:
+      header probe (vs body probe). Catches
+      ops-observability regressions invisible to body-
+      only checks: refactor that drops cache layer
+      instrumentation; refactor that adds a third state
+      ('STALE') without telling ops; timing regression
+      that emits 'NaN ms' or raw integer. 126 smoke
       tests green. Still to add: candlesAggregation
       (Candle.volume = sum of contained Swap amounts
       within period), full chartShape ID-pair match,

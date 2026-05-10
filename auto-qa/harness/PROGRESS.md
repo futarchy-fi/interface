@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **39 invariants**: 9 api-internal + 26 indexer + 4 chain-layer; first registry-side hardcoded-address PINNING check landed; 121 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **40 invariants (milestone)**: 10 api-internal + 26 indexer + 4 chain-layer; first response-HEADER validation landed; 126 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,61 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (apiUnifiedChartHasObservabilityHeaders)**
+  (this iteration, on the api side) — **40-invariant
+  milestone reached**. First response-HEADER validation
+  in the catalog:
+  * `apiUnifiedChartHasObservabilityHeaders` — calls
+    `/api/v2/proposals/:id/chart`, asserts response
+    has `X-Cache: HIT|MISS` AND `X-Response-Time:
+    Nms` headers.
+
+  - **Why this is a distinct probe class**: every
+    prior api invariant probed status code or body
+    shape. The unified-chart handler emits
+    observability headers on every code path (cached
+    HIT + fresh MISS); ops dashboards consume them
+    for cache-hit rate and p50/p95 latency. A
+    regression that drops them is INVISIBLE to body
+    checks — body still parses fine.
+
+  - **Bug shapes caught**: removal of cache layer
+    instrumentation; addition of third state
+    ('STALE', 'BYPASS') without telling ops; format
+    regressions emitting 'NaN ms' or raw integer.
+
+  - **Test 3 demonstrates the gap closure**: drop the
+    X-Cache header. apiUnifiedChartShape STILL passes
+    since body shape is unchanged; only this header
+    probe catches the broken instrumentation.
+
+  - **Fixture extension**: chart handler now emits
+    `x-cache` and `x-response-time` headers
+    unconditionally (matching production); new
+    `unifiedChartXCache` / `unifiedChartXResponseTime`
+    knobs (set to null to drop).
+
+  - **Smoke tests**: 5 new (happy MISS, happy HIT,
+    X-Cache dropped — verifies apiUnifiedChartShape
+    STILL passes, X-Cache='STALE' invalid value,
+    X-Response-Time wrong format); 126/126 pass
+    (was 121). **40 invariants** total: 10 api-
+    internal + 26 indexer + 4 chain-layer.
+
+  - Slice 4 progress: 40-invariant milestone. Catalog
+    composition by KIND of correctness: existence,
+    validation, data-plane shape, single-row data
+    shape, multi-row data shape, cross-layer match,
+    cross-entity FK, cross-entity time coherence,
+    chain-layer, passthrough liveness, economic,
+    magnitude bounds, enum validation, pinning,
+    AND now response headers (NEW). Remaining
+    bot-doable: candlesAggregation, full chartShape
+    match, conservation, monotonicity (TWAP),
+    cross-run rate monotonicity.
+
 - **slice 4d-scenarios-more (registryHasFutarchyProdAggregator)**
-  (this iteration, on the api side) — high-value
+  (previous iteration, on the api side) — high-value
   PINNING check at the registry layer:
   * `registryHasFutarchyProdAggregator` — asserts the
     indexer has the production futarchy aggregator at
