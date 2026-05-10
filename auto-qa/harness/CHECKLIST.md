@@ -689,21 +689,23 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 23 invariants (api side): 5 api-internal + 15
+      Now 24 invariants (api side): 5 api-internal + 16
       indexer probes (2 `__typename` liveness + 6
       data-aware coverage + 4 single-row data-SHAPE +
-      2 multi-row data-SHAPE + 1 CROSS-LAYER MATCH:
-      `apiCandlesMatchesDirect` added this slice — first
-      true api↔indexer agreement check. Issues the same
-      GraphQL query via api passthrough AND direct in
-      parallel; compares ids + times pair-wise. Catches
-      api caching drift, adapter rewriting, schema-
-      translation bugs that no other invariant sees) +
-      3 chain-layer probes. 56 smoke tests green. Still
-      to add: probabilityBounds, candlesAggregation
-      (Candle aggregates derive correctly from contained
-      Swaps), chartShape, conservation, cross-run
-      monotonicity on rateSanity.
+      2 multi-row data-SHAPE + 2 CROSS-LAYER MATCH:
+      `apiCandlesMatchesDirect` (previous slice) +
+      `apiRegistryMatchesDirect` added this slice (single
+      query touches all 3 registry entity types
+      proposalEntities/organizations/aggregators; parallel
+      to api + direct, per-entity length + pair-wise id
+      compare. Catches per-entity cache drift like "api
+      caches proposalEntities but not organizations" that
+      a single-entity check would miss)) + 3 chain-layer
+      probes. 61 smoke tests green. Still to add:
+      probabilityBounds, candlesAggregation (Candle
+      aggregates derive correctly from contained Swaps),
+      chartShape (api unified-chart vs indexer raw),
+      conservation, cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.

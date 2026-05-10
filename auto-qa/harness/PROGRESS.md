@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 23 invariants: 5 api-internal + 15 indexer + 3 chain-layer; first true api↔indexer MATCH check landed; 56 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 24 invariants: 5 api-internal + 16 indexer + 3 chain-layer; both candles + registry now have api↔direct MATCH coverage; 61 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,71 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (apiRegistryMatchesDirect)**
+  (this iteration, on the api side) — registry analog of
+  the previous iteration's apiCandlesMatchesDirect:
+  * `apiRegistryMatchesDirect` — single GraphQL query
+    touches all THREE registry entity types
+    (proposalEntities + organizations + aggregators) in
+    one round-trip, then per-entity length + per-entity
+    pair-wise id check.
+
+  - **Why a single 3-entity query (vs three single-entity
+    invariants)**: per-entity-type cache granularity is
+    a real failure mode — api may cache proposalEntities
+    while keeping organizations fresh. Single multi-
+    entity query catches the inconsistency in one probe
+    AND attributes the failure to the SPECIFIC entity
+    that drifted (error message names "organizations" or
+    "aggregators[0].id" rather than "registry mismatch").
+
+  - **Bug classes caught (in addition to the
+    candles-side ones from previous iteration)**:
+    * Per-entity cache granularity: api caches
+      proposalEntities but not organizations (any subset
+      combination). Wholesale-cache or wholesale-fresh
+      passes; selective caching fails.
+    * Adapter rewriting per-entity: a regression that
+      only mutates aggregators (e.g., metadata
+      transformer applied to wrong entity type) lights
+      up specifically.
+    * Whole-row swap: same length, different rows.
+      Length-only check would miss this; pair-wise id
+      check catches it.
+
+  - **Fixture refactor**: extracted `buildRegistry()`
+    alongside the buildPools / buildSwaps / buildCandles
+    builders. /registry/graphql now returns full
+    registry data by default (was just `{__typename}`);
+    routed through new `apiRegistryDriftFn` hook for
+    drift simulation. /registry-direct/graphql
+    simplified to use the same builder. Existing
+    apiCanReachRegistry invariant still passes (only
+    checks `__typename === 'Query'`, which the richer
+    response still includes).
+
+  - **Smoke tests**: 5 new (happy match, all-empty
+    vacuous, organizations length mismatch / per-entity
+    drift, aggregator id rewrite / adapter mutation,
+    proposalEntities WHOLE-row swap / same length but
+    different rows); 61/61 pass (was 56). Now 24
+    invariants: 5 api-internal + 16 indexer (2
+    liveness + 6 data-aware coverage + 4 single-row
+    data-shape + 2 multi-row data-shape + 2 cross-layer
+    MATCH) + 3 chain-layer.
+
+  - Slice 4 progress: ~94% (24 of ~26 sub-slices). Both
+    candles AND registry now have api↔direct match
+    coverage (parity with existence + data-aware
+    probes). Symmetric build-out continues — as candles
+    got apiCandlesMatchesDirect last iteration,
+    registry now gets the analog. Next natural moves
+    are cross-entity invariants like candlesAggregation
+    that combine multiple entity types from a single
+    endpoint.
+
 - **slice 4d-scenarios-more (apiCandlesMatchesDirect)**
-  (this iteration, on the api side) — first true
+  (previous iteration, on the api side) — first true
   api↔indexer MATCH check in the catalog:
   * `apiCandlesMatchesDirect` — issues the same GraphQL
     query against `apiUrl/candles/graphql` AND the
