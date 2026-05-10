@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 3 — slices 1+1.5 + Spike-001 complete in futarchy-api. RPC compat verified, bootstrap path identified. UI side still waits for Phase 4-5. |
+| Phase | 3 — slices 1+1.5+2 in futarchy-api: ADR + spike + sibling clone discovery + start-indexers wrapper (5 contract tests pass). UI side still waits for Phase 4-5. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
