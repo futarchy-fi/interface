@@ -689,20 +689,18 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 37 invariants (api side): 9 api-internal + 24
+      Now 38 invariants (api side): 9 api-internal + 25
       indexer probes + 4 chain-layer.
-      `swapAmountsBoundedAbove` added this slice —
-      magnitude-upper-bound for swap amounts. Closes
-      the swap-side magnitude gap (candle side had
-      probabilityBounds + candlePricesNonNegative;
-      swap side only had >0 + range checks). Asserts
-      amountIn AND amountOut < 1e15 — catches raw
-      uint256 leaks (parseFloat returning 1e18) and
-      token-decimal misalignment. Magnitude-sanity
-      family now SYMMETRIC across candle and swap
-      sides (each has lower-bound + upper-bound).
-      113 smoke tests green. Still to add:
-      candlesAggregation (Candle.volume = sum of
+      `poolTypeIsValidEnum` added this slice — first
+      indexer-side enum validation. For all pools
+      (first 50), asserts type ∈ {CONDITIONAL,
+      PREDICTION, EXPECTED_VALUE}. Catches schema
+      drift, null types, and typos like "PRDICTION"
+      that pass every other check while being silently
+      dropped by the api adapter. New pattern:
+      iterate-all-rows enum check (vs latest-row or
+      count-only). 118 smoke tests green. Still to
+      add: candlesAggregation (Candle.volume = sum of
       contained Swap amounts within period), full
       chartShape ID-pair match, conservation, TWAP
       monotonicity, cross-run rate monotonicity.

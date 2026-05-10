@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **37 invariants**: 9 api-internal + 24 indexer + 4 chain-layer; magnitude-upper-bound check closes the swap-side gap; 113 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **38 invariants**: 9 api-internal + 25 indexer + 4 chain-layer; first indexer-side enum validation landed; 118 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,56 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (poolTypeIsValidEnum)**
+  (this iteration, on the api side) — first
+  indexer-side enum validation:
+  * `poolTypeIsValidEnum` — for all pools (first 50),
+    asserts type ∈ {CONDITIONAL, PREDICTION,
+    EXPECTED_VALUE} (the set sourced from
+    unified-chart.js's findPoolByOutcome()).
+
+  - **Why this catches what other invariants miss**:
+    A typo'd type like "PRDICTION":
+    * candlesHasPools: PASSES (existence is fine)
+    * swap/candlePoolReferentialIntegrity: PASSES
+      (FK resolves)
+    * probabilityBounds: PASSES (vacuous on
+      non-PREDICTION; "PRDICTION" ≠ "PREDICTION",
+      so skipped)
+    * api adapter: SILENTLY DROPS the pool → blank
+      UI for that proposal
+    Test 4 verifies this exact scenario.
+
+  - **New pattern: iterate-all-rows enum check**.
+    Most existing indexer checks look at `first 1`
+    or use COUNT. This one iterates all returned
+    rows and validates each. Useful template for
+    future per-row field-validation invariants
+    (outcomeSide ∈ {YES, NO}, address fields, etc.).
+
+  - **Bug shapes caught**: schema migration adds 4th
+    type (e.g., 'AMM_V2'); indexer regression
+    returns null type; typo'd type values;
+    string-vs-int encoding regression.
+
+  - **No new fixture knobs**: existing `poolType`
+    knob covers all cases.
+
+  - **Smoke tests**: 5 new (PREDICTION default,
+    CONDITIONAL, vacuous-no-pools, typo "PRDICTION"
+    — verifies candlesHasPools + probabilityBounds
+    STILL pass, null type / handler regression);
+    118/118 pass (was 113). Now 38 invariants:
+    9 api-internal + 25 indexer + 4 chain-layer.
+
+  - Slice 4 progress: pool-entity coverage now spans
+    existence (candlesHasPools) + FK from child
+    entities (swap/candle FK) + per-pool field
+    validation (poolTypeIsValidEnum). Three layers
+    of pool checking.
+
 - **slice 4d-scenarios-more (swapAmountsBoundedAbove)**
-  (this iteration, on the api side) — closes the
+  (previous iteration, on the api side) — closes the
   swap-side magnitude gap:
   * `swapAmountsBoundedAbove` — for the latest swap,
     asserts amountIn AND amountOut < 1e15.
