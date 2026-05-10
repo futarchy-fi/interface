@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 3 — slices 1+1.5+2+3+4 in futarchy-api. Orchestration smoke shipped (skips when daemon down). 25 smoke tests pass + 3 skips. Slice 5 (literal roundtrip) needs bootstrap-timing design. UI side waits for Phase 4-5. |
+| Phase | 3 — slices 1-5 in futarchy-api: roundtrip invariant test ships (anvil mines → indexer follows via bootstrapAfterStart). 25 smoke tests pass + 4 skips (all docker-up-gated). UI side waits for Phase 4-5. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
