@@ -44,165 +44,22 @@ import {
     installWalletStub,
     nStubWallets,
 } from '../fixtures/wallet-stub.mjs';
+import {
+    REGISTRY_GRAPHQL_URL,
+    CANDLES_GRAPHQL_URL,
+    PROBE_ORG_NAME,
+    PROBE_POOL_YES,
+    PROBE_POOL_NO,
+    makeGraphqlMockHandler,
+    makeCandlesMockHandler,
+    fakeProposal,
+    fakePoolBearingProposal,
+} from '../fixtures/api-mocks.mjs';
 
 const STUB_RPC_URL =
     process.env.HARNESS_FRONTEND_RPC_URL ||
     process.env.HARNESS_ANVIL_URL ||
     'http://localhost:8546';
-
-// Endpoints the /companies page POSTs to (see
-// `src/config/subgraphEndpoints.js`).
-const REGISTRY_GRAPHQL_URL = 'https://api.futarchy.fi/registry/graphql';
-const CANDLES_GRAPHQL_URL  = 'https://api.futarchy.fi/candles/graphql';
-
-// Two distinctive pool addresses used by slice 4c v3 to exercise the
-// `collectAndFetchPoolPrices` → candles → `attachPrefetchedPrices`
-// pipeline. Vanishingly unlikely to appear naturally; if either shows
-// up in a candles query, we know the chain is wired correctly.
-const PROBE_POOL_YES = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01';
-const PROBE_POOL_NO  = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa02';
-const PROBE_PROPOSAL_ADDRESS = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-
-// Distinctive probe names — vanishingly unlikely to appear naturally
-// in any real org/proposal — so we can assert they came from our mock.
-const PROBE_AGG_NAME = 'HARNESS-PROBE-AGG-001';
-const PROBE_ORG_NAME = 'HARNESS-PROBE-ORG-001';
-const PROBE_AGG_ID = '0xc5eb43d53e2fe5fdde5faf400cc4167e5b5d4fc1'; // DEFAULT_AGGREGATOR
-const PROBE_ORG_ID = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
-
-// Build a route handler that dispatches on the GraphQL operation
-// embedded in the POST body. Returns the canned response for each
-// operation and 200/empty for anything unrecognized.
-//
-// Parameters:
-//   - proposals       — proposalentities payload (4a uses [], 4b uses
-//                       a mixed-visibility list)
-//   - orgMetadata     — string written to organizations[0].metadata
-//                       (parsed via JSON.parse by the consumer hook;
-//                       4c uses {chain: '10'} to flip the ChainBadge)
-//   - onCall          — observer for the operation name, useful in
-//                       failure logs
-function makeGraphqlMockHandler({ proposals = [], orgMetadata = null, onCall } = {}) {
-    return async (route) => {
-        const body = JSON.parse(route.request().postData() || '{}');
-        const q = body.query || '';
-        onCall?.(q);
-
-        let data;
-        if (q.includes('aggregator(id:')) {
-            data = {
-                aggregator: {
-                    id:          PROBE_AGG_ID,
-                    name:        PROBE_AGG_NAME,
-                    description: 'Synthetic aggregator for harness slice 4',
-                    metadata:    null,
-                },
-            };
-        } else if (q.includes('organizations(where:')) {
-            data = {
-                organizations: [{
-                    id:           PROBE_ORG_ID,
-                    name:         PROBE_ORG_NAME,
-                    description:  'Probe org returned by mocked GraphQL',
-                    metadata:     orgMetadata,
-                    metadataURI:  null,
-                    owner:        '0x0000000000000000000000000000000000000000',
-                    editor:       '0x0000000000000000000000000000000000000000',
-                }],
-            };
-        } else if (q.includes('proposalentities(where:')) {
-            data = { proposalentities: proposals };
-        } else {
-            data = {};
-        }
-
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({ data }),
-        });
-    };
-}
-
-// Build a stub `proposalentity` row matching the shape
-// useAggregatorCompanies expects (id + metadata + organization{id}).
-// `metadataExtra` overrides on top of the base metadata object so
-// callers can pin `archived: true` / `visibility: 'hidden'` / etc.
-function fakeProposal(idSuffix, metadataExtra = {}) {
-    return {
-        id: `0xprop${String(idSuffix).padStart(40, '0').slice(-40)}`,
-        metadata: JSON.stringify(metadataExtra),
-        organization: { id: PROBE_ORG_ID },
-    };
-}
-
-// Build a stub `proposalentity` row matching the
-// `useAggregatorProposals.PROPOSALS_QUERY` shape (the carousel-side
-// fetcher), which differs from `useAggregatorCompanies`: it includes
-// `displayNameEvent`, `displayNameQuestion`, `description`,
-// `proposalAddress`, `owner`. Used by slice 4c v3 to exercise the
-// HighlightCarousel → collectAndFetchPoolPrices → candles pipeline.
-function fakePoolBearingProposal(opts = {}) {
-    const {
-        idSuffix = '01',
-        proposalAddress = PROBE_PROPOSAL_ADDRESS,
-        poolYes = PROBE_POOL_YES,
-        poolNo = PROBE_POOL_NO,
-        title = 'HARNESS-PROBE-EVENT-001',
-        chain = 100,
-    } = opts;
-    return {
-        id: `0xprop${String(idSuffix).padStart(40, '0').slice(-40)}`,
-        displayNameEvent:    title,
-        displayNameQuestion: title,
-        description:         'Harness probe event for slice 4c v3',
-        metadata: JSON.stringify({
-            chain: String(chain),
-            conditional_pools: {
-                yes: { address: poolYes },
-                no:  { address: poolNo  },
-            },
-        }),
-        metadataURI:    null,
-        proposalAddress,
-        owner:          '0x0000000000000000000000000000000000000000',
-        organization:   { id: PROBE_ORG_ID },
-    };
-}
-
-// Build a route handler for the candles GraphQL endpoint
-// (https://api.futarchy.fi/candles/graphql). `prices` is a map of
-// lowercased pool address → numeric price. Any pool not in the map
-// is omitted from the response (caller chooses default vs price).
-function makeCandlesMockHandler({ prices = {}, onCall } = {}) {
-    return async (route) => {
-        const body = JSON.parse(route.request().postData() || '{}');
-        const q = body.query || '';
-        onCall?.(q);
-
-        // The bulk fetcher's query shape:
-        //   pools(where: { id_in: ["0x...", "0x..."] }) { id, name, price, type, outcomeSide }
-        // Extract the addresses from the inline `id_in` list so the
-        // mock can return only what was asked.
-        const idMatches = [...q.matchAll(/"(0x[a-fA-F0-9]{40})"/g)].map(m => m[1].toLowerCase());
-
-        const pools = idMatches
-            .filter((addr) => Object.prototype.hasOwnProperty.call(prices, addr))
-            .map((addr) => ({
-                id:          addr,
-                name:        `harness-pool-${addr.slice(2, 10)}`,
-                price:       prices[addr],
-                type:        'CONDITIONAL',
-                outcomeSide: 'YES',
-            }));
-
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({ data: { pools } }),
-        });
-    };
-}
 
 test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
     test.beforeEach(({}, testInfo) => {

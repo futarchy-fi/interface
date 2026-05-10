@@ -60,5 +60,6 @@ running assertions in registration order.
 
 ## Current scenarios
 
-_None landed yet (Phase 6 slice 1 set up the format; slice 2 lands
-the first scenario)._
+| #  | File                              | Bug shape                                  | Notes |
+|----|-----------------------------------|--------------------------------------------|-------|
+| 01 | `01-stale-price-shape.scenario.mjs` | PR #64 stale-price-but-API-healthy       | Lifted from Phase 5 slice 4c v3b. Mocks both registry + candles GraphQL; asserts "0.4200 SDAI" renders in the EventHighlightCard via the prefetched-price short-circuit. |

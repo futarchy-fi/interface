@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase **6 slice 1** landed (scenario format ADR + structure). Phase 5: 17/17 browser tests green; canonical DOM↔API invariant working end-to-end through 6 layers. Phase 6 slice 1: ADR-002 picks executable `.scenario.mjs` modules over JSON snapshot or full state dump (rationale: reuses the existing fixture vocabulary; Phase 6's "first real bug shape replayable" goal is achievable today via mocked API + DOM assertions). `scenarios/` directory + README in place; first actual scenario is slice 2. |
+| Phase | 5 done + Phase 6 slices **1+2** landed. Slice 1: ADR-002 picks executable `.scenario.mjs` modules + scenarios/ structure. Slice 2: **first real scenario captured** — `01-stale-price-shape.scenario.mjs` lifts slice 4c v3b's mocks + assertions into the Scenario format. Wrapper spec `flows/scenarios.spec.mjs` auto-discovers scenarios and emits one Playwright test per file. Mock helpers extracted into shared `fixtures/api-mocks.mjs` so the spec + scenarios reuse them. **Phase 6's "first real bug shape replayable" gate is now met.** 18/18 browser tests green (spec suite + scenario suite both passing). |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -899,14 +899,65 @@ on-ramps to it.
     * Catalog generation script (`SCENARIOS.md` index — pin
       when ≥3 scenarios exist)
 
+- **slice 2** (this iteration) — first scenario captured +
+  wrapper spec runner. **Phase 6's "first real bug shape
+  replayable" gate is now MET.**
+
+  - **Mock-helper extraction**: moved
+    `makeGraphqlMockHandler`, `makeCandlesMockHandler`,
+    `fakeProposal`, `fakePoolBearingProposal`, and the PROBE_*
+    constants out of `flows/dom-api-invariant.spec.mjs` into a
+    new shared module `fixtures/api-mocks.mjs`. The spec file
+    now imports from there. Rationale: scenarios need the same
+    helpers and importing from a spec file is awkward.
+
+  - **First scenario** —
+    `scenarios/01-stale-price-shape.scenario.mjs`. Lifts slice 4c
+    v3b's exact mock setup + assertions into the Scenario format
+    defined by ADR-002. Guards the PR #64 stale-price-but-API-
+    healthy bug shape (mocked candles GraphQL → "0.4200 SDAI" via
+    EventHighlightCard's prefetched-price short-circuit).
+
+  - **Wrapper spec** — `flows/scenarios.spec.mjs`:
+    * Top-level `await` discovers `scenarios/*.scenario.mjs`
+      and dynamically imports each (Playwright sees the full test
+      list at collection time).
+    * For each scenario, emits one
+      `test('<name> — <bugShape>', …)` that:
+      1. Skips if `HARNESS_NO_WEBSERVER=1` (scenarios always need
+         the dev server)
+      2. Installs the default wallet stub (every scenario needs
+         `window.ethereum` for wagmi/RainbowKit hydration)
+      3. Applies each entry of `scenario.mocks` via `context.route`
+      4. Navigates to `scenario.route`
+      5. Runs `scenario.assertions[i](page)` in order
+
+  - **Validated end-to-end** — 7 tests pass when run together
+    (6 dom-api-invariant + 1 scenario): the extracted helpers
+    work in both contexts; the scenario format produces a
+    correct test from a pure data structure. Wall-clock 22.6s
+    with cold compile.
+
+  - **`scenarios/README.md`** updated with a "Current scenarios"
+    table indexing the captured scenarios. Becomes the human-
+    readable bug-shape catalog as scenarios accumulate.
+
 **Phase 6 — remaining slices:**
 
-- **slice 2** — first scenario captured + wrapper spec
-  `flows/scenarios.spec.mjs` that auto-discovers every
-  `*.scenario.mjs` and emits one Playwright `test()` per scenario.
-  The first scenario is the stale-price-but-API-healthy class
-  (PR #64 shape) — lift the slice 4c v3b assertions into a
-  `01-stale-price-shape.scenario.mjs` file.
 - **slice 3** — `scenarios:catalog` script that emits a
   `SCENARIOS.md` index from each scenario's `bugShape`. Worth
-  doing once we have ≥3 scenarios.
+  doing once we have ≥3 scenarios — for now the README table is
+  enough.
+
+**Smoke summary (UI side, post-Phase 6 slice 2):**
+
+```
+Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
+Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
+Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
+Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
+Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
+Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
+Phase 6 scenarios (1 case, chromium + Next.js)         ✓ ~3s
+                                       TOTAL: 27 pass + 0 skip
+```
