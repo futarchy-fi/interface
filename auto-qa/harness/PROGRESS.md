@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **35 invariants**: 8 api-internal + 23 indexer + 4 chain-layer; universal price-sanity check closes the gap left by ordering+bounds invariants; 105 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **36 invariants**: 9 api-internal + 23 indexer + 4 chain-layer; first cross-layer count consistency for unified-chart endpoint landed; 109 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,62 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (chartCandleCountsBoundedByDirect)**
+  (this iteration, on the api side) — first true
+  cross-layer count check for unified-chart endpoint:
+  * `chartCandleCountsBoundedByDirect` — issues
+    parallel calls to api `/api/v2/proposals/:id/
+    chart` AND direct candles indexer; asserts
+    `sum(api.candles.{yes,no}.length) ≤ direct
+    candles count`.
+
+  - **Why ≤ rather than =**: api candles ⊆ direct
+    candles. The api FILTERS direct candles by the
+    proposal's YES + NO pools; direct query returns
+    ALL candles in the indexer. So api count is a
+    strict subset.
+
+  - **Bug shapes caught**:
+    * api fabricates extra candles (transform
+      regression duplicates rows)
+    * Filter regression — api returns ALL candles
+      instead of just the proposal's pools
+    * Cache-key mismatch returns a different (larger)
+      proposal's candles
+
+  - **What this is NOT** (deferred to future
+    candlesAggregation): the full per-id pair-wise
+    compare (requires modeling pool-filtering logic
+    in the test) and sum-of-volumes reconciliation.
+    This is the COUNT-bounded version (lower-cost
+    first step toward documented chartShape match).
+
+  - **Spot exclusion**: api.candles.spot comes from
+    a DIFFERENT source (CoinGecko or spot-candles
+    indexer), not the candles indexer — excluded
+    from comparison. Yes + no only.
+
+  - **Smoke tests**: 4 new (happy default 0+0 ≤ 1,
+    vacuous both 0, happy subset 1+1 ≤ 5, failure
+    filter regression 5+5 > 1 — verifies
+    apiUnifiedChartShape STILL passes since shape
+    is fine, only the count relationship catches
+    it). Test fix: bumped candlesCandlesCount to 3
+    in the previously-passing apiUnifiedChartShape
+    happy-with-data test (which had yes=2 + no=1 = 3
+    but default direct had 1). 109/109 pass (was
+    105). Now 36 invariants: 9 api-internal + 23
+    indexer + 4 chain-layer.
+
+  - Slice 4 progress: cross-layer match family now
+    spans 3 patterns (passthrough match, multi-
+    entity passthrough match, filtered subset).
+    Remaining: full chartShape ID-pair match,
+    candlesAggregation, conservation, monotonicity
+    (TWAP), cross-run rate monotonicity.
+
 - **slice 4d-scenarios-more (candlePricesNonNegative)**
-  (this iteration, on the api side) — universal
+  (previous iteration, on the api side) — universal
   price-sanity probe:
   * `candlePricesNonNegative` — for ALL pool types,
     asserts latest candle's open/high/low/close ≥ 0.

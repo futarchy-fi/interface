@@ -689,23 +689,25 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 35 invariants (api side): 8 api-internal + 23
+      Now 36 invariants (api side): 9 api-internal + 23
       indexer probes + 4 chain-layer.
-      `candlePricesNonNegative` added this slice —
-      universal price-sanity probe that closes a gap
-      left by candleOHLCOrdering + probabilityBounds.
-      Ordering passes when low+high are both negative
-      (low ≤ high holds for negatives), and
-      probabilityBounds only fires for PREDICTION pools
-      (and only checks close). This asserts all 4 OHLC
-      ≥ 0 for ANY pool type. Defense-in-depth even for
-      PREDICTION pools. 105 smoke tests green. Single-
-      row candle data-shape coverage now has 5
-      complementary checks (ordering, volumes, time
-      monotonic, prices non-negative, probability
-      bounds). Still to add: candlesAggregation,
-      chartShape full match, conservation, monotonicity
-      (TWAP), cross-run rate monotonicity.
+      `chartCandleCountsBoundedByDirect` added this
+      slice — first true cross-layer count check for
+      the unified-chart endpoint. Asserts
+      `sum(api.candles.{yes,no}.length) ≤ direct
+      candle count`. Catches api filter regression
+      (returns ALL candles instead of pool-filtered
+      subset) or transform fabrication (api invents
+      candles not in indexer). Cross-layer match
+      family now spans 3 patterns: passthrough match,
+      multi-entity passthrough match, filtered subset.
+      Bridges to documented full chartShape invariant.
+      109 smoke tests green. Still to add:
+      candlesAggregation (Candle.volume = sum of
+      contained Swap amounts within period), full
+      chartShape ID-pair match, conservation
+      (∑YES + ∑NO = ∑sDAI), monotonicity (TWAP),
+      cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
