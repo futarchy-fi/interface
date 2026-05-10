@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase **6 fully done** (slice 3 catalog generator landed: `scripts/scenarios-catalog.mjs` auto-emits `scenarios/SCENARIOS.md` from each scenario's `bugShape` field; 3 scenarios indexed today) + Phase 7 slices 1+2 (CANDLES branch) landed. 20/20 browser tests green. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 (3 chaos scenarios: registry-down, candles-down, **candles-partial**) landed. Latest: `04-candles-partial.scenario.mjs` mocks 2 events but CANDLES returns prices for only 1 — asserts the priced card renders "0.4200 SDAI" while the unpriced card falls back to "0.00 SDAI". WALLET-RPC and mid-flight-failure sub-slices deprioritized after investigation (low blast radius / DOM-indistinguishable from existing scenarios on /companies). 21/21 browser tests green (4 scenarios + 17 prior). |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1113,4 +1113,73 @@ Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
 Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
 Phase 6+7 scenarios (3 cases, chromium + Next.js)      ✓ ~5s
                                        TOTAL: 29 pass + 0 skip
+```
+
+- **slice 2 partial branch** (this iteration) — `04-candles-partial`
+  scenario. The "API is up but my data isn't in the answer" shape,
+  distinct from 03's "API didn't answer at all".
+
+  - **`scenarios/04-candles-partial.scenario.mjs`**: mocks
+    REGISTRY with TWO `fakePoolBearingProposal` rows (different
+    pool addresses). CANDLES returns prices ONLY for the first
+    pair; the second pair is omitted from the response (the
+    `makeCandlesMockHandler` filters by `Object.prototype.hasOwnProperty.call(prices, addr)`,
+    so an absent address is simply not in the returned `pools`
+    list — same shape as a real candles endpoint that hasn't
+    indexed those pools yet). Asserts the priced card renders
+    "0.4200 SDAI" while the unpriced card falls back to
+    "0.00 SDAI" AND both cards remain visible.
+
+  - **Bug-shapes guarded**:
+    * One missing price corrupting all (shared cache or
+      last-write-wins applies wrong price to multiple cards)
+    * Card disappearing when its price is missing (overzealous
+      filter hides events with null prices)
+    * Formatter crashes on null prices for unpriced card while
+      priced card renders fine (defensive-coding regression)
+    * Prices swapping between cards (cache-key /
+      address-comparison bug in `attachPrefetchedPrices`)
+
+  - **Two slice-2 sub-slices deprioritized after investigation**:
+    * **WALLET RPC failure**: the wallet stub handles
+      `eth_chainId` / `eth_accounts` /
+      `wallet_switchEthereumChain` LOCALLY (not via
+      `rpcPassthrough`), so wagmi/RainbowKit's auto-probe
+      surface doesn't actually hit `rpcUrl`. On `/companies`
+      (no swap, no message-sign) the wallet's RPC URL has
+      near-zero blast radius. Revisit when a scenario needs
+      to drive a real swap.
+    * **Mid-flight failure on /companies**: traced through
+      `useAggregatorCompanies` + `CompaniesPage.jsx` —
+      consumer drops the hook's `error` field, so partial-
+      success on REGISTRY's three-query pipeline lands at the
+      same DOM state as full failure ("No organizations found").
+      Indistinguishable from scenario 02; no new bug shape
+      captured. Re-evaluate on a market detail page.
+
+  - **Validated end-to-end**: 04 passes in 1.4s; all 4
+    scenarios together: 20.6s wall-clock with cold compile.
+    UI-side smoke now 30 pass + 0 skip.
+
+  - **Catalog regenerated**: `scripts/scenarios-catalog.mjs`
+    re-ran cleanly, `SCENARIOS.md` now indexes 4 scenarios.
+
+  - **Transient gotcha worth noting**: first run failed with
+    "Playwright Test did not expect test.describe() to be called
+    here" — turned out to be a stale dev-server / test-results
+    interaction, not a real problem with scenario 04. Killing
+    port 3000 and clearing `test-results/` fixed it. Adding to
+    the harness operational notes for future debugging.
+
+**Smoke summary (UI side, post-Phase 7 slice 2 partial-branch):**
+
+```
+Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
+Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
+Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
+Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
+Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
+Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
+Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
+                                       TOTAL: 30 pass + 0 skip
 ```

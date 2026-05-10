@@ -75,3 +75,4 @@ context that doesn't fit in a one-cell description).
 | 01 | `01-stale-price-shape.scenario.mjs` | Lifted from Phase 5 slice 4c v3b. The first scenario; proves the format end-to-end against the real futarchy app. |
 | 02 | `02-registry-down.scenario.mjs`     | First Phase 7 chaos primitive — REGISTRY out, carousel renders nothing. |
 | 03 | `03-candles-down.scenario.mjs`      | Phase 7 slice 2 — REGISTRY healthy, CANDLES out. Surfaced a harness-level finding: per-pool fallback hits the SAME endpoint as the bulk prefetcher, so a CANDLES outage takes both layers down at once. |
+| 04 | `04-candles-partial.scenario.mjs`   | Phase 7 slice 2 partial-branch — CANDLES is up but only returns prices for one of two events. Asserts the priced card renders "0.4200 SDAI" while the unpriced card falls back to "0.00 SDAI" — guards against partial-data shapes (one missing price corrupting all, card disappearing, prices swapping between cards). |

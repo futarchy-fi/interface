@@ -10,10 +10,11 @@ auto-discovers every `*.scenario.mjs` in this directory and emits one
 Playwright test per row. See [ADR-002](../docs/ADR-002-scenario-format.md)
 for the format definition.
 
-Total scenarios: **3**
+Total scenarios: **4**
 
 | #  | File                               | Bug shape                                                   | Route          | Description |
 |----|------------------------------------|-------------------------------------------------------------|----------------|-------------|
 | 01 | `01-stale-price-shape.scenario.mjs` | PR #64 stale-price-but-API-healthy | `/companies` | YES=0.42 from candles GraphQL flows through 6 layers of real React app code into the rendered DOM string "0.4200 SDAI". |
 | 02 | `02-registry-down.scenario.mjs` | hard-crash / hung-spinner / leaked-error on registry 5xx | `/companies` | Registry GraphQL returns 502; assert /companies degrades to the "No organizations found" empty state instead of crashing or hanging. |
 | 03 | `03-candles-down.scenario.mjs` | price card hangs / crashes / shows fake number when candles down | `/companies` | REGISTRY healthy + CANDLES 502; assert the carousel still renders our event but the price degrades to "0.00 SDAI" (per-pool fallback ALSO hits the dead candles endpoint). |
+| 04 | `04-candles-partial.scenario.mjs` | partial-price-data corrupts unrelated cards / vanishes unpriced card / hangs spinner | `/companies` | CANDLES is up but only returns prices for one of two requested pool sets; assert the priced card renders "0.4200 SDAI" while the unpriced card falls back to "0.00 SDAI" (NOT a hung spinner, NOT a vanished card, NOT swapped prices). |
