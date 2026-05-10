@@ -715,11 +715,26 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 52 invariants (api side)**: 14 api-internal +
-      28 indexer probes + 10 chain-layer. 176 smoke tests
+      **Now 53 invariants (api side)**: 14 api-internal +
+      29 indexer probes + 10 chain-layer. 180 smoke tests
       green.
-      `candlesIndexerSchemaHasRequiredTypes` added this
-      slice — first GraphQL INTROSPECTION probe; new
+      `registryIndexerSchemaHasRequiredTypes` added this
+      slice — second GraphQL INTROSPECTION probe; sister
+      to candlesIndexerSchemaHasRequiredTypes on the
+      registry side. Symmetrically completes schema-
+      validation across both indexers. Asserts
+      ProposalEntity, Organization, Aggregator types
+      (the three load-bearing registry entities, each
+      referenced by other invariants). Catches schema-
+      rename, type-drop, and per-indexer introspection-
+      disablement regressions. Both indexers now have
+      full coverage across three qualitative dimensions:
+      connectivity, data, SCHEMA — diagnostics triage to
+      one of three modes (down / empty / schema-regressed)
+      per indexer.
+
+      `candlesIndexerSchemaHasRequiredTypes` (previous
+      slice) — first GraphQL INTROSPECTION probe; new
       qualitative dimension. All previous indexer probes
       query DATA (pools/swaps/candles); this queries the
       SCHEMA (`__schema { types { name } }`) to verify
