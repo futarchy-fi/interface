@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slices 1+2+3a landed. Slice 1: browser-injection smoke. Slice 2: in-page signing via `setupSigningTunnel` exposeBinding. Slice 3a: futarchy Next.js dev server in the loop — `flows/app-discovery.spec.mjs` confirms `window.ethereum.isHarness` is observable in the real app context (cold compile ~17s, test ~1.7s). Webhook bug fixed: slice 1's `npm --prefix ../../..` was resolving to /Users/kas/, not the interface root. 10/10 browser tests green. Slice 3b (RainbowKit Connect modal assertion) + slice 4 (DOM↔API price invariant) still pending. |
+| Phase | 5 slices 1+2+3 landed. Slice 1: browser-injection smoke. Slice 2: in-page signing via `setupSigningTunnel` exposeBinding. Slice 3: futarchy Next.js dev server in the loop + RainbowKit Connect modal lists "Futarchy Harness Wallet" (EIP-6963 discovery confirmed end-to-end against the real app, not a synthetic listener). 11/11 browser tests green. Phase 4 slices 1+2+3 prior. Slice 4 (DOM↔API price invariant) is the canonical remaining Phase 5 deliverable. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -519,13 +519,37 @@ Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
     about a `<script>` tag in `next/head`. Both are app issues
     that don't break hydration; flagged here for context.
 
+- **slice 3b** (this iteration) — RainbowKit Connect modal
+  assertion. The slice 1 EIP-6963 test verified the announce
+  fires against a synthetic listener; slice 3b verifies it
+  actually reaches RainbowKit's discovery in the real app and
+  surfaces our wallet by name in the connect modal. Slim test:
+
+    1. Install wallet stub (no signing tunnel — modal-listing
+       doesn't require signing)
+    2. Navigate to `/companies` (Header runs in `app` config
+       there; `/` is landing-only with just "Launch App")
+    3. Click the "Connect Wallet" button (text-based locator;
+       `.first()` because Header renders both desktop + mobile)
+    4. `expect(page.getByText('Futarchy Harness Wallet'))
+       .toBeVisible({timeout: 15s})` — the EIP-6963 announce
+       reaches RainbowKit's modal and our wallet is listed by
+       name from the EIP-6963 `info.name`
+
+  - **Validated end-to-end** — both slice 3a + 3b tests pass
+    against the warm dev server in 14.3s wall-clock (3.4s for
+    slice 3b alone, including modal open animation + wallet-
+    list render).
+
+  - **Stretch deferred**: clicking the wallet in the modal and
+    asserting a successful connect (account address visible in
+    the header). Skipped for now because the post-click selectors
+    are RainbowKit-version-sensitive; revisit during Phase 6
+    scenario work where we actually need a connected wallet to
+    drive a real swap.
+
 **Phase 5 — remaining slices:**
 
-- slice 3b — once we're past the "does the wallet inject" gate,
-  open RainbowKit's Connect modal and assert "Futarchy Harness
-  Wallet" appears in the wallet list (proving the EIP-6963
-  announce is reaching RainbowKit's discovery). Optional follow-
-  up: click the wallet, assert successful connect.
 - slice 4 — the canonical Phase 5 invariant: navigate to a
   proposal page, scrape the visible price, compare to the api
   response that produced it.

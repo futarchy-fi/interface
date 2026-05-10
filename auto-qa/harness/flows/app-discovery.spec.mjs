@@ -81,4 +81,36 @@ test.describe('Phase 5 slice 3 — futarchy app + wallet auto-discovery', () => 
         expect(probe.isHarness).toBe(true);
         expect(probe.selectedAddress).toBe(wallet.address);
     });
+
+    test('RainbowKit Connect modal lists "Futarchy Harness Wallet"', async ({ context, page }) => {
+        // Same compile slack as above — second test reuses the warm
+        // dev server but cold-compiles the /companies route the first
+        // time it's hit.
+        test.setTimeout(180_000);
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        // Landing page (`/`) only shows "Launch App". The actual
+        // Connect Wallet UI lives on app routes; `/companies` is the
+        // shallowest one that uses Header in `app` mode.
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Click the Connect Wallet button. RainbowKit's
+        // ConnectButton.Custom render emits a <button> containing the
+        // text "Connect Wallet" (see src/components/common/Header.jsx).
+        // .first() because there can be multiple (mobile + desktop).
+        await page.getByRole('button', { name: 'Connect Wallet' }).first().click();
+
+        // RainbowKit's modal should now be open. Our wallet announces
+        // itself with `name: 'Futarchy Harness Wallet'`. Wait for it
+        // to appear in the modal's wallet list.
+        await expect(
+            page.getByText('Futarchy Harness Wallet'),
+        ).toBeVisible({ timeout: 15_000 });
+    });
 });
