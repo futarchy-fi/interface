@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slice **2-empty-orgs** (interface scenario #05: registry empty-200 path; completes the chaos 2×2 matrix {REGISTRY,CANDLES} × {5xx,200-degraded}) + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive + apiHealthBodyShape + anvilTimeWarpCapabilityPresent + apiWarmerBodyShape + candlesIndexerSchemaHasRequiredTypes + registryIndexerSchemaHasRequiredTypes + candleVolumesAllRowsNonNegative + candleOHLCAllRowsConsistent + apiRegistryGraphqlForwardsIntrospection + apiCandlesGraphqlForwardsIntrospection)** on api side + Phase 7 slice **4d-by-layer-script** (`npm run scenarios:by-layer` prints summary table + per-layer detail — catalog ergonomics for navigating 55+ invariants at a glance) (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **57 invariants** (10 api + 5 api↔candles + 3 api↔registry + 21 orchestrator↔candles + 8 orchestrator↔registry + 10 orchestrator↔chain — per `scenarios:by-layer`); introspection coverage matrix complete: DIRECT × API × {candles, registry} = 4 probes; 197 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slice **2-empty-orgs** (interface scenario #05: registry empty-200 path; completes the chaos 2×2 matrix {REGISTRY,CANDLES} × {5xx,200-degraded}) + Phase 7 slice **2-both-down** (interface scenario #06: total-outage / cumulative-failure on /companies) + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive + apiHealthBodyShape + anvilTimeWarpCapabilityPresent + apiWarmerBodyShape + candlesIndexerSchemaHasRequiredTypes + registryIndexerSchemaHasRequiredTypes + candleVolumesAllRowsNonNegative + candleOHLCAllRowsConsistent + apiRegistryGraphqlForwardsIntrospection + apiCandlesGraphqlForwardsIntrospection)** on api side + Phase 7 slice **4d-by-layer-script** (`npm run scenarios:by-layer` prints summary table + per-layer detail — catalog ergonomics for navigating 55+ invariants at a glance) (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **57 invariants** (10 api + 5 api↔candles + 3 api↔registry + 21 orchestrator↔candles + 8 orchestrator↔registry + 10 orchestrator↔chain — per `scenarios:by-layer`); introspection coverage matrix complete: DIRECT × API × {candles, registry} = 4 probes; 197 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,49 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 2-both-down (interface scenario #06: total-outage)**
+  (this iteration, on the interface side) — second
+  consecutive scenarios-side slice. Where #02 takes ONE
+  endpoint out and #03 takes the other ONE out, this
+  takes BOTH out simultaneously:
+
+  * Adds `scenarios/06-both-endpoints-down.scenario.mjs`.
+    Mocks REGISTRY_GRAPHQL_URL AND CANDLES_GRAPHQL_URL
+    both with 502. Asserts /companies STILL degrades to
+    the same "No organizations found" terminal state —
+    cumulative outage shouldn't cascade into a worse UX.
+
+  * Real-world parallel: regional outage at the api host
+    (single point of failure for both endpoints), or a
+    CORS regression that breaks the entire api domain.
+
+  * Bug-shapes guarded:
+    - cascading errors (the second .catch fires, retries
+      the first endpoint, surfaces a worse error message
+      than either single-endpoint case)
+    - hung spinner from race-condition between the two
+      failures (loading-state cleared by one .catch, set
+      true again by the other's retry)
+    - error envelope from the SECOND endpoint leaks to
+      UI while the FIRST is correctly handled (per-
+      endpoint coverage drift)
+    - "No organizations found" REPLACED by something
+      worse (raw "Bad Gateway" text) when candles also
+      fails
+
+  * Why /companies' UX is unaffected by the candles
+    outage when registry is also down: /companies is
+    registry-driven (orgs fetched first; pools/prices
+    only after orgs exist). With registry down, the
+    candles step never runs. This scenario asserts that
+    a buggy retry chain doesn't surface the candles
+    error anyway.
+
+  * 6 Playwright scenarios now (was 5). SCENARIOS.md
+    auto-regenerated.
+
 - **slice 2-empty-orgs (interface scenario #05: registry-empty-200)**
-  (this iteration, on the interface side) — first new
+  (previous iteration, on the interface side) — first new
   Playwright scenario in many slices (most recent work
   has been api-side invariants):
 

@@ -10,7 +10,7 @@ auto-discovers every `*.scenario.mjs` in this directory and emits one
 Playwright test per row. See [ADR-002](../docs/ADR-002-scenario-format.md)
 for the format definition.
 
-Total scenarios: **5**
+Total scenarios: **6**
 
 | #  | File                               | Bug shape                                                   | Route          | Description |
 |----|------------------------------------|-------------------------------------------------------------|----------------|-------------|
@@ -19,3 +19,4 @@ Total scenarios: **5**
 | 03 | `03-candles-down.scenario.mjs` | price card hangs / crashes / shows fake number when candles down | `/companies` | REGISTRY healthy + CANDLES 502; assert the carousel still renders our event but the price degrades to "0.00 SDAI" (per-pool fallback ALSO hits the dead candles endpoint). |
 | 04 | `04-candles-partial.scenario.mjs` | partial-price-data corrupts unrelated cards / vanishes unpriced card / hangs spinner | `/companies` | CANDLES is up but only returns prices for one of two requested pool sets; assert the priced card renders "0.4200 SDAI" while the unpriced card falls back to "0.00 SDAI" (NOT a hung spinner, NOT a vanished card, NOT swapped prices). |
 | 05 | `05-registry-empty-orgs.scenario.mjs` | empty-200 path hangs / shows wrong message / crashes on empty array (different code branch in useAggregatorCompanies than the 5xx path; same expected UX) | `/companies` | Registry GraphQL responds 200 with empty organizations array; assert /companies degrades to "No organizations found" empty state — distinct code path from the 5xx scenario (#02) which fires .catch, vs this one which fires .then(empty). |
+| 06 | `06-both-endpoints-down.scenario.mjs` | cascading-error / cumulative-degradation / per-endpoint-coverage-drift on simultaneous registry+candles outage | `/companies` | BOTH REGISTRY GraphQL and CANDLES GraphQL return 502 simultaneously; assert /companies still degrades to "No organizations found" — cumulative outage doesn't cascade into a worse UX than either single-endpoint-down case. |
