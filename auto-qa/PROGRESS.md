@@ -13,9 +13,9 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 15 |
-| PRs catalogued | 31 / ~65 |
-| PRs classified | 31 |
+| Iterations completed | 16 |
+| PRs catalogued | 40 / ~65 |
+| PRs classified | 40 |
 | Tests added | 53 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window — all passing) |
 | Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
@@ -244,7 +244,64 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: Snapshot link was being constructed from a hardcoded mapping. Some proposals had wrong/missing entries → the "View on Snapshot" button linked to the wrong proposal or 404'd. Fix: read `metadata.snapshot_proposal_id` from the on-chain registry.
 - **Ideal test**: For a proposal with a known `snapshot_proposal_id` in metadata, the rendered link's `href` ends with that ID.
 - **Tools needed**: Component test with mocked metadata.
+- **Test status**: partially covered (snapshot ID extraction tested in PR #48 — see `snapshot-id-extraction.test.mjs`. The link composition itself still needs a component test.)
+
+### PR #31 — Fix Impact showing 0% by using candle close prices
+- **Class**: bug-fix
+- **Hypothesis**: The Impact widget computed price impact from pool tick (instantaneous) but the widget displayed % between previous-tick and current-tick — for stable pools that often gave 0%. Fix: use latest candle close prices instead, which capture trading-window-end prices.
+- **Ideal test**: For a fixture pool with two non-zero candle closes, `computeImpact(yesPrice, noPrice)` returns a non-zero percentage. Pure unit test.
+- **Tools needed**: pure unit test of the impact formula.
 - **Test status**: not-started
+
+### PR #30 — Improve market page layout: auto-height hero, smooth scroll
+- **Class**: feature/UX
+- **Hypothesis**: n/a
+- **Ideal test**: Visual regression / snapshot test (Percy or Chromatic).
+- **Test status**: deferred
+
+### PR #29 — Discover pools from subgraph instead of requiring metadata
+- **Class**: refactor / bug-fix
+- **Hypothesis**: Pools used to be hardcoded per-proposal in metadata; if metadata was missing/stale the pool fetcher returned null and price widgets showed empty. Fix: discover pools from the subgraph at query time.
+- **Ideal test**: For a proposal with no `pools` in metadata, the discovery path still resolves YES/NO pools from the subgraph. Already covered in spirit by `unified-chart.test.mjs` (asserts non-null pool_id) on the api side.
+- **Test status**: indirectly covered (api-side unified-chart test)
+
+### PR #28 — Fix resolved proposals showing as ongoing (#10, #11)
+- **Class**: bug-fix
+- **Hypothesis**: The `resolution_status === 'resolved'` filter check was missing or wrong-cased somewhere — resolved proposals leaked into the "Active" bucket. Fix: filter on both `resolution_status` and `resolutionStatus` (camelCase) values.
+- **Ideal test**: Pure unit test: given a list of proposals with mixed status fields, the bucketing function puts each in the correct bucket regardless of which casing the field uses.
+- **Tools needed**: pure unit test if the bucketing function is exported.
+- **Test status**: not-started
+
+### PR #27 — Restore landing page
+- **Class**: feature
+- **Hypothesis**: n/a
+- **Ideal test**: smoke test that `/` returns a non-error page. Subsumed by the page-load-without-console-errors test family.
+- **Test status**: deferred
+
+### PR #26 — Remove 7 unused npm packages
+- **Class**: refactor / cleanup
+- **Hypothesis**: n/a
+- **Ideal test**: Lint that asserts removed packages are NOT re-introduced into package.json.
+- **Tools needed**: package.json grep.
+- **Test status**: not-started
+
+### PR #25 — Cleanup batch 2: dead code, image optimization, security headers
+- **Class**: refactor / cleanup
+- **Hypothesis**: n/a
+- **Ideal test**: Security-headers test: assert `next.config.js` exports the expected set of security headers (CSP, X-Frame-Options, etc.).
+- **Test status**: not-started
+
+### PR #24 — Cleanup: fix debug flags, remove stale files and old workflows
+- **Class**: refactor / cleanup
+- **Hypothesis**: n/a
+- **Ideal test**: subsumed by other lint tests
+- **Test status**: deferred
+
+### PR #23 — Remove excessive top margin on companies page
+- **Class**: feature/UX
+- **Hypothesis**: n/a
+- **Ideal test**: Visual regression
+- **Test status**: deferred
 
 ## Tooling backlog
 
