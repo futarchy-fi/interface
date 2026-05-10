@@ -689,23 +689,24 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 32 invariants (api side): 8 api-internal + 21
-      indexer probes + 3 chain-layer.
-      `apiMarketEventsShape` added this slice — third
-      and final api endpoint shape probe, closes the
-      api-endpoint-shape arc (3-of-3 documented /api/v*
-      endpoints covered). Calls /api/v1/market-events/
-      proposals/:id/prices expecting 200 + JSON with
-      conditional_yes/no/spot/timeline structure (the
-      minimal contract every consumer in interface/
-      depends on). Catches subtle envelope drift like
-      status-field rename that silently breaks every
-      "if (response.status === 'ok')" consumer branch.
-      93 smoke tests green. Still to add:
-      probabilityBounds, candlesAggregation (Candle.volume
-      = sum of contained Swap amounts within period),
-      chartShape full match (api vs indexer raw),
-      conservation, cross-run monotonicity on rateSanity.
+      Now 33 invariants (api side): 8 api-internal + 21
+      indexer probes + 4 chain-layer.
+      `anvilLatestBlockSensible` added this slice —
+      first chain-layer time-shape probe, mirrors
+      swapTimestampSensible / candleTimeMonotonic at
+      the chain layer. Calls eth_getBlockByNumber(latest)
+      and asserts hash is a valid 0x+64hex string AND
+      timestamp ∈ [2020-01-01, now+1d]. Catches stuck-
+      clock bugs, wrong-fork-era misconfiguration, and
+      garbage block responses that the count-only
+      anvilBlockNumber probe misses. Chain-layer
+      coverage now spans count + identity + structural
+      + time + contract state. 97 smoke tests green.
+      Still to add: probabilityBounds, candlesAggregation
+      (Candle.volume = sum of contained Swap amounts
+      within period), chartShape full match (api vs
+      indexer raw), conservation, cross-run
+      monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
