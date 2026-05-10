@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate** on api side (`docker compose config --services` returns 7; full app stack — anvil + api + 4 indexer services + Next.js dev server — structurally validated). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep** on api side (orchestrator stub fixed: same path/port/env/Node-version pattern as 4c-prep + a deeper scope concern surfaced — assertion scripts don't exist yet, so 4d split into 4d-prep / 4d-scenarios / 4d-activate). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1793,3 +1793,51 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
       after 4c-verify + 4d.
 
   - Slice 4 progress: ~58% done (8 of ~13+ sub-slices total).
+
+- **slice 4d-prep** (this iteration, on the api side) — fixed
+  FIVE bugs in the Phase 0 orchestrator stub + decomposed
+  slice 4d into 3 sub-slices (the original "orchestrator
+  service" was a single line in CHECKLIST; reality is bigger).
+
+  - **Bug catalog**:
+    (i) Path bug: `../../../auto-qa/harness` resolves to
+        `/Users/kas/auto-qa/harness/` (doesn't exist);
+        corrected to `.` (the harness dir IS the compose
+        file's directory).
+    (ii) Port bug: `API_URL: http://api:3000` → 3031.
+    (iii) Wrong env vars: `CHECKPOINT_URL: http://indexer:3001/graphql`
+        → `REGISTRY_URL: http://registry-checkpoint:3000/graphql`
+        + `CANDLES_URL: http://checkpoint:3000/graphql`
+        (per src/config/endpoints.js).
+    (iv) Node version: 20-bookworm → 22-alpine.
+    (v) `npm run test` won't work in fresh container;
+        replaced with conditional install + exec pattern.
+
+  - **Top-level addition**: `orchestrator-node-modules`
+    named volume.
+
+  - **DEEPER SCOPE FINDING**: ARCHITECTURE.md envisions
+    orchestrator/invariants.mjs (cross-layer assertion lib)
+    + scenario-runner. NEITHER EXISTS YET. The existing
+    orchestrator/services.mjs assumes native-anvil + script
+    indexers (Phase 3 topology) — would conflict with the
+    compose stack. Slice 4d split into 4d-prep (this),
+    4d-scenarios (build invariants.mjs + decide between
+    HARNESS_COMPOSE-gated unified runner vs defer compose
+    orchestrator), 4d-activate (atomic uncomment after
+    4d-scenarios).
+
+  - **Why command is `tail -f /dev/null`**: even with bugs
+    fixed, orchestrator container needs SOME command. No-op
+    placeholder lets it start cleanly without doing anything
+    until 4d-scenarios builds the real runner.
+
+  - **Validation**: `docker compose config --quiet` succeeds;
+    `--services` still returns 7 (orchestrator block remains
+    commented).
+
+  - Slice 4 progress: ~62% done (9 of ~14+ sub-slices total —
+    slice 4d now decomposes into 3). Next bot-doable: slice
+    4d-scenarios (NEW CODE — build the assertion library) OR
+    slice 4e (acceptance gate, blocked on 4b-verify +
+    4c-verify + 4d-activate).

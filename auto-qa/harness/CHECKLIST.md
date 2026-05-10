@@ -670,8 +670,21 @@ freshly-generated addresses as recipients; documented in
       http://localhost:3010` should serve the futarchy app.
       CHOKIDAR_USEPOLLING=true is the standard fallback if
       HMR fails over the bind-mount FS layer.
-- [ ] **4d — orchestrator service** (compose driver for the
-      cross-layer assertions).
+- [x] **4d-prep — fixed FIVE bugs in the orchestrator stub**
+      (api side, commit pending) + decomposed slice 4d into 3
+      sub-slices. Same path/port/env/Node/install pattern as
+      4a-prep + 4c-prep, plus a deeper finding: ARCHITECTURE
+      assertion scripts (orchestrator/invariants.mjs) don't
+      exist yet.
+- [ ] **4d-scenarios — build the missing assertion scripts.**
+      ARCHITECTURE envisions invariants.mjs + scenario-runner.
+      The existing orchestrator/services.mjs assumes native
+      topology (would conflict with compose). Decide between
+      (a) HARNESS_COMPOSE-gated scenario-runner that switches
+      between topologies, or (b) defer compose orchestrator,
+      treat compose as a "bring up stack" tool.
+- [ ] **4d-activate — atomic uncomment** after 4d-scenarios.
+      Adds 8th service to compose stack.
 - [ ] **4e — single `docker compose up -d`** brings the full
       stack cleanly on a fresh checkout. The slice 4
       acceptance gate.
