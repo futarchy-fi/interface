@@ -50,9 +50,18 @@ const STUB_RPC_URL =
     process.env.HARNESS_ANVIL_URL ||
     'http://localhost:8546';
 
-// Endpoint the /companies page POSTs to (see
-// `src/config/subgraphEndpoints.js::AGGREGATOR_SUBGRAPH_URL`).
+// Endpoints the /companies page POSTs to (see
+// `src/config/subgraphEndpoints.js`).
 const REGISTRY_GRAPHQL_URL = 'https://api.futarchy.fi/registry/graphql';
+const CANDLES_GRAPHQL_URL  = 'https://api.futarchy.fi/candles/graphql';
+
+// Two distinctive pool addresses used by slice 4c v3 to exercise the
+// `collectAndFetchPoolPrices` → candles → `attachPrefetchedPrices`
+// pipeline. Vanishingly unlikely to appear naturally; if either shows
+// up in a candles query, we know the chain is wired correctly.
+const PROBE_POOL_YES = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01';
+const PROBE_POOL_NO  = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa02';
+const PROBE_PROPOSAL_ADDRESS = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
 // Distinctive probe names — vanishingly unlikely to appear naturally
 // in any real org/proposal — so we can assert they came from our mock.
@@ -124,6 +133,74 @@ function fakeProposal(idSuffix, metadataExtra = {}) {
         id: `0xprop${String(idSuffix).padStart(40, '0').slice(-40)}`,
         metadata: JSON.stringify(metadataExtra),
         organization: { id: PROBE_ORG_ID },
+    };
+}
+
+// Build a stub `proposalentity` row matching the
+// `useAggregatorProposals.PROPOSALS_QUERY` shape (the carousel-side
+// fetcher), which differs from `useAggregatorCompanies`: it includes
+// `displayNameEvent`, `displayNameQuestion`, `description`,
+// `proposalAddress`, `owner`. Used by slice 4c v3 to exercise the
+// HighlightCarousel → collectAndFetchPoolPrices → candles pipeline.
+function fakePoolBearingProposal(opts = {}) {
+    const {
+        idSuffix = '01',
+        proposalAddress = PROBE_PROPOSAL_ADDRESS,
+        poolYes = PROBE_POOL_YES,
+        poolNo = PROBE_POOL_NO,
+        title = 'HARNESS-PROBE-EVENT-001',
+        chain = 100,
+    } = opts;
+    return {
+        id: `0xprop${String(idSuffix).padStart(40, '0').slice(-40)}`,
+        displayNameEvent:    title,
+        displayNameQuestion: title,
+        description:         'Harness probe event for slice 4c v3',
+        metadata: JSON.stringify({
+            chain: String(chain),
+            conditional_pools: {
+                yes: { address: poolYes },
+                no:  { address: poolNo  },
+            },
+        }),
+        metadataURI:    null,
+        proposalAddress,
+        owner:          '0x0000000000000000000000000000000000000000',
+        organization:   { id: PROBE_ORG_ID },
+    };
+}
+
+// Build a route handler for the candles GraphQL endpoint
+// (https://api.futarchy.fi/candles/graphql). `prices` is a map of
+// lowercased pool address → numeric price. Any pool not in the map
+// is omitted from the response (caller chooses default vs price).
+function makeCandlesMockHandler({ prices = {}, onCall } = {}) {
+    return async (route) => {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const q = body.query || '';
+        onCall?.(q);
+
+        // The bulk fetcher's query shape:
+        //   pools(where: { id_in: ["0x...", "0x..."] }) { id, name, price, type, outcomeSide }
+        // Extract the addresses from the inline `id_in` list so the
+        // mock can return only what was asked.
+        const idMatches = [...q.matchAll(/"(0x[a-fA-F0-9]{40})"/g)].map(m => m[1].toLowerCase());
+
+        const pools = idMatches
+            .filter((addr) => Object.prototype.hasOwnProperty.call(prices, addr))
+            .map((addr) => ({
+                id:          addr,
+                name:        `harness-pool-${addr.slice(2, 10)}`,
+                price:       prices[addr],
+                type:        'CONDITIONAL',
+                outcomeSide: 'YES',
+            }));
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ data: { pools } }),
+        });
     };
 }
 
@@ -281,5 +358,68 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row).toHaveCount(1);
         // Fallback formatter: shortName = `Chain ${chainId}`.
         await expect(row.locator('td').nth(4)).toHaveText('Chain 999');
+    });
+
+    test('slice 4c v3a — candles GraphQL endpoint is hit with the proposal\'s pool addresses', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // The /companies page also fires the EventsHighlightCarousel,
+        // which calls fetchProposalsFromAggregator (DIFFERENT data path
+        // from useAggregatorCompanies — it uses the carousel-shape
+        // PROPOSALS_QUERY with displayName/proposalAddress fields) →
+        // collectAndFetchPoolPrices → POST to candles/graphql.
+        //
+        // 4c v3a is plumbing-only: prove the carousel pipeline reaches
+        // the candles endpoint with our mocked pool addresses. 4c v3b
+        // (next iteration) builds on top to assert the formatted price
+        // renders in the carousel card.
+
+        // Track which candles requests came in so we can assert the
+        // pipeline reached the expected stage.
+        const candlesCalls = [];
+
+        // Registry mock — must respond to BOTH the
+        // useAggregatorCompanies queries (table view) AND the
+        // useAggregatorProposals queries (carousel). Both use the same
+        // operation NAMES (aggregator / organizations / proposalentities)
+        // but the carousel's proposalentities query selects more fields
+        // (displayNameEvent etc.), so we stuff a richer object into
+        // the response — the table view ignores extra fields.
+        const richProposal = fakePoolBearingProposal({});
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        // Candles mock — return a known YES price; capture pool
+        // addresses requested so the test can assert routing.
+        await context.route(CANDLES_GRAPHQL_URL, makeCandlesMockHandler({
+            prices: {
+                [PROBE_POOL_YES]: 0.42,
+                [PROBE_POOL_NO]:  0.58,
+            },
+            onCall: (q) => {
+                const ids = [...q.matchAll(/"(0x[a-fA-F0-9]{40})"/g)].map(m => m[1].toLowerCase());
+                candlesCalls.push(ids);
+            },
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Wait until at least one candles request comes in. Small
+        // poll loop tolerates the carousel's async data-fetch ordering.
+        await expect.poll(() => candlesCalls.length, { timeout: 30_000 }).toBeGreaterThan(0);
+
+        // Assert at least one candles call mentioned one of our probe
+        // pool addresses — proves the carousel pipeline routed our
+        // mocked proposal's metadata through to the bulk price fetcher.
+        const flat = candlesCalls.flat();
+        expect(flat).toContain(PROBE_POOL_YES);
     });
 });

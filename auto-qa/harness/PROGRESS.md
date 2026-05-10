@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slices 1+2+3+4a+4b+4c v1+4c v2 landed. Slices 1-3 prior. Slice 4a: DOM↔API mechanism (string passthrough). Slice 4b: integer counts through visibility filter ("8" / "11"). Slice 4c v1: int → enum mapping formatter (chain=10 → "Optimism"). Slice 4c v2: enum FALLBACK formatter — template-literal branch (chain=999 → "Chain 999"). 15/15 browser tests green. Currency-formatted price (4c v3 — needs candles pipeline mock) + cross-protocol reconciliation (4d) still ahead. |
+| Phase | 5 slices 1-3 + 4a + 4b + 4c (v1, v2, v3a) landed. Latest: 4c v3a — candles pipeline plumbing. Mocks both `api.futarchy.fi/{registry,candles}/graphql`; seeds a proposal with `metadata.conditional_pools.{yes,no}.address` matching probe pool addresses; asserts the candles endpoint gets POSTed with our pool address. Proves the carousel-side fetch chain reaches the network with the right inputs. Foundation for 4c v3b (DOM-level currency formatter assertion). 16/16 browser tests green. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -704,7 +704,53 @@ Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
     endpoint with matching pool prices. Larger lift; staged for
     a dedicated iteration so we can keep shipping per-tick.
 
-**Smoke summary (UI side, post-Phase 5 slice 4c v2):**
+- **slice 4c v3a** (this iteration) — candles pipeline
+  plumbing. Splits the original 4c v3 ambition into two
+  iterations: v3a proves the network reaches the candles
+  endpoint with the right inputs; v3b (next) asserts the
+  formatted DOM string. Plumbing-first because the candles
+  pipeline involves a SECOND fetcher path
+  (`fetchProposalsFromAggregator` from `useAggregatorProposals.js`,
+  not `useAggregatorCompanies` — they query the same registry
+  endpoint with DIFFERENT field selections, then the carousel
+  side calls `collectAndFetchPoolPrices` which is the new bit).
+
+  - **New fixtures in the test file**:
+    * `CANDLES_GRAPHQL_URL` constant
+    * `PROBE_POOL_YES` / `PROBE_POOL_NO` /
+      `PROBE_PROPOSAL_ADDRESS` — distinctive addresses so any
+      candles request mentioning them is unambiguously ours
+    * `fakePoolBearingProposal({...})` — builds a proposal row in
+      the carousel-side shape (includes `displayNameEvent`,
+      `displayNameQuestion`, `description`, `proposalAddress`,
+      `owner`); embeds `metadata.conditional_pools.{yes,no}.address`
+    * `makeCandlesMockHandler({prices, onCall})` — parses the
+      bulk-fetcher's `pools(where: id_in: [...])` query, returns
+      only the pools the test seeded prices for, optionally
+      records each query's address list
+
+  - **Test "slice 4c v3a"**:
+    1. Mock REGISTRY with our pool-bearing proposal
+    2. Mock CANDLES with prices for both probe pool addresses;
+       record each call's address list
+    3. Navigate to `/companies` (which renders the carousel)
+    4. `expect.poll(() => candlesCalls.length).toBeGreaterThan(0)`
+    5. Assert the flattened address list contains
+       `PROBE_POOL_YES`
+
+  - **Validated end-to-end**: the carousel hits the candles
+    endpoint, the bulk fetcher's `id_in` query carries our
+    probe address, and our mock returns the price.
+    Test runtime: 1.7s (full dom-api-invariant suite: 24.4s).
+
+  - **What v3a deliberately doesn't do**: assert the DOM. The
+    carousel might render a card variant that doesn't display
+    the YES price (e.g., the resolved-event renderer), or it
+    might filter our proposal due to the placeholder
+    `proposalAddress`. v3b will trace which card path renders
+    and which formatter's output is the visible string.
+
+**Smoke summary (UI side, post-Phase 5 slice 4c v3a):**
 
 ```
 Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
@@ -712,17 +758,19 @@ Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
 Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
 Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
 Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
-Phase 5 dom-api-invariant (4 cases, chromium + Next.js) ✓ ~9s
-                                       TOTAL: 24 pass + 0 skip
+Phase 5 dom-api-invariant (5 cases, chromium + Next.js) ✓ ~12s
+                                       TOTAL: 25 pass + 0 skip
 ```
 
 **Phase 5 — remaining sub-slices:**
 
-- **4c v3** — currency-formatted price through the candles
-  pipeline. Mock both `api.futarchy.fi/registry/graphql`
-  (existing) AND `api.futarchy.fi/candles/graphql` (new); seed
-  proposals with `prediction_pools`/`pools` references; assert
-  the formatted price/percentage in the carousel card.
+- **4c v3b** — DOM-level currency formatter assertion building
+  on v3a's plumbing. Return known prices for our probe pools,
+  then assert the formatted string ("0.42 SDAI" / "42% YES" /
+  whatever the carousel actually renders) appears in the
+  visible DOM. Will need to trace which card variant renders
+  for our mocked proposal and which of its fields is the
+  visible price.
 
 - **4d** — cross-protocol price reconciliation: when multiple
   sources (Algebra / CoW / Sushi) should agree, mock each to
