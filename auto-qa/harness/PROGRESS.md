@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slice **2-empty-orgs** (interface scenario #05: registry empty-200 path; completes the chaos 2×2 matrix {REGISTRY,CANDLES} × {5xx,200-degraded}) + Phase 7 slice **2-both-down** (interface scenario #06: total-outage / cumulative-failure on /companies) + Phase 7 slice **2-malformed-body** (interface scenario #07: HTML-not-JSON; the third REGISTRY failure-mode branch alongside 5xx and empty-200) + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive + apiHealthBodyShape + anvilTimeWarpCapabilityPresent + apiWarmerBodyShape + candlesIndexerSchemaHasRequiredTypes + registryIndexerSchemaHasRequiredTypes + candleVolumesAllRowsNonNegative + candleOHLCAllRowsConsistent + apiRegistryGraphqlForwardsIntrospection + apiCandlesGraphqlForwardsIntrospection)** on api side + Phase 7 slice **4d-by-layer-script** (`npm run scenarios:by-layer` prints summary table + per-layer detail — catalog ergonomics for navigating 55+ invariants at a glance) (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **57 invariants** (10 api + 5 api↔candles + 3 api↔registry + 21 orchestrator↔candles + 8 orchestrator↔registry + 10 orchestrator↔chain — per `scenarios:by-layer`); introspection coverage matrix complete: DIRECT × API × {candles, registry} = 4 probes; 197 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slice **2-empty-orgs** (interface scenario #05: registry empty-200 path; completes the chaos 2×2 matrix {REGISTRY,CANDLES} × {5xx,200-degraded}) + Phase 7 slice **2-both-down** (interface scenario #06: total-outage / cumulative-failure on /companies) + Phase 7 slice **2-malformed-body** (interface scenario #07: HTML-not-JSON; the third REGISTRY failure-mode branch alongside 5xx and empty-200) + Phase 7 slice **2-candles-malformed** (interface scenario #08: candles HTML-not-JSON; sister to #07 on the candles side) + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive + apiHealthBodyShape + anvilTimeWarpCapabilityPresent + apiWarmerBodyShape + candlesIndexerSchemaHasRequiredTypes + registryIndexerSchemaHasRequiredTypes + candleVolumesAllRowsNonNegative + candleOHLCAllRowsConsistent + apiRegistryGraphqlForwardsIntrospection + apiCandlesGraphqlForwardsIntrospection)** on api side + Phase 7 slice **4d-by-layer-script** (`npm run scenarios:by-layer` prints summary table + per-layer detail — catalog ergonomics for navigating 55+ invariants at a glance) (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **57 invariants** (10 api + 5 api↔candles + 3 api↔registry + 21 orchestrator↔candles + 8 orchestrator↔registry + 10 orchestrator↔chain — per `scenarios:by-layer`); introspection coverage matrix complete: DIRECT × API × {candles, registry} = 4 probes; 197 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,65 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 2-candles-malformed (interface scenario #08: candles HTML-not-JSON)**
+  (this iteration, on the interface side) — fourth
+  consecutive scenarios-side slice. Sister to #07 on
+  the candles side, completes the candles-side failure-
+  mode coverage:
+
+  | Mode | Status | Body | Scenario |
+  |------|--------|------|----------|
+  | 5xx down | 502 | error envelope | #03 |
+  | partial-200 | 200 | subset of pools | #04 |
+  | malformed body | 200 | HTML | **#08 (NEW)** |
+
+  * Adds `scenarios/08-candles-malformed-body.scenario.mjs`.
+    REGISTRY happy + CANDLES returns 200 + HTML body.
+    Asserts carousel still renders the event card
+    (registry data intact) AND price degrades to
+    "0.00 SDAI".
+
+  * Why distinct from #07 (registry-malformed-body):
+    - Different hook chain — candles fetch happens in
+      `attachPrefetchedPrices` (called by useAggregator-
+      Companies), different .catch placement
+    - Different fallback path — when candles fails, the
+      page can STILL render the carousel (registry intact);
+      only the price overlay falls back. The malformed-body
+      SyntaxError must be caught WITHOUT taking down the
+      cards
+    - Different blast radius — registry malformed body
+      breaks the entire page; candles malformed body
+      breaks only the price. A bug crashing the whole
+      page on candles malformed body is a regression even
+      if registry malformed body is correctly handled
+
+  * Bug-shapes guarded:
+    - JSON.parse SyntaxError on candles takes down the
+      carousel entirely
+    - HTML body content leaks into the price overlay
+      ("503 Service Unavailable" rendered where "0.00
+      SDAI" should be)
+    - hung price spinner because SyntaxError doesn't
+      trigger per-pool fallback's loading=false
+    - "undefined SDAI" or "NaN SDAI" from a 200-thinks-
+      success path that set prices.yes=undefined
+
+  * 8 Playwright scenarios now (was 7). The chaos
+    coverage matrix is now near-complete on /companies:
+      | | 5xx | empty-200 | partial-200 | malformed |
+      |---|---|---|---|---|
+      | REGISTRY | #02 | #05 | n/a* | #07 |
+      | CANDLES | #03 | n/a** | #04 | **#08** |
+    (*#04 covers candles-partial; the registry analog
+     would be a per-org-subset failure — lower priority
+     since registry is queried as a single batch.
+     **n/a because the page never reaches candles when
+     orgs is empty.)
+    Plus #06 (BOTH-down) which spans the diagonal.
+
 - **slice 2-malformed-body (interface scenario #07: HTML-not-JSON)**
-  (this iteration, on the interface side) — third
+  (previous iteration, on the interface side) — third
   consecutive scenarios-side slice. Distinct THIRD branch
   through useAggregatorCompanies, alongside #02 (5xx)
   and #05 (empty-200):
