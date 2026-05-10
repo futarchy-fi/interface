@@ -714,10 +714,26 @@ freshly-generated addresses as recipients; documented in
       `tests/smoke-scenario-runner.test.mjs` (6 tests, all
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
+- [x] **4d-by-layer-script — catalog ergonomics**. Added
+      `npm run scenarios:by-layer` on the api side (35-line
+      `scripts/scenarios-by-layer.mjs`) that imports
+      INVARIANTS, groups by `layer` field, and prints a
+      summary table (layer + count + bar-chart) plus
+      per-layer detail blocks. At 55 invariants the dry-
+      run flat catalog is hard to scan; this answers
+      "what does X layer cover?" and "where's the catalog
+      growing?" in one command. Surfaces authoritative
+      layer breakdown: api=10, api↔candles=4,
+      api↔registry=2, orchestrator↔candles=21,
+      orchestrator↔chain=10, orchestrator↔registry=8
+      (= 55 total). Api commit: `e9d2954`. (interface
+      side mirrors docs only — the script lives where
+      the orchestrator lives.)
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 55 invariants (api side)**: 14 api-internal +
-      31 indexer probes + 10 chain-layer. 188 smoke tests
-      green.
+      **Now 55 invariants (api side)**: 10 api + 4
+      api↔candles + 2 api↔registry + 21 orchestrator↔candles
+      + 8 orchestrator↔registry + 10 orchestrator↔chain
+      (per `scenarios:by-layer`). 189 smoke tests green.
       `candleOHLCAllRowsConsistent` added this slice —
       third iterate-all-rows extension; COMPLETES the
       iterate-all-rows TRIAD on the indexer's main
