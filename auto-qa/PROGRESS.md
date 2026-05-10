@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 4 |
+| Iterations completed | 5 |
 | PRs catalogued | 20 / ~65 |
 | PRs classified | 20 |
-| Tests added | 6 (4 extractor-sanity + 2 graphql-compat — all passing) |
+| Tests added | 9 (4 extractor-sanity + 2 graphql-compat + 3 endpoint-liveness — all passing) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
 | **Real bugs surfaced** | **16 broken GraphQL queries** (see `auto-qa/fixtures/known-graphql-failures.json`) |
@@ -75,7 +75,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: Frontend hardcoded the AWS CloudFront subgraph URLs that died with the GCP migration. The dead URLs returned `database unavailable`, so aggregator queries failed silently and the Companies page rendered empty ("No upcoming events", "No resolved markets yet"). Fix: point endpoints at the new `api.futarchy.fi/registry/graphql` and `/candles/graphql` passthroughs and rewrite affected queries for the Checkpoint schema.
 - **Ideal test**: Endpoint-liveness invariant — for every URL in `src/config/subgraphEndpoints.js`, send a trivial introspection query and assert HTTP 200 + parseable response. Catches both "endpoint dead" and "endpoint URL typo'd" regressions.
 - **Tools needed**: HTTP client + a glob/grep over the config file for URL constants.
-- **Test status**: not-started
+- **Test status**: **landed-passing** (`auto-qa/tests/endpoint-liveness.test.mjs` — auto-discovers URLs from the config file and asserts each returns a valid introspection envelope. Also covers PRs #47, #49, #50.)
 
 ### PR #59 — fix(ui): allow text selection across all pages
 - **Class**: bug-fix
@@ -145,7 +145,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: Same family as #60 — moves another data source off the dead AWS subgraph onto Checkpoint.
 - **Ideal test**: Endpoint-liveness invariant for the milestones data source (subsumed by #60's test).
 - **Tools needed**: same as #60.
-- **Test status**: not-started
+- **Test status**: **landed-passing** (covered transitively by `endpoint-liveness.test.mjs` since milestones queries hit the same endpoint URL constants)
 
 ### PR #49 — Replace SupabasePoolFetcher with subgraph-based fetcher
 - **Class**: refactor (Supabase → subgraph)
