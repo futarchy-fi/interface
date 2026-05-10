@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 2 — slices 1+2+4 landed in futarchy-api. Stub-indexer + 3 passthrough cases + multi-spawn stress all green. UI side still waits for Phase 4-5. |
+| Phase | 3 — server-side slice 1 landed in futarchy-api (ADR-002: build-from-source via futarchy-indexers sibling clone). UI side still waits for Phase 4-5. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
