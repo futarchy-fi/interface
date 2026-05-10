@@ -689,16 +689,16 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 6 invariants (api side): 5 GraphQL probes (api
-      passthrough + direct-indexer pairs) plus `rateSanity`
-      (added this slice — eth_call to sDAI's getRate() at
-      0x89C80A4540A00b5270347E02e2E144c71da2EceD on Gnosis;
-      asserts ≥ 1e18; mirrors src/services/rate-provider.js;
-      first chain-layer invariant). 12 smoke tests green.
-      Still to add: probabilityBounds (price ∈ [0, 1]),
-      candlesAggregation, chartShape, conservation, plus
-      cross-run monotonicity on rateSanity (needs persistent
-      state).
+      Now 8 invariants (api side): 5 GraphQL probes + 3
+      chain-layer (`anvilBlockNumber` and `anvilChainId`
+      added this slice — eth_blockNumber > 0 + eth_chainId
+      == 0x64 / 100 / Gnosis; complement `rateSanity` for
+      full chain-process+state coverage). Refactored the
+      JSON-RPC mock in the smoke fixture to parse the
+      request body and branch on method (was eth_call-only).
+      16 smoke tests green. Still to add: probabilityBounds,
+      candlesAggregation, chartShape, conservation,
+      cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.

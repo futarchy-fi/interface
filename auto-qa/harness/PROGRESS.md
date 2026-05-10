@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 6 invariants: 3 api-passthrough + 2 direct-probe + 1 chain-layer rateSanity; 12 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 8 invariants: 3 api-passthrough + 2 direct-probe + 3 chain-layer; 16 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2051,3 +2051,49 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     candlesAggregation or chartShape — meaningful new
     invariants on the now-stable RPC + GraphQL plumbing.
 
+- **slice 4d-scenarios-more (anvilBlockNumber + anvilChainId)**
+  (this iteration, on the api side) — two new chain-process
+  probes complement `rateSanity` (contract STATE) with chain-
+  PROCESS health checks. Naturally paired:
+  * `anvilBlockNumber` — eth_blockNumber > 0 (chain has
+    state, fork loaded a real starting point)
+  * `anvilChainId` — eth_chainId == 0x64 (chain 100 =
+    Gnosis; catches "fork wrong chain" + "running bare
+    anvil at default 31337")
+
+  - **Why split into 3 chain-layer invariants**: separation
+    of concerns lets failures point at the right layer.
+    BlockNumber=0 means anvil isn't producing blocks /
+    fork didn't load. ChainId mismatch means forking the
+    wrong chain. Rate < 1 means chain is alive but
+    contract state isn't right. Each failure mode is a
+    different bug; bundling would obscure which fired.
+
+  - **Refactor of fixture's /rpc handler**: was
+    eth_call-only (returned rate-shaped response for any
+    method). Now parses the request body, branches on
+    method, returns method-appropriate responses (eth_call
+    → rate hex, eth_blockNumber → blockNumberHex,
+    eth_chainId → chainIdHex; method-not-mocked +
+    JSON-parse-error fallbacks). Two new options:
+    blockNumberHex / chainIdHex.
+
+  - **Refactor of invariants.mjs**: introduced
+    `rpcRequest(rpcUrl, method, params)` as the generic
+    JSON-RPC helper. ethCall(...) now delegates to it.
+    Both new invariants use rpcRequest directly with
+    method name + empty params.
+
+  - **Smoke test coverage**: 4 new tests (happy + failure
+    for each new invariant). All 16 tests pass (was 12).
+
+  - **Validation**: 16/16 smoke tests pass (199ms);
+    `npm run scenarios:dry` lists all 8 invariants;
+    `docker compose config --quiet` still passes.
+
+  - Slice 4 progress: ~88% (15 of ~17 sub-slices).
+    4d-scenarios-more is now well past half-way. Remaining
+    bot-doable invariants (probabilityBounds,
+    candlesAggregation, chartShape, conservation) all need
+    real pool data or multiple contract calls — meatier
+    than the simple GraphQL/RPC probes shipped so far.
