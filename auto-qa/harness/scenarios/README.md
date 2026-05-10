@@ -1,0 +1,64 @@
+# scenarios/
+
+Captured bug shapes, replayable as Playwright tests. Each `*.scenario.mjs`
+file pins one bug class with a known mock setup + assertion. Format is
+defined by [ADR-002](../docs/ADR-002-scenario-format.md).
+
+## Why a separate dir from `flows/`?
+
+`flows/` holds infrastructure tests — they prove the harness's
+**mechanism** works (wallet stub injection, signing tunnel, GraphQL
+mock dispatch, etc.). Each test there exercises a piece of the
+testing stack itself.
+
+`scenarios/` holds bug-shape regressions — each file pins a
+**specific bug class** the harness must keep catching. A scenario
+might internally use the same fixtures as a `flows/` test, but the
+intent is different: a scenario's job is to fail loudly the moment
+its bug shape returns.
+
+If the harness's mechanism breaks, `flows/` tests fail.
+If the futarchy app regresses on a known bug shape, `scenarios/`
+tests fail.
+
+## Format (binding)
+
+Per ADR-002, every scenario is `<NN>-<short-name>.scenario.mjs`
+exporting:
+
+```js
+export default {
+    name:        '01-stale-price-shape',
+    description: '...',
+    bugShape:    'PR #64 stale price (frontend stale, API healthy)',
+    route:       '/companies',
+    mocks: {
+        'https://api.futarchy.fi/registry/graphql': makeGraphqlMockHandler({...}),
+        'https://api.futarchy.fi/candles/graphql':  makeCandlesMockHandler({...}),
+    },
+    assertions: [
+        async (page) => expect(page.getByText('0.4200 SDAI').first()).toBeVisible(),
+    ],
+    // Optional: timeout, wallet, etc.
+};
+```
+
+A wrapper spec at `flows/scenarios.spec.mjs` (added in Phase 6 slice 2)
+will auto-discover every file matching `*.scenario.mjs` and emit one
+Playwright test per scenario, applying mocks before navigation and
+running assertions in registration order.
+
+## Adding a scenario
+
+1. Pick the next free `<NN>` (zero-padded two digits).
+2. Write a one-sentence `bugShape` that names the class (this becomes
+   the catalog entry).
+3. Reuse fixture helpers from `../fixtures/wallet-stub.mjs` and
+   `../flows/dom-api-invariant.spec.mjs` (mock factories).
+4. Run `npm run auto-qa:e2e:ui:full` — the scenario is picked up
+   automatically; no test-list maintenance.
+
+## Current scenarios
+
+_None landed yet (Phase 6 slice 1 set up the format; slice 2 lands
+the first scenario)._

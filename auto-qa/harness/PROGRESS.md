@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slices 1-3 + 4a + 4b + 4c (v1, v2, v3a, **v3b**) landed. Latest: **4c v3b — THE CANONICAL PHASE 5 INVARIANT.** Mocked candles GraphQL returns YES=0.42 → flows through 6 layers of real React app code (`fetchProposalsFromAggregator` → `collectAndFetchPoolPrices` → `attachPrefetchedPrices` → carousel → `EventHighlightCard` → `useLatestPoolPrices` → `toFixed`-based formatter) → DOM string "0.4200 SDAI". 17/17 browser tests green. Phase 5 is now substantively done; remaining 4d (cross-protocol reconciliation) is a more advanced bug-shape probe. |
+| Phase | 5 done + Phase **6 slice 1** landed (scenario format ADR + structure). Phase 5: 17/17 browser tests green; canonical DOM↔API invariant working end-to-end through 6 layers. Phase 6 slice 1: ADR-002 picks executable `.scenario.mjs` modules over JSON snapshot or full state dump (rationale: reuses the existing fixture vocabulary; Phase 6's "first real bug shape replayable" goal is achievable today via mocked API + DOM assertions). `scenarios/` directory + README in place; first actual scenario is slice 2. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -827,12 +827,86 @@ visible price, compare to the api response that produced it") is
 met — slice 4c v3b is exactly that, and v3a/v2/v1/4b/4a are the
 on-ramps to it.
 
-**Remaining sub-slice:**
+**Remaining sub-slice (deferred, not Phase 5 acceptance-critical):**
 
 - **4d** — cross-protocol price reconciliation: when multiple
   sources (Algebra / CoW / Sushi) should agree, mock each to
   slightly-different values and assert the UI either flags the
   divergence or picks the right canonical source. Catches the
   BUY/SELL inversion / multi-RPC silent breakage bug shapes.
-  More advanced bug-probe; not strictly required for Phase 5
-  acceptance.
+  More advanced bug-probe; can land out-of-order with Phase 6.
+
+### Phase 6 — Scenario library (UI side)
+
+- **slice 1** (this iteration) — scenario format decided.
+  CHECKLIST gate "Scenario capture format decided (JSON snapshot
+  vs full state dump)" was originally framed in chain-snapshot
+  terms. The actual design space turned out broader (4 options:
+  pure JSON, executable `.scenario.mjs` modules, naming
+  conventions on regular `.spec.mjs` files, full anvil state
+  dump). The trade-offs are walked through in
+  `interface/auto-qa/harness/docs/ADR-002-scenario-format.md`.
+
+  - **Decision**: Option B — executable `.scenario.mjs` modules
+    in `auto-qa/harness/scenarios/`, exporting a `Scenario` object
+    with `{name, description, bugShape, route, mocks, assertions}`.
+
+  - **Rationale**:
+    * Reuses the existing fixture vocabulary
+      (`makeGraphqlMockHandler`, `makeCandlesMockHandler`,
+      `fakePoolBearingProposal`, `installWalletStub`,
+      `setupSigningTunnel`) directly. JSON option would have
+      required porting all of it into a JSON-interpreting shim.
+    * Phase 6's stop-here value is "first real bug shape
+      replayable" — achievable today via mocked-API + DOM
+      assertions, since slice 4c v3b's stale-price-but-API-healthy
+      regression already proves the pattern.
+    * Auto-generation from a real chain recording (the JSON
+      appeal) isn't a Phase 6 deliverable. If it becomes one,
+      JSON can wrap `.scenario.mjs` (parser → `Scenario` object
+      at load time).
+    * Full-stack snapshot (Option D, the original CHECKLIST
+      framing) deferred to Phase 7 chaos work or to the first
+      scenario that genuinely needs anvil state inexpressible
+      via mocks.
+
+  - **Structure landed**:
+    * `interface/auto-qa/harness/docs/ADR-002-scenario-format.md`
+      (Status: Proposed)
+    * `interface/auto-qa/harness/scenarios/` directory with
+      `README.md` documenting the format + naming convention
+      (`<NN>-<short-name>.scenario.mjs`)
+
+  - **Format definition** (binding for Phase 6):
+    ```ts
+    type Scenario = {
+        name:        string;            // "01-stale-price-shape"
+        description: string;            // 1-2 sentences
+        bugShape:    string;            // e.g. "PR #64 stale price"
+        route:       string;            // e.g. "/companies"
+        mocks:       Record<string, RouteHandler>;  // url → Playwright handler
+        assertions:  Array<(page: Page) => Promise<void>>;
+        timeout?:    number;
+    };
+    ```
+
+  - **Open items deferred to slice 2+**:
+    * Per-scenario wallet state (does the scenario need a
+      `nStubWallets` selection / signing tunnel? probably yes —
+      add an optional `wallet` field when first needed)
+    * Cross-repo scenarios (a scenario needing both real anvil +
+      real api would live on the api-side)
+    * Catalog generation script (`SCENARIOS.md` index — pin
+      when ≥3 scenarios exist)
+
+**Phase 6 — remaining slices:**
+
+- **slice 2** — first scenario captured + wrapper spec
+  `flows/scenarios.spec.mjs` that auto-discovers every
+  `*.scenario.mjs` and emits one Playwright `test()` per scenario.
+  The first scenario is the stale-price-but-API-healthy class
+  (PR #64 shape) — lift the slice 4c v3b assertions into a
+  `01-stale-price-shape.scenario.mjs` file.
+- **slice 3** — `scenarios:catalog` script that emits a
+  `SCENARIOS.md` index from each scenario's `bugShape`. Worth
+  doing once we have ≥3 scenarios.
