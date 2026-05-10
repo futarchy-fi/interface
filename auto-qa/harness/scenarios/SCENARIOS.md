@@ -10,7 +10,7 @@ auto-discovers every `*.scenario.mjs` in this directory and emits one
 Playwright test per row. See [ADR-002](../docs/ADR-002-scenario-format.md)
 for the format definition.
 
-Total scenarios: **8**
+Total scenarios: **9**
 
 | #  | File                               | Bug shape                                                   | Route          | Description |
 |----|------------------------------------|-------------------------------------------------------------|----------------|-------------|
@@ -22,3 +22,4 @@ Total scenarios: **8**
 | 06 | `06-both-endpoints-down.scenario.mjs` | cascading-error / cumulative-degradation / per-endpoint-coverage-drift on simultaneous registry+candles outage | `/companies` | BOTH REGISTRY GraphQL and CANDLES GraphQL return 502 simultaneously; assert /companies still degrades to "No organizations found" — cumulative outage doesn't cascade into a worse UX than either single-endpoint-down case. |
 | 07 | `07-registry-malformed-body.scenario.mjs` | json-parse-syntaxerror crashes / hangs / leaks HTML to UI when proxy returns 200 with HTML body (the third code branch alongside 5xx and empty-200; most likely to crash because SyntaxError can bypass .catch) | `/companies` | Registry GraphQL responds 200 + content-type:text/html + an HTML error page body (CDN/proxy intercepted the request). Asserts /companies degrades to "No organizations found" — distinct from the 5xx (#02) and empty-200 (#05) paths because response.json() throws SyntaxError before the .then chain runs. |
 | 08 | `08-candles-malformed-body.scenario.mjs` | json-parse-syntaxerror on candles crashes carousel / leaks HTML to price overlay / hangs price spinner (distinct from #03 5xx-down because the SyntaxError can bypass the .catch the same way #07's registry malformed-body can) | `/companies` | REGISTRY healthy + CANDLES returns 200 with HTML body (CDN/proxy intercepted candles request). Assert the carousel still renders the event card (registry data intact) but the price degrades to "0.00 SDAI" — JSON.parse SyntaxError on candles must NOT take down the carousel. |
+| 09 | `09-registry-corrupt-org.scenario.mjs` | one bad apple crashes orgs list / corrupt row leaks raw "undefined" to UI / valid orgs filtered alongside corrupt ones (per-row defensive-coding regression) | `/companies` | Registry returns valid orgs list with a CORRUPT row mixed in (missing required `name` field). Assert the valid org renders — proves the page handles per-row corruption without crashing the entire list. |
