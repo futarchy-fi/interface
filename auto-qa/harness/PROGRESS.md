@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 done (slices 1+2; slice 3 catalog deferred until ≥3 scenarios) + Phase **7 slice 1** landed. Phase 7 slice 1: first chaos primitive — `02-registry-down.scenario.mjs` mocks REGISTRY GraphQL → 502 and asserts /companies degrades to "No organizations found". Composes with the Phase 6 scenario format with no format change. 19/19 browser tests green (added 1 chaos scenario). |
+| Phase | 5 done + Phase 6 done (slice 3 catalog now unblocked, ≥3 scenarios exist) + Phase 7 slices **1+2 (CANDLES branch)** landed. Phase 7 slice 2: `03-candles-down.scenario.mjs` mocks REGISTRY healthy + CANDLES → 502. Asserts the carousel renders our event but the price degrades to "0.00 SDAI" — discovery: the per-pool fallback fetcher hits the SAME endpoint as the bulk prefetcher, so a CANDLES outage takes BOTH layers down. 20/20 browser tests green (3 scenarios). |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1013,4 +1013,67 @@ Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
 Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
 Phase 6+7 scenarios (2 cases, chromium + Next.js)      ✓ ~5s
                                        TOTAL: 28 pass + 0 skip
+```
+
+- **slice 2** (this iteration) — CANDLES-down branch added.
+  Companion to slice 1's REGISTRY-down: where 02 takes the
+  carousel-source out so nothing renders, 03 keeps the carousel
+  source healthy so a card mounts, then takes the SECOND-tier
+  pricing source out.
+
+  - **`scenarios/03-candles-down.scenario.mjs`**: mocks
+    REGISTRY → success (carousel renders our event card),
+    CANDLES → 502 (both bulk prefetch AND per-pool fallback
+    fail). Asserts event title visible AND "0.00 SDAI" visible.
+
+  - **Discovery while wiring this** (worth pinning): per
+    `src/utils/SubgraphPoolFetcher.js`, the per-pool fetcher
+    used by `useLatestPoolPrices` calls
+    `getSubgraphEndpoint(chainId)` → CANDLES — the SAME
+    endpoint `collectAndFetchPoolPrices` hits in the bulk-
+    prefetch step. So a CANDLES outage takes BOTH layers down
+    in one shot. There is no third-tier fallback; the formatter
+    eventually settles on its `prices.yes !== null ? … : '0.00 SDAI'`
+    branch and renders the literal "0.00 SDAI" string. This is
+    actually a **harness-level architecture finding**: any
+    future work that wants to test the per-pool fallback in
+    isolation will need to make the bulk and per-pool fetchers
+    hit different endpoints first.
+
+  - **Bug-shapes guarded**:
+    * Card hangs on LoadingSpinner when CANDLES is dead
+      (loading state not unwound on fetch error)
+    * Card crashes when prices come back null (formatter
+      assumes non-null without the fallback branch)
+    * Card shows stale or fake numbers (silent drift to a
+      different pricing source that's not visibly distinguishable)
+
+  - **Negative-companion benefit**: 03 also tightens the
+    DOM↔API invariant on scenario 01. If someone later adds a
+    silent default-price source ("if candles fails, use X
+    instead"), scenario 01 might still pass spuriously, but
+    scenario 03 fails because "0.00 SDAI" wouldn't appear
+    anymore. The pair pins both the happy path AND the explicit
+    failure path.
+
+  - **Validated end-to-end**: 03 passes in 1.4s; all 3
+    scenarios together: 20.3s wall-clock with cold compile.
+    UI-side smoke now 29 pass + 0 skip.
+
+  - **Phase 6 slice 3 unblocked**: with 3 scenarios in place,
+    the `scenarios:catalog` script (originally deferred until
+    ≥3 scenarios) is now worth writing. Re-tagged in CHECKLIST
+    as "UNBLOCKED".
+
+**Smoke summary (UI side, post-Phase 7 slice 2 candles-branch):**
+
+```
+Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
+Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
+Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
+Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
+Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
+Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
+Phase 6+7 scenarios (3 cases, chromium + Next.js)      ✓ ~5s
+                                       TOTAL: 29 pass + 0 skip
 ```
