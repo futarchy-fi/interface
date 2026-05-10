@@ -730,12 +730,25 @@ freshly-generated addresses as recipients; documented in
       side mirrors docs only — the script lives where
       the orchestrator lives.)
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 56 invariants (api side)**: 10 api + 4
+      **Now 57 invariants (api side)**: 10 api + 5
       api↔candles + 3 api↔registry + 21 orchestrator↔candles
       + 8 orchestrator↔registry + 10 orchestrator↔chain
-      (per `scenarios:by-layer`). 193 smoke tests green.
-      `apiRegistryGraphqlForwardsIntrospection` added this
-      slice — first api-layer introspection-passthrough
+      (per `scenarios:by-layer`). 197 smoke tests green.
+      `apiCandlesGraphqlForwardsIntrospection` added this
+      slice — sister to apiRegistryGraphqlForwardsIntrospection
+      on the candles side. COMPLETES the introspection-
+      coverage MATRIX (DIRECT × API × {candles, registry}
+      = 4 probes). Bug class beyond the registry sister:
+      per-route proxy config drift (candles route can be
+      misconfigured independently of the registry route
+      — separate proxy configs are common in production
+      GraphQL gateways). Pairing the two api-layer probes
+      catches that drift. For ANY introspection failure,
+      the four-probe truth table pinpoints layer
+      (api/direct) × indexer (registry/candles).
+
+      `apiRegistryGraphqlForwardsIntrospection` (previous
+      slice) — first api-layer introspection-passthrough
       probe; sister to registryIndexerSchemaHasRequiredTypes
       (DIRECT side). Catches GraphQL proxies that disable
       introspection at the api layer for security (Apollo
