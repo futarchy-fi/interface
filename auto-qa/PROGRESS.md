@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 16 |
+| Iterations completed | 17 |
 | PRs catalogued | 40 / ~65 |
 | PRs classified | 40 |
-| Tests added | 53 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window — all passing) |
+| Tests added | 67 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window + 14 impact-formula — all passing) |
 | Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -248,10 +248,10 @@ For each merged PR (newest first), capture:
 
 ### PR #31 — Fix Impact showing 0% by using candle close prices
 - **Class**: bug-fix
-- **Hypothesis**: The Impact widget computed price impact from pool tick (instantaneous) but the widget displayed % between previous-tick and current-tick — for stable pools that often gave 0%. Fix: use latest candle close prices instead, which capture trading-window-end prices.
-- **Ideal test**: For a fixture pool with two non-zero candle closes, `computeImpact(yesPrice, noPrice)` returns a non-zero percentage. Pure unit test.
+- **Hypothesis**: `usePoolData.js` derived YES/NO prices from the subgraph `tick` field, which was stale on at least the AAVE market — both pools reported tick `-50491`, so YES==NO and `(YES-NO)/spot = 0`. The impact *formula* in `SubgraphChart.jsx`/`TripleChart.jsx` was correct; the inputs were degenerate. Fix: fetch the latest candle close price per pool and override the tick-derived value.
+- **Ideal test**: Two layers — (a) pin the impact formula directly so any rewrite preserves sign/scale/guards, and (b) demonstrate the bug condition (`yes==no → 0%`) so a future regression that re-introduces tick-derived prices would surface as the chart's flat-zero series. Pure unit test.
 - **Tools needed**: pure unit test of the impact formula.
-- **Test status**: not-started
+- **Test status**: **landed-passing** (`auto-qa/tests/impact-formula.test.mjs`, 14 cases — pins both the SubgraphChart card formula and the TripleChart series formula; bug-repro tests assert YES==NO yields exactly 0% on both code paths; AAVE-shape divergence test confirms ~20% impact for the example in the PR body)
 
 ### PR #30 — Improve market page layout: auto-height hero, smooth scroll
 - **Class**: feature/UX
