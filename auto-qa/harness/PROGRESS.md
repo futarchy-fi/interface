@@ -2313,8 +2313,47 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 2-by-route-script (interface ergonomics)**
+  (this iteration, on the interface side) — tooling
+  slice (no new scenario). Mirror of api-side
+  `scenarios:by-layer` script. At 9 scenarios the
+  catalog is still small but the script's value
+  appears as scenarios spread across routes:
+
+  * Adds `scripts/scenarios-by-route.mjs` (~70 lines).
+    Imports each scenario module, groups by `route`
+    field, prints summary + per-route detail.
+
+  * Current output makes the route gap explicit:
+    ```
+    summary by route:
+      /companies   9  #########
+    ```
+    9 of 9 scenarios on `/companies` — visible at a
+    glance. As soon as a market-page scenario lands,
+    the bar chart shifts.
+
+  * New npm script `scenarios:by-route` and root-side
+    alias `auto-qa:e2e:scenarios:by-route` (the latter
+    not yet wired — depends on harness PR landing).
+
+  * 1 new smoke test (`tests/smoke-scenarios-by-route.test.mjs`)
+    that asserts the script prints summary + per-route
+    detail + at least one well-known scenario name.
+    10/10 interface harness smoke tests pass (was 9).
+
+  * Why this iteration is tooling-only: per the user's
+    earlier strategic question + my last-iteration
+    commitment ("wait for your strategic call rather
+    than ship more /companies scenarios on cron"),
+    this iteration is safe parallel work that doesn't
+    push toward any strategic direction. The route-
+    grouping script will pay off whichever direction
+    the user picks (cap, market-page invest, or PR
+    work).
+
 - **slice 2-corrupt-org (interface scenario #09: per-row corruption)**
-  (this iteration, on the interface side) — fifth
+  (previous iteration, on the interface side) — fifth
   consecutive scenarios-side slice. First per-row
   failure mode (vs all-or-nothing endpoint failures
   in #02/#05/#06/#07/#08):

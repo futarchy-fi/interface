@@ -17,6 +17,7 @@
         "ui:full:ui": "playwright test --ui",
         "ui:report": "playwright show-report",
         "scenarios:catalog": "node scripts/scenarios-catalog.mjs",
+        "scenarios:by-route": "node scripts/scenarios-by-route.mjs",
         "replay": "echo 'TODO Phase 5 — full chain↔api↔ui replay' && exit 1"
     },
     "dependencies": {
