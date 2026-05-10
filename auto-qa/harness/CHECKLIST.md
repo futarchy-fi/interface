@@ -689,13 +689,16 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 20 invariants (api side): 5 api-internal + 12
+      Now 22 invariants (api side): 5 api-internal + 14
       indexer probes (2 `__typename` liveness + 6
-      data-aware coverage + 4 data-SHAPE: candle OHLC +
-      volumes + `swapAmountsPositive` and
-      `swapTimestampSensible` added this slice; data-shape
-      pattern now covers both Candle and Swap entities)
-      + 3 chain-layer probes. 45 smoke tests green. Still
+      data-aware coverage + 4 single-row data-SHAPE +
+      2 MULTI-ROW data-SHAPE: `candleTimeMonotonic`
+      (strict desc) + `swapTimeMonotonicNonStrict`
+      (non-strict — multiple swaps share a block ts) added
+      this slice; first cross-row checks in the catalog,
+      establishing the access pattern future cross-row
+      invariants like TWAP monotonicity will reuse) + 3
+      chain-layer probes. 51 smoke tests green. Still
       to add: probabilityBounds, candlesAggregation
       (cross-layer Candle vs Swap), chartShape,
       conservation, cross-run monotonicity on rateSanity.

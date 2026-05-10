@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 20 invariants: 5 api-internal + 12 indexer + 3 chain-layer; 45 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 22 invariants: 5 api-internal + 14 indexer + 3 chain-layer; first MULTI-ROW data-shape checks landed; 51 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,65 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (candleTimeMonotonic +
+  swapTimeMonotonicNonStrict)** (this iteration, on the
+  api side) — first MULTI-ROW data-shape invariants in
+  the catalog. Previous data-shape probes all looked at
+  a single row; these compare adjacent rows in a series:
+  * `candleTimeMonotonic` — query last 5 candles ordered
+    `time desc`, assert STRICTLY decreasing. Each candle
+    covers a unique period; same `time` across two rows
+    is a period-aggregator bug.
+  * `swapTimeMonotonicNonStrict` — query last 5 swaps
+    ordered `timestamp desc`, assert NON-STRICTLY
+    decreasing. Multiple swaps per block legally share
+    a block timestamp; the bug is going BACKWARDS.
+
+  - **Strict-vs-non-strict encodes real semantics**:
+    candles emit one row per period (strict by
+    construction); swaps emit per-event (non-strict
+    because block.ts is the source). A future change
+    that lets candle aggregator emit duplicate rows OR
+    that reorders swap events backwards lights up here.
+
+  - **Bug classes caught (distinct from single-row
+    probes)**:
+    * Candles: period-aggregator upsert-as-insert,
+      bucket-key off-by-one collisions, broken orderBy.
+      Single-row OHLC/volume probes can't see these.
+    * Swaps: orderBy returning insertion-order instead
+      of timestamp; off-by-one wrong-block context on
+      a swap. swapTimestampSensible is single-row range;
+      this is cross-row drift inside that range.
+
+  - **Multi-row pattern unlocks future cross-row
+    invariants**: TWAP-window monotonicity (PR #54
+    shape from the invariants table), conservation
+    sums, candlesAggregation. This slice establishes
+    the access pattern (`first: 5, orderBy: X,
+    orderDirection: desc` + iterate adjacent pairs).
+
+  - **Fixture extension**: 4 new options
+    (`candleTimes`, `candleTimeStep`, `swapTimestamps`,
+    `swapTimestampStep`). Every row now gets a `time`/
+    `timestamp` field (auto-generated descending series
+    OR explicit array for failure-mode tests). Defaults
+    keep the existing single-row tests green via the
+    "vacuous when count < 2" escape.
+
+  - **Smoke tests**: 6 new (candle happy/vacuous/
+    duplicate/out-of-order, swap happy with same-block
+    timestamps, swap backwards-bug); 51/51 pass (was 45).
+    Now 22 invariants: 5 api-internal + 14 indexer (2
+    liveness + 6 data-aware coverage + 4 single-row
+    data-shape + 2 multi-row data-shape) + 3 chain-layer.
+
+  - Slice 4 progress: ~92% (22 of ~24 sub-slices). First
+    multi-row pattern in the catalog opens the door to
+    true cross-row invariants in upcoming slices.
+
 - **slice 4d-scenarios-more (swapAmountsPositive +
-  swapTimestampSensible)** (this iteration, on the api
+  swapTimestampSensible)** (previous iteration, on the api
   side) — extends data-shape pattern from Candle to Swap:
   * `swapAmountsPositive` — amountIn > 0 AND amountOut > 0
   * `swapTimestampSensible` — timestamp ∈ [2020-01-01,
