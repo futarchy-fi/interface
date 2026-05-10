@@ -10,7 +10,7 @@ auto-discovers every `*.scenario.mjs` in this directory and emits one
 Playwright test per row. See [ADR-002](../docs/ADR-002-scenario-format.md)
 for the format definition.
 
-Total scenarios: **6**
+Total scenarios: **7**
 
 | #  | File                               | Bug shape                                                   | Route          | Description |
 |----|------------------------------------|-------------------------------------------------------------|----------------|-------------|
@@ -20,3 +20,4 @@ Total scenarios: **6**
 | 04 | `04-candles-partial.scenario.mjs` | partial-price-data corrupts unrelated cards / vanishes unpriced card / hangs spinner | `/companies` | CANDLES is up but only returns prices for one of two requested pool sets; assert the priced card renders "0.4200 SDAI" while the unpriced card falls back to "0.00 SDAI" (NOT a hung spinner, NOT a vanished card, NOT swapped prices). |
 | 05 | `05-registry-empty-orgs.scenario.mjs` | empty-200 path hangs / shows wrong message / crashes on empty array (different code branch in useAggregatorCompanies than the 5xx path; same expected UX) | `/companies` | Registry GraphQL responds 200 with empty organizations array; assert /companies degrades to "No organizations found" empty state — distinct code path from the 5xx scenario (#02) which fires .catch, vs this one which fires .then(empty). |
 | 06 | `06-both-endpoints-down.scenario.mjs` | cascading-error / cumulative-degradation / per-endpoint-coverage-drift on simultaneous registry+candles outage | `/companies` | BOTH REGISTRY GraphQL and CANDLES GraphQL return 502 simultaneously; assert /companies still degrades to "No organizations found" — cumulative outage doesn't cascade into a worse UX than either single-endpoint-down case. |
+| 07 | `07-registry-malformed-body.scenario.mjs` | json-parse-syntaxerror crashes / hangs / leaks HTML to UI when proxy returns 200 with HTML body (the third code branch alongside 5xx and empty-200; most likely to crash because SyntaxError can bypass .catch) | `/companies` | Registry GraphQL responds 200 + content-type:text/html + an HTML error page body (CDN/proxy intercepted the request). Asserts /companies degrades to "No organizations found" — distinct from the 5xx (#02) and empty-200 (#05) paths because response.json() throws SyntaxError before the .then chain runs. |

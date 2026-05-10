@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slice **2-empty-orgs** (interface scenario #05: registry empty-200 path; completes the chaos 2×2 matrix {REGISTRY,CANDLES} × {5xx,200-degraded}) + Phase 7 slice **2-both-down** (interface scenario #06: total-outage / cumulative-failure on /companies) + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive + apiHealthBodyShape + anvilTimeWarpCapabilityPresent + apiWarmerBodyShape + candlesIndexerSchemaHasRequiredTypes + registryIndexerSchemaHasRequiredTypes + candleVolumesAllRowsNonNegative + candleOHLCAllRowsConsistent + apiRegistryGraphqlForwardsIntrospection + apiCandlesGraphqlForwardsIntrospection)** on api side + Phase 7 slice **4d-by-layer-script** (`npm run scenarios:by-layer` prints summary table + per-layer detail — catalog ergonomics for navigating 55+ invariants at a glance) (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **57 invariants** (10 api + 5 api↔candles + 3 api↔registry + 21 orchestrator↔candles + 8 orchestrator↔registry + 10 orchestrator↔chain — per `scenarios:by-layer`); introspection coverage matrix complete: DIRECT × API × {candles, registry} = 4 probes; 197 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slice **2-empty-orgs** (interface scenario #05: registry empty-200 path; completes the chaos 2×2 matrix {REGISTRY,CANDLES} × {5xx,200-degraded}) + Phase 7 slice **2-both-down** (interface scenario #06: total-outage / cumulative-failure on /companies) + Phase 7 slice **2-malformed-body** (interface scenario #07: HTML-not-JSON; the third REGISTRY failure-mode branch alongside 5xx and empty-200) + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive + apiHealthBodyShape + anvilTimeWarpCapabilityPresent + apiWarmerBodyShape + candlesIndexerSchemaHasRequiredTypes + registryIndexerSchemaHasRequiredTypes + candleVolumesAllRowsNonNegative + candleOHLCAllRowsConsistent + apiRegistryGraphqlForwardsIntrospection + apiCandlesGraphqlForwardsIntrospection)** on api side + Phase 7 slice **4d-by-layer-script** (`npm run scenarios:by-layer` prints summary table + per-layer detail — catalog ergonomics for navigating 55+ invariants at a glance) (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **57 invariants** (10 api + 5 api↔candles + 3 api↔registry + 21 orchestrator↔candles + 8 orchestrator↔registry + 10 orchestrator↔chain — per `scenarios:by-layer`); introspection coverage matrix complete: DIRECT × API × {candles, registry} = 4 probes; 197 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,61 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 2-malformed-body (interface scenario #07: HTML-not-JSON)**
+  (this iteration, on the interface side) — third
+  consecutive scenarios-side slice. Distinct THIRD branch
+  through useAggregatorCompanies, alongside #02 (5xx)
+  and #05 (empty-200):
+
+  * Adds `scenarios/07-registry-malformed-body.scenario.mjs`.
+    Mocks REGISTRY_GRAPHQL_URL with status 200 +
+    content-type:text/html + HTML error page body.
+    Asserts /companies degrades to "No organizations
+    found" — same UX terminal state as the other two
+    failure modes.
+
+  * Real-world parallel: a CDN/proxy intercepts the
+    request and returns an HTML error page (Cloudflare
+    challenge, "503 Service Unavailable", "Origin DNS
+    error"). Upstream might be healthy but the proxy
+    substituted its own response.
+
+  * Why the third branch is the most likely to crash:
+    - 5xx → fetch resolves with !response.ok → hook .catch
+    - empty-200 → fetch resolves, response.json() resolves
+      to {data:{organizations:[]}} → .then(empty) branch
+    - malformed-200 → fetch resolves, response.ok=true,
+      response.json() THROWS SyntaxError → unhandled
+      rejection unless explicitly caught
+    The third can bypass the hook's .catch entirely
+    because the SyntaxError originates outside the .then
+    chain.
+
+  * Bug-shapes guarded:
+    - JSON.parse SyntaxError surfaces as "Application
+      error" or React error boundary's red banner
+    - hung spinner because the SyntaxError doesn't trigger
+      loading=false
+    - HTML body content leaks into the UI ("503 Service
+      Unavailable" rendered as text in the org list)
+    - silent broken state — status 200 made the hook
+      think it succeeded, but downstream code crashed
+
+  * 7 Playwright scenarios now (was 6). The /companies
+    chaos coverage now spans FIVE distinct REGISTRY
+    failure modes:
+      | Mode | Status | Body | Scenario |
+      |------|--------|------|----------|
+      | 5xx down | 502 | error envelope | #02 |
+      | empty-200 | 200 | {organizations:[]} | #05 |
+      | both down | 502+502 | both error | #06 |
+      | malformed body | 200 | HTML | **#07 (NEW)** |
+      | (happy) | 200 | valid JSON | #01 |
+    Each hits a different code branch with the same
+    expected UX.
+
 - **slice 2-both-down (interface scenario #06: total-outage)**
-  (this iteration, on the interface side) — second
+  (previous iteration, on the interface side) — second
   consecutive scenarios-side slice. Where #02 takes ONE
   endpoint out and #03 takes the other ONE out, this
   takes BOTH out simultaneously:
