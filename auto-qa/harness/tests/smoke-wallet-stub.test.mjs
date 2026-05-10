@@ -35,6 +35,17 @@
  *
  * Runtime: ~5s (spawn anvil + several RPC roundtrips + tx mine).
  *
+ * ANVIL DEV-ACCOUNT QUIRK (resolved in Phase 4 slice 3):
+ *   On a Gnosis fork, anvil's "10000 ETH" auto-funding for dev
+ *   addresses (0xf39F, 0x7099, …) is a LAZY view. The underlying
+ *   fork state is whatever the address has on Gnosis (~0). On first
+ *   interaction (incoming tx), the lazy 10000 ETH vanishes and the
+ *   true fork balance materializes. So sending 1 ETH to dev[1]
+ *   reads as recipient going from 10000 → 0, NOT 10000 → 10001.
+ *   Verified in scripts/debug-balance-quirk.mjs across 4 recipient
+ *   kinds: dev[1] anomalous, vanity/fresh/low addresses all correct.
+ *   FIX: this test sends to a freshly-generated address.
+ *
  * Run via:   node --test auto-qa/harness/tests/smoke-wallet-stub.test.mjs
  *       or:  npm run auto-qa:e2e:smoke:wallet
  */
@@ -43,6 +54,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as wait } from 'node:timers/promises';
+
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 import {
     createProvider,
@@ -223,8 +236,11 @@ test('Phase 4 slice 1 — live anvil: provider end-to-end', async (t) => {
         assert.ok(height > 0, `block number should be > 0 (got ${height})`);
         t.diagnostic(`eth_blockNumber → ${height}`);
 
-        // 7. eth_sendTransaction — fund recipient first via anvil_setBalance
-        const recipientAddr = wallets[1].address;
+        // 7. eth_sendTransaction — use a FRESHLY GENERATED recipient
+        // (anvil dev addresses on a fork carry "lazy" 10000-ETH balances
+        // that vanish on first interaction — see scripts/debug-balance-quirk.mjs).
+        // Fresh addresses give correct credit semantics.
+        const recipientAddr = privateKeyToAccount(generatePrivateKey()).address;
         const oneEth = '0xde0b6b3a7640000';
 
         // Fund the SENDER via anvil_setBalance (anvil dev accounts may not
@@ -290,18 +306,16 @@ test('Phase 4 slice 1 — live anvil: provider end-to-end', async (t) => {
             `sender should lose at least ${BigInt(oneEth)} wei (lost ${senderDelta})`);
         t.diagnostic(`sender lost ${senderDelta} wei (${senderDelta - BigInt(oneEth)} for gas)`);
 
-        // KNOWN ANVIL QUIRK: on a forked chain, the recipient's balance
-        // reads after a successful tx don't always reflect the credit
-        // (recipient went 10000 → 0 even with status=0x1, sender debit
-        // correct). Suspected cause: anvil's fork-mode interaction with
-        // pre-funded dev accounts on the recipient side. Tracked as a
-        // harness investigation; not a wallet-stub bug. Receipt status
-        // + sender debit are the load-bearing assertions.
+        // Recipient credit — works correctly because we used a fresh
+        // address (see ANVIL DEV-ACCOUNT QUIRK note at top of this file).
         const post = await provider.request({
             method: 'eth_getBalance',
             params: [recipientAddr, 'latest'],
         });
-        t.diagnostic(`post balance of recipient: ${BigInt(post)} wei (anvil quirk if 0)`);
+        const recipientDelta = BigInt(post) - BigInt(pre);
+        assert.equal(recipientDelta, BigInt(oneEth),
+            `fresh recipient should have received exactly 1 ETH (got ${recipientDelta})`);
+        t.diagnostic(`recipient credited ${recipientDelta} wei (= 1 ETH)`);
 
         // 8. personal_sign
         const sig = await provider.request({

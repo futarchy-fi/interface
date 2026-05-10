@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 4 — slice 1 landed (UI side ACTIVE). createProvider EIP-1193 stub validated against live anvil (8 cases pass in 5s). Spike-002 resolved. nStubWallets derives canonical anvil dev addresses. Anvil-fork quirk surfaced (recipient balance reads 0 after success). |
+| Phase | 4 — slices 1+3 landed. createProvider EIP-1193 stub validated against live anvil (8 cases pass in ~4s, recipient credit now real-asserted). Spike-002 resolved. nStubWallets canonical. Anvil dev-account quirk RESOLVED (lazy-funding behavior, fix is fresh-recipient addresses). |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -237,15 +237,46 @@ Phase 1:
   accounts. Tracked for follow-up; receipt-status + sender-debit
   are the load-bearing assertions.
 
+- **slice 3** (this iteration) — RESOLVED the recipient-balance
+  quirk from slice 1.
+
+  - `scripts/debug-balance-quirk.mjs` (new): spawns anvil, runs the
+    same 1-ETH-transfer scenario via RAW JSON-RPC (no viem, no
+    wallet stub) across 4 recipient address kinds:
+      1. anvil dev[1] (0x70997970…) — recipient credit = -10000 ETH ✗
+      2. vanity 0xff…ffff — credit = +1 ETH ✓
+      3. fresh random address — credit = +1 ETH ✓
+      4. low non-zero 0x0…0001 — credit = +1 ETH ✓
+
+  - **Diagnosis**: anvil's "10000 ETH" auto-funding for dev addresses
+    on a fork is a LAZY view — the underlying fork state is whatever
+    the address has on Gnosis (~0). On first incoming tx, the lazy
+    10000 ETH vanishes and the true fork balance materializes.
+    Sender behavior is unaffected. NOT a wallet stub bug; NOT a viem
+    bug; pure anvil fork-mode behavior.
+
+  - **Fix** in `tests/smoke-wallet-stub.test.mjs`: switched recipient
+    from `wallets[1].address` (anvil dev[1]) to a freshly-generated
+    address via `viem.generatePrivateKey() → privateKeyToAccount`.
+    Recipient assertion now real: `delta === 1 ETH`. Quirk
+    documented in test header for future contributors.
+
+  - All 8 wallet-stub tests pass in ~4s with REAL recipient credit
+    asserted (not the previous diagnostic-only stub).
+
+  - `@noble/curves` + `@noble/hashes` were tentatively added during
+    debug then dropped — the script uses viem's `generatePrivateKey`
+    + `privateKeyToAccount` which already covers fresh-address
+    generation. (deps remain in package.json — future cleanup if
+    we never need them.)
+
 **Phase 4 wrap-up — remaining:**
 
 - slice 2 — Mock futarchy contracts on anvil. Deploy a minimal
-  Aggregator + ProposalFactory locally (or use anvil_setCode to
+  Aggregator + ProposalFactory locally (or use `anvil_setCode` to
   inject existing Gnosis contracts at known addresses) so we can
   fire NewProposal events for the first end-to-end indexer roundtrip.
-- slice 3 — Investigate the recipient-balance quirk. May be
-  anvil-specific (fork mode + pre-funded accounts), or maybe related
-  to viem's tx submission behavior. Either fix or document permanently.
+  Foundation for Phase 6 scenario library.
 - slice 4 — End-to-end roundtrip test combining wallet stub +
   Phase 3 indexer: send tx via wallet → mine → indexer observes →
   api passthrough returns it. Gated on Docker Desktop start.
