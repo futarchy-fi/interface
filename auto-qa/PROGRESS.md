@@ -13,9 +13,9 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 6 |
-| PRs catalogued | 20 / ~65 |
-| PRs classified | 20 |
+| Iterations completed | 7 |
+| PRs catalogued | 31 / ~65 |
+| PRs classified | 31 |
 | Tests added | 19 (4 extractor-sanity + 2 graphql-compat + 3 endpoint-liveness + 10 url-shapes — all passing) |
 | Known gaps documented | 1 (uppercase-`0X` prefix in proposalId param — see `url-shapes.test.mjs`) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
@@ -174,6 +174,76 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: Listing endpoints didn't filter `metadata.archived === true`. Stale test proposals leaked into Companies and Proposals page lists.
 - **Ideal test**: For every listing endpoint, no card renders if its metadata has `archived === true`. Already partially covered by PR #61's ideal test.
 - **Tools needed**: subsumed by #61.
+- **Test status**: not-started
+
+### PR #45 — Fix 'Entity not found' on Manage Organization modal
+- **Class**: bug-fix
+- **Hypothesis**: The Manage Organization modal queried the registry by an organization ID with the wrong shape (e.g. lowercase address vs checksum, or missing chain prefix after the Checkpoint migration). Lookup returned null → modal showed "Entity not found".
+- **Ideal test**: Open the modal for a known org address, assert the modal does not show the empty/error state. Or unit-test the entity-resolution function with each known address shape.
+- **Tools needed**: Component test (RTL/Storybook) OR Playwright.
+- **Test status**: not-started
+
+### PR #44 — Fix /companies linkable proposals cutoff
+- **Class**: bug-fix
+- **Hypothesis**: The "linkable proposals" list on /companies was being cut off — likely `first: N` or pagination wasn't fetching all entries, or a date-range filter excluded too much. Some proposals that should appear in the linker were missing.
+- **Ideal test**: Open the linker, assert all proposals matching `(open OR resolved-recently) AND visibility==='public'` appear.
+- **Tools needed**: Component or Playwright test.
+- **Test status**: not-started
+
+### PR #43 — Remove tickspread.com URL references
+- **Class**: refactor / cleanup (post-rebrand)
+- **Hypothesis**: n/a (no behavior change; removed dead links)
+- **Ideal test**: Lint rule asserting `tickspread.com` does not appear anywhere in `src/**`. Prevents re-introduction.
+- **Tools needed**: grep + assertion in node:test.
+- **Test status**: not-started
+
+### PR #42 — Point API URL to api.futarchy.fi
+- **Class**: infra / config
+- **Hypothesis**: After GCP migration, the env-var `NEXT_PUBLIC_FUTARCHY_API_URL` (or similar) defaulted to a stale URL. Frontend talked to the dead AWS endpoint. Same root family as the subgraph URL fix.
+- **Ideal test**: Endpoint-liveness invariant — already covered by `endpoint-liveness.test.mjs` in the subgraph case; could be extended to also check the futarchy-api base URL by reading `usePoolData.js` for the `RAW_API_BASE_URL`.
+- **Tools needed**: Same as endpoint-liveness, just point at a different URL constant.
+- **Test status**: not-started (close win — extend existing test)
+
+### PR #39 — Better post-trade panel
+- **Class**: feature/UX
+- **Hypothesis**: n/a
+- **Ideal test**: Component test asserting the post-trade panel shows execution summary fields (`amountOut`, `priceImpact`, `txHash` link).
+- **Tools needed**: Storybook + RTL.
+- **Test status**: not-started
+
+### PR #37 — Fix premature Transaction Succeeded for CoW Swap orders
+- **Class**: bug-fix
+- **Hypothesis**: CoW Swap orders go through a separate signing → batch-settlement flow. The UI marked the trade as "Succeeded" upon signing the order rather than after on-chain settlement. Users would see "succeeded" before the trade actually filled.
+- **Ideal test**: For a mock CoW order, status transitions: `pending → signed → matching → executed → succeeded`. Assert "succeeded" only fires after the `executed` step.
+- **Tools needed**: Mock CoW SDK or fixture for each phase.
+- **Test status**: not-started
+
+### PR #35 — Fix spot price chart shivering on page load
+- **Class**: bug-fix (UI/UX)
+- **Hypothesis**: Spot chart re-rendered with shifted axes on every data refresh — visual "shiver". Likely the chart was recreating instead of updating, or the time axis was using `Date.now()` per frame.
+- **Ideal test**: Hard to test without visual diff. Closest unit test: chart options object is stable across consecutive renders with the same data (object identity or shallow-equal).
+- **Tools needed**: React testing library + chart instance inspection. Or visual regression tooling (Percy/Chromatic).
+- **Test status**: not-started
+
+### PR #34 — Fix slippage calculation bug (Issue #5)
+- **Class**: bug-fix
+- **Hypothesis**: Slippage was computed using wrong formula (e.g. `(in - out)/in` instead of `(quoted - actual)/quoted`, or missing decimal normalization). Quoted amounts and minOut bounds didn't match user expectations.
+- **Ideal test**: Pure unit test of `computeSlippage(quotedOut, minOut, executedOut, decimals)` — for a known input set, assert the output matches a hand-computed expected value.
+- **Tools needed**: Pure unit test if the function is exported, otherwise Storybook for the slippage display.
+- **Test status**: not-started
+
+### PR #33 — Fix trade simulation preview precision and add pool price after
+- **Class**: bug-fix
+- **Hypothesis**: Trade preview rounded too aggressively (lost precision on small amounts) and didn't show the post-trade pool price. Users couldn't see the actual price impact.
+- **Ideal test**: For a known input amount + pool state, the previewed `amountOut` matches a quoter call's `amountOut` to 6 decimal places. Post-trade price field is populated.
+- **Tools needed**: Quoter mock + unit test of formatter.
+- **Test status**: not-started
+
+### PR #32 — Fix Snapshot link using on-chain Registry metadata (#21)
+- **Class**: bug-fix
+- **Hypothesis**: Snapshot link was being constructed from a hardcoded mapping. Some proposals had wrong/missing entries → the "View on Snapshot" button linked to the wrong proposal or 404'd. Fix: read `metadata.snapshot_proposal_id` from the on-chain registry.
+- **Ideal test**: For a proposal with a known `snapshot_proposal_id` in metadata, the rendered link's `href` ends with that ID.
+- **Tools needed**: Component test with mocked metadata.
 - **Test status**: not-started
 
 ## Tooling backlog
