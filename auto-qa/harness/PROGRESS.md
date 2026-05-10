@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 16 invariants: 5 api-internal + 8 indexer + 3 chain-layer; 33 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 18 invariants: 5 api-internal + 10 indexer + 3 chain-layer; 39 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2266,3 +2266,49 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliations (candlesAggregation,
     chartShape, probabilityBounds, conservation) — meatier
     than the additive per-entity probes.
+
+- **slice 4d-scenarios-more (candleOHLCOrdering +
+  candleVolumesNonNegative)** (this iteration, on the api
+  side) — first DATA-SHAPE invariants. Up to now all 16
+  indexer invariants checked existence (does the row
+  exist?). These two check VALUES (does the row's content
+  make sense?). Both query the latest candle:
+  * `candleOHLCOrdering` — `low ≤ open, close ≤ high`
+    (and `low ≤ high`)
+  * `candleVolumesNonNegative` — `volumeToken0 ≥ 0` AND
+    `volumeToken1 ≥ 0`
+
+  - **Bug classes caught**:
+    * OHLC failure: aggregator min/max accumulator broken
+      (signedness error, swap-direction misclassification,
+      uninitialized-min-equals-max edge case). `high < low`
+      is impossible by definition; `close > high` means the
+      close-of-period update path missed a max() call.
+    * Volume failure: signed-amount bug — probably
+      subtracting outgoing from incoming when it should
+      take Math.abs(). Negative volumes nonsensical.
+
+  - **Vacuously true when no candles**: both return ok if
+    candles[] is empty. That's candlesHasCandles's concern,
+    not these. Cleanly separates "no data" from "data is
+    wrong" — important during compose startup.
+
+  - **Schema details pinned**: open/high/low/close/
+    volumeToken0/volumeToken1 all `String!` per
+    `futarchy-indexers/proposals-candles/checkpoint/src/schema.gql`.
+    parseFloat() tolerates either decimal or scientific.
+
+  - **Fixture extension**: 6 new options for the 6 latest-
+    candle fields. The first candle row in the response
+    array carries the OHLC + volume fields; subsequent
+    rows just have id.
+
+  - **Smoke tests**: 6 new (happy + 5 specific failure
+    modes); 39/39 pass (was 33). Now 18 invariants: 5
+    api-internal + 10 indexer + 3 chain-layer.
+
+  - Slice 4 progress: ~90% (20 of ~22 sub-slices). The
+    harness now has 18 invariants distinguishing many
+    distinct failure modes — existence vs shape vs
+    cross-layer reconciliation. Remaining: cross-layer
+    reconciliations + cross-run monotonicity.
