@@ -27,6 +27,7 @@
     "auto-qa:e2e:ui:full": "npm --prefix auto-qa/harness run ui:full",
     "auto-qa:e2e:ui:full:ui": "npm --prefix auto-qa/harness run ui:full:ui",
     "auto-qa:e2e:scenarios:catalog": "npm --prefix auto-qa/harness run scenarios:catalog",
+    "auto-qa:e2e:scenarios:by-route": "npm --prefix auto-qa/harness run scenarios:by-route",
     "auto-qa:e2e:wallet:demo": "npm --prefix auto-qa/harness run wallet:demo"
   },
   "dependencies": {

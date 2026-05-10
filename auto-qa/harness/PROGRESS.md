@@ -2313,6 +2313,27 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 2-root-aliases (cross-repo wiring)**
+  (this iteration, both sides) — tooling slice (no
+  new scenario, no new script). Mirrors the api-side
+  4d-root-aliases entry. Wires 1 root-level alias on
+  the interface side:
+
+  * `auto-qa:e2e:scenarios:by-route` →
+    `npm --prefix auto-qa/harness run scenarios:by-route`
+
+  The by-route slice's own PROGRESS entry called this
+  out as "alias not yet wired — depends on harness PR
+  landing" — the harness directory is stable enough
+  now that the alias is safe to ship as a pure-additive
+  root package.json change.
+
+  Pairs with api-side root `package.json` adding two
+  aliases (`auto-qa:e2e:scenarios:by-layer` +
+  `auto-qa:e2e:invariants:catalog`). Both repos'
+  catalog scripts are now discoverable + runnable from
+  each repo's root.
+
 - **slice 2-catalog-drift-test (interface ergonomics)**
   (this iteration, on the interface side) — second
   consecutive tooling slice (no new scenario). Fills
