@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slices 1+2+3+4a+4b+4c v1 landed. Slices 1-3 prior. Slice 4a: DOM↔API mechanism (mock GraphQL → assert probe name in DOM). Slice 4b: integer counts through visibility filter (`OrgRow` cells "8" / "11"). Slice 4c v1: int → enum mapping formatter (mock `metadata.chain='10'` → ChainBadge cell shows "Optimism"). 14/14 browser tests green. Currency-formatted price (4c v2) + cross-protocol reconciliation (4d) still ahead. |
+| Phase | 5 slices 1+2+3+4a+4b+4c v1+4c v2 landed. Slices 1-3 prior. Slice 4a: DOM↔API mechanism (string passthrough). Slice 4b: integer counts through visibility filter ("8" / "11"). Slice 4c v1: int → enum mapping formatter (chain=10 → "Optimism"). Slice 4c v2: enum FALLBACK formatter — template-literal branch (chain=999 → "Chain 999"). 15/15 browser tests green. Currency-formatted price (4c v3 — needs candles pipeline mock) + cross-protocol reconciliation (4d) still ahead. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -671,7 +671,40 @@ Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
     * `transformOrgToCard` regression that drops the chainId
       derivation would default to 100 → "Gnosis" instead
 
-**Smoke summary (UI side, post-Phase 5 slice 4c v1):**
+- **slice 4c v2** (this iteration) — chain enum FALLBACK
+  formatter (template-literal branch). Same data path as 4c v1
+  but exercises the OTHER branch in `ChainBadge.jsx` —
+  the dynamic-template formatter that runs when the chainId
+  isn't in CHAIN_CONFIG.
+
+  - **Data flow**: mock `metadata.chain = '999'` →
+    `parseInt('999', 10) = 999` → CHAIN_CONFIG[999] is undefined
+    → fallback `{shortName: \`Chain ${chainId}\`}` →
+    `td[4]` shows "Chain 999".
+
+  - **Why a separate test from 4c v1**: 4c v1 covers the
+    lookup-table branch (chainId in CHAIN_CONFIG). 4c v2 covers
+    the fallback branch — a different code path that catches a
+    different bug shape. A regression that drops the fallback
+    case (e.g., crashes on missing key, or renders empty when
+    the key is missing) would surface here, not in 4c v1.
+
+  - **Validated end-to-end**: 1 new test, 1.4s. All 4
+    dom-api-invariant tests together: 20.3s wall-clock with
+    Next.js cold compile.
+
+  - **Why staging the original 4c (currency) as 4c v3**: real
+    currency formatting (`(v).toFixed(2) + ' ' + baseTokenSymbol`,
+    `(v * 100).toFixed(0) + '%'`) lives in `HighlightCards` /
+    `EventHighlightCard`, fed by the `collectAndFetchPoolPrices`
+    pipeline that hits `api.futarchy.fi/candles/graphql` (a
+    DIFFERENT endpoint from the registry one we already mock).
+    Mocking it requires seeding each proposal with valid
+    `prediction_pools`/`pools` references AND mocking the candles
+    endpoint with matching pool prices. Larger lift; staged for
+    a dedicated iteration so we can keep shipping per-tick.
+
+**Smoke summary (UI side, post-Phase 5 slice 4c v2):**
 
 ```
 Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
@@ -679,19 +712,17 @@ Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
 Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
 Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
 Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
-Phase 5 dom-api-invariant (3 cases, chromium + Next.js) ✓ ~7s
-                                       TOTAL: 23 pass + 0 skip
+Phase 5 dom-api-invariant (4 cases, chromium + Next.js) ✓ ~9s
+                                       TOTAL: 24 pass + 0 skip
 ```
 
 **Phase 5 — remaining sub-slices:**
 
-- **4c v2** — currency-formatted price ("$0.42" / "0.4242" /
-  whatever the real formatter does). 4c v1 covered enum-style
-  formatting; v2 should pin a numeric value that goes through
-  decimal / currency / rounding logic. Likely targets
-  `singleProposalTransformer.prices.{approval,refusal}_price`
-  on a `/proposals/[id]` route, or `usePoolData`'s spot price
-  derivation from sqrtPrice/tick.
+- **4c v3** — currency-formatted price through the candles
+  pipeline. Mock both `api.futarchy.fi/registry/graphql`
+  (existing) AND `api.futarchy.fi/candles/graphql` (new); seed
+  proposals with `prediction_pools`/`pools` references; assert
+  the formatted price/percentage in the carousel card.
 
 - **4d** — cross-protocol price reconciliation: when multiple
   sources (Algebra / CoW / Sushi) should agree, mock each to

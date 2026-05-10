@@ -249,4 +249,37 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         // Chain cell is td[4]; ChainBadge renders shortName.
         await expect(row.locator('td').nth(4)).toHaveText('Optimism');
     });
+
+    test('slice 4c v2 — chain enum FALLBACK formatter (unknown chain → "Chain N" template literal)', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // ChainBadge.jsx falls back when the chainId isn't in
+        // CHAIN_CONFIG to:
+        //   { shortName: `Chain ${chainId}`, name: `Chain ${chainId}` }
+        // 4c v1 covered the lookup-table branch (chain=10 → "Optimism");
+        // this test covers the fallback branch — a TEMPLATE-LITERAL
+        // formatter that interpolates the input number into a string.
+        // Different bug shape than 4c v1: regression that drops the
+        // fallback (e.g., crashes on missing key, or renders empty)
+        // would surface here, not in 4c v1.
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            orgMetadata: JSON.stringify({ chain: '999' }),
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        // Fallback formatter: shortName = `Chain ${chainId}`.
+        await expect(row.locator('td').nth(4)).toHaveText('Chain 999');
+    });
 });
