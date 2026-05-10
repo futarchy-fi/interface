@@ -715,10 +715,25 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 43 invariants (api side)**: 11 api-internal +
-      26 indexer probes + 6 chain-layer. 139 smoke tests
+      **Now 44 invariants (api side)**: 12 api-internal +
+      26 indexer probes + 6 chain-layer. 144 smoke tests
       green.
-      `anvilGasPricePresent` added this slice — chain-FEE-
+      `apiUnifiedChartXCacheTtlPresent` added this slice
+      — second response-HEADER probe in the catalog.
+      Sister to apiUnifiedChartHasObservabilityHeaders
+      (X-Cache + X-Response-Time); this covers X-Cache-TTL.
+      Asserts unconditionally on both HIT + MISS paths
+      (corrects an earlier comment that said TTL was
+      HIT-only — src sets it on both code paths). Format:
+      positive integer string, no unit suffix. Catches
+      refactor dropping TTL from one path but not the
+      other (sister probe still passes — demonstrates
+      per-header-split value), 'NaN'/'-1' from timing/
+      env-var bugs, accidental unit suffix ('300s' silently
+      wrong since parseInt returns 300 by coincidence),
+      header dropped entirely.
+
+      `anvilGasPricePresent` (previous slice) — chain-FEE-
       MARKET probe (sixth chain-layer invariant). Companion
       to anvilLatestBlockSensible + anvilChainId; those pin
       "chain reachable + right network", this pins fee-

@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **43 invariants**: 11 api-internal + 26 indexer + 6 chain-layer; chain-FEE-MARKET probe landed; 139 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **44 invariants**: 12 api-internal + 26 indexer + 6 chain-layer; X-Cache-TTL header now probed unconditionally on both HIT + MISS paths; 144 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,47 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (apiUnifiedChartXCacheTtlPresent)**
+  (this iteration, on the api side) — second response-
+  HEADER probe in the catalog:
+
+  * Sister to apiUnifiedChartHasObservabilityHeaders
+    (X-Cache + X-Response-Time); this one covers
+    X-Cache-TTL. Split into a separate invariant for
+    single-responsibility per probe — ops dashboards
+    filter on TTL independently of hit/miss.
+
+  * Scope correction: the original X-Cache+X-Response-Time
+    invariant's comment said TTL was HIT-only. Inspection
+    of `src/routes/unified-chart.js` shows it's set on
+    BOTH paths (line 74 HIT + line 278 MISS), so this
+    asserts unconditionally rather than as a conditional
+    WHEN-HIT check. The old comment was updated in the
+    same commit.
+
+  * Format asserted: positive integer string, no unit
+    suffix. Catches refactor dropping TTL from one path
+    but not the other (sister probe STILL passes —
+    demonstrates per-header-split value), 'NaN'/'-1'
+    from timing/env-var bugs, accidental unit suffix
+    ('300s' silently wrong since parseInt returns 300
+    by coincidence), header dropped entirely.
+
+  * 44 invariants now: 12 api-internal (was 11) + 26
+    indexer + 6 chain-layer. Smoke tests: 5 new + 1
+    fixture knob (unifiedChartXCacheTtl). 144/144 pass.
+    Api commit: `df81b39`.
+
+  * Unified-chart endpoint now has FOUR coverage layers:
+    shape (apiUnifiedChartShape), count-bound
+    (chartCandleCountsBoundedByDirect), per-time-pair
+    membership (chartCandlesAreSubsetOfDirect), AND TWO
+    observability-header probes (apiUnifiedChartHasObservabilityHeaders
+    for X-Cache+X-Response-Time, apiUnifiedChartXCacheTtlPresent
+    for X-Cache-TTL — NEW).
+
 - **slice 4d-scenarios-more (anvilGasPricePresent)**
-  (this iteration, on the api side) — chain-FEE-MARKET
+  (previous iteration, on the api side) — chain-FEE-MARKET
   probe (sixth chain-layer invariant):
 
   * Companion to anvilLatestBlockSensible + anvilChainId.
