@@ -368,25 +368,165 @@ export function nStubWallets(n, mnemonic = ANVIL_DEV_MNEMONIC) {
  * Returns JS source to inject into a Playwright browser context via
  * `context.addInitScript({content: installWalletStub({...})})`.
  *
- * The injected script:
- *   1. Defines a tiny EIP-1193 provider using fetch (no viem in the page)
- *   2. Sets window.ethereum
- *   3. Announces via EIP-6963 so RainbowKit auto-discovers it
- *   4. Emits "ethereum#initialized" for late-hydrating dApps
+ * Phase 5 slice 1 scope:
+ *   - eth_accounts / eth_requestAccounts return [address]
+ *   - eth_chainId / wallet_switchEthereumChain handled in-page
+ *   - All read RPCs (eth_call, eth_blockNumber, eth_getBalance, …)
+ *     proxy to `rpcUrl` via fetch
+ *   - Signing methods (personal_sign, eth_signTypedData_v4,
+ *     eth_sendTransaction) return JSON-RPC -32601 — slice 2 will
+ *     inline @noble/secp256k1 to enable signing in-page
+ *   - EIP-6963 announcement so RainbowKit auto-discovers
+ *   - Emits ethereum#initialized for late-hydrating dApps
  *
- * NOTE: For Phase 4 we keep this throwing — Phase 5 will land the
- * page-side implementation. The test surface (createProvider) is
- * what the in-node tests exercise.
+ * The script is HEREDOC'd as a template literal then JSON-encoded
+ * into safe fields so addresses/keys/etc. don't break parsing.
  *
- * @param {ProviderConfig} _config
+ * @param {ProviderConfig} config
  * @returns {string} JS source to inject
  */
-export function installWalletStub(_config) {
-    throw new Error(
-        '[wallet-stub] installWalletStub — Phase 5 will land the ' +
-        'browser-injection script. createProvider() works today and ' +
-        'is tested via node:test.',
-    );
+export function installWalletStub(config) {
+    if (!config) throw new Error('installWalletStub: config required');
+    const { privateKey, rpcUrl, chainId } = config;
+    if (!privateKey || typeof privateKey !== 'string') {
+        throw new Error('installWalletStub: privateKey (hex) required');
+    }
+    if (!rpcUrl) throw new Error('installWalletStub: rpcUrl required');
+    if (!Number.isInteger(chainId) || chainId < 1) {
+        throw new Error('installWalletStub: chainId required');
+    }
+
+    // Derive the address in node so we don't need viem in-page.
+    const address = privateKeyToAccount(privateKey).address;
+
+    // Encode all interpolated values via JSON.stringify so quotes /
+    // special characters in URLs etc. don't break the script.
+    const cfg = JSON.stringify({ address, rpcUrl, chainId });
+
+    return `
+(function installHarnessWallet() {
+    const CFG = ${cfg};
+    const SIGNING_METHODS = new Set([
+        'personal_sign', 'eth_sign', 'eth_signTypedData_v4',
+        'eth_sendTransaction', 'eth_sign_typed_data',
+    ]);
+    const SUB_METHODS = new Set(['eth_subscribe', 'eth_unsubscribe']);
+
+    let currentChainId = CFG.chainId;
+    const handlers = new Map();
+    function on(event, fn) {
+        if (!handlers.has(event)) handlers.set(event, []);
+        handlers.get(event).push(fn);
+    }
+    function emit(event, ...args) {
+        const arr = handlers.get(event); if (!arr) return;
+        for (const fn of [...arr]) fn(...args);
+    }
+    function removeListener(event, fn) {
+        const arr = handlers.get(event); if (!arr) return;
+        const i = arr.indexOf(fn); if (i >= 0) arr.splice(i, 1);
+    }
+
+    let _id = 0;
+    async function rpcPassthrough(method, params) {
+        const r = await fetch(CFG.rpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0', id: ++_id, method, params,
+            }),
+        });
+        const j = await r.json();
+        if (j.error) {
+            const e = new Error(j.error.message || 'RPC error');
+            e.code = j.error.code ?? -32603;
+            throw e;
+        }
+        return j.result;
+    }
+
+    async function request({ method, params }) {
+        const _params = params ?? [];
+
+        switch (method) {
+            case 'eth_accounts':
+            case 'eth_requestAccounts':
+                return [CFG.address];
+            case 'eth_chainId':
+                return '0x' + currentChainId.toString(16);
+            case 'wallet_switchEthereumChain': {
+                const next = parseInt(_params[0]?.chainId, 16);
+                if (!Number.isInteger(next)) {
+                    const e = new Error('invalid chainId');
+                    e.code = -32602; throw e;
+                }
+                currentChainId = next;
+                emit('chainChanged', '0x' + currentChainId.toString(16));
+                return null;
+            }
+            case 'wallet_addEthereumChain':
+                return null;
+        }
+
+        if (SIGNING_METHODS.has(method)) {
+            // Phase 5 slice 1: signing not yet enabled in-page.
+            // Slice 2 will inline @noble/secp256k1 to support this.
+            const e = new Error(method + ' not yet supported by harness in-page wallet stub (Phase 5 slice 2)');
+            e.code = -32601; throw e;
+        }
+
+        if (SUB_METHODS.has(method)) {
+            const e = new Error(method + ' not supported (consumers should poll)');
+            e.code = -32601; throw e;
+        }
+
+        return rpcPassthrough(method, _params);
+    }
+
+    const provider = {
+        request, on, removeListener,
+        isMetaMask: true,
+        isHarness: true,
+        get chainId() { return '0x' + currentChainId.toString(16); },
+        get selectedAddress() { return CFG.address; },
+    };
+
+    // Set window.ethereum (Wagmi's MetaMask connector keys off this)
+    try {
+        Object.defineProperty(window, 'ethereum', {
+            value: provider,
+            writable: true,
+            configurable: true,
+        });
+    } catch {
+        window.ethereum = provider;
+    }
+
+    // EIP-6963 announcement for modern wallet auto-discovery (RainbowKit).
+    const info = {
+        uuid: '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0').slice(-12),
+        name: 'Futarchy Harness Wallet',
+        rdns: 'fi.futarchy.harness',
+        // Placeholder transparent 1x1 PNG so RainbowKit's icon validation passes
+        icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=',
+    };
+    function announce() {
+        window.dispatchEvent(new CustomEvent('eip6963:announceProvider', {
+            detail: Object.freeze({ info, provider }),
+        }));
+    }
+    window.addEventListener('eip6963:requestProvider', announce);
+    announce();
+
+    // Late-hydrating dApps may listen for this:
+    window.dispatchEvent(new Event('ethereum#initialized'));
+
+    // Diagnostic — visible to Playwright via console listening
+    if (window.__HARNESS_DEBUG) {
+        console.log('[harness-wallet] installed', { address: CFG.address, chainId: CFG.chainId });
+    }
+})();
+`;
 }
 
 // ────────────────────────────────────────────────────────────────────

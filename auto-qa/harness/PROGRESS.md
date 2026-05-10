@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 4 — slices 1+2+3 landed. Wallet stub + contract-call surface (read/write/event-decode) both validated against live Gnosis fork. WXDAI deposit smoke proves end-to-end contract path. Spike-002 + dev-account quirk both resolved. |
+| Phase | 5 slice 1 landed (browser-injection smoke). Playwright + chromium installed; `installWalletStub` browser wrapper now wires window.ethereum + EIP-6963 announcement; 6/6 wallet-injection browser tests green in 2.4s. Phase 4 slices 1+2+3 prior — wallet stub + contract-call surface validated against live Gnosis fork. Phase 5 slices 2/3/4 + Phase 4 slice 4 still pending. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -323,3 +323,99 @@ Phase 4 contract-calls (1 case, 4 reads + 1 write + event decode + bal check)
   add ABIs for FutarchyProposalFactory, AlgebraPool, sDAI deposit/
   withdraw. Once Phase 3 indexer is live, deposit sDAI then verify
   the futarchy events flow into the indexer + api.
+
+### Phase 5 — Playwright + DOM↔API assertions (UI side)
+
+- **slice 1** (this iteration) — browser-injection smoke. The
+  goal: prove the wallet stub installed via Playwright actually
+  takes hold in a real chromium page, before we wire it to the
+  futarchy app. Kept the slice deliberately narrow: connection +
+  read paths only, no signing, no Next.js dev server.
+
+  - **Tooling:**
+    - `@playwright/test ^1.59.1` added to harness devDependencies
+    - chromium browser binary provisioned via
+      `npx playwright install chromium` (~92 MiB headless shell +
+      ffmpeg)
+    - `playwright.config.mjs` REWRITTEN from placeholder to use
+      real `defineConfig({...})`. Single `chromium` project (firefox
+      + webkit deferred to Phase 7). `webServer` block auto-launches
+      Next.js dev unless `HARNESS_NO_WEBSERVER=1` (slice 1 opts out
+      since we're testing pure injection, not the app).
+
+  - **`installWalletStub` browser wrapper** (in
+    `fixtures/wallet-stub.mjs`) — was a placeholder that threw, now
+    returns a self-executing JS source string suitable for
+    `context.addInitScript`. The script:
+    * Sets `window.ethereum` with `isMetaMask: true`,
+      `isHarness: true`, `selectedAddress`, `chainId`
+    * Implements eth_accounts/eth_requestAccounts/eth_chainId/
+      wallet_switchEthereumChain (with chainChanged emission) /
+      wallet_addEthereumChain in-page
+    * Rejects signing methods with -32601 (slice 2 will inline
+      @noble/secp256k1 to enable in-page signing)
+    * Rejects subscription methods with -32601 per Spike-002
+    * Forwards all other methods (eth_blockNumber, eth_call, etc.)
+      via `fetch` to the configured RPC URL
+    * Announces itself via EIP-6963 `announceProvider` event +
+      listens for `requestProvider` to re-announce (lets
+      RainbowKit's discovery mechanism find it even if Wagmi
+      hydrates before injection finishes)
+    * Dispatches `ethereum#initialized` for late-hydrating dApps
+    * Address is derived in node from privateKey (no viem
+      bundled into the page)
+
+  - **`flows/wallet-injection.spec.mjs`** — first browser-context
+    test file. 6 cases against `about:blank`, all green in 2.4s:
+    1. window.ethereum exposes the configured address + chain
+       (hasEth, isMetaMask, isHarness, accounts, chainId,
+       selectedAddress)
+    2. wallet_switchEthereumChain emits chainChanged + new
+       eth_chainId reflects the switch
+    3. eth_subscribe rejected with -32601 (per Spike-002)
+    4. Signing methods (personal_sign, eth_signTypedData_v4,
+       eth_sendTransaction) all rejected with -32601 (slice 2
+       will enable)
+    5. EIP-6963 announcement fires — listener registered before
+       requestProvider dispatch catches the replay
+    6. eth_blockNumber forwards to the configured RPC
+
+  - **CORS / null-origin gotcha resolved**: First attempt at the
+    eth_blockNumber test ran a real http server and made the page
+    fetch it cross-origin. Failed with "TypeError: Failed to fetch"
+    even after adding permissive CORS headers + OPTIONS preflight.
+    Root cause: chromium drops fetches from `about:blank` (null
+    origin) to local addresses regardless of CORS. **Fix**: switched
+    to `context.route(MOCK_RPC_URL, ...)` — Playwright intercepts
+    at the network layer before chromium's null-origin check, so the
+    fetch never has to leave the browser. Pinned in the test header
+    so future contributors don't re-litigate.
+
+  - **npm scripts wired**: `ui` / `ui:ui` / `ui:report` in
+    harness `package.json`; `auto-qa:e2e:ui` and `auto-qa:e2e:ui:ui`
+    at interface root.
+
+**Smoke summary (UI side, post-Phase 5 slice 1):**
+
+```
+Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
+Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
+Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
+                                       TOTAL: 15 pass + 0 skip
+```
+
+**Phase 5 — remaining slices:**
+
+- slice 2 — inline @noble/secp256k1 in the page so signing methods
+  (personal_sign, eth_signTypedData_v4, eth_sendTransaction) work
+  against `window.ethereum` in the browser, not just in
+  node:test's `createProvider`. Will need browser tests that sign +
+  recover the address, then send a 1-XDAI tx through the in-page
+  stub and decode the receipt.
+- slice 3 — drop `HARNESS_NO_WEBSERVER`, let Playwright launch the
+  Next.js dev server, navigate to a real page, and confirm
+  Wagmi/RainbowKit auto-discovers the harness wallet via the
+  EIP-6963 announcement.
+- slice 4 — the canonical Phase 5 invariant: navigate to a
+  proposal page, scrape the visible price, compare to the api
+  response that produced it.
