@@ -715,10 +715,26 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 45 invariants (api side)**: 12 api-internal +
-      26 indexer probes + 7 chain-layer. 149 smoke tests
+      **Now 46 invariants (api side)**: 12 api-internal +
+      26 indexer probes + 8 chain-layer. 152 smoke tests
       green.
-      `anvilNetworkVersionMatchesChainId` added this slice
+      `anvilImpersonationCapabilityPresent` added this slice
+      — eighth chain-layer invariant; first probe that
+      exercises an ANVIL-SPECIFIC RPC method
+      (anvil_impersonateAccount) rather than a standard
+      JSON-RPC method. Asserts the method is actually
+      callable, not just that the client claims to be
+      anvil. Distinct from anvilClientVersionMentionsAnvil
+      (which checks the version string only). Catches
+      hardhat-compatible forks emitting "anvil" in
+      clientVersion but lacking the impersonation
+      extension; anvil version regressions; RPC-layer
+      method allowlisting excluding anvil_*. Why this
+      matters: every futarchy scenario mutates state via
+      impersonation; without this method, scenarios
+      silently fail.
+
+      `anvilNetworkVersionMatchesChainId` (previous slice)
       — seventh chain-layer invariant; chain-RPC-CONSISTENCY
       check. Asserts net_version (decimal) and eth_chainId
       (hex) numerically agree. Orthogonal to anvilChainId
