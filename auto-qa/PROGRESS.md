@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 17 |
+| Iterations completed | 18 |
 | PRs catalogued | 40 / ~65 |
 | PRs classified | 40 |
-| Tests added | 67 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window + 14 impact-formula — all passing) |
+| Tests added | 78 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window + 14 impact-formula + 11 proposal-resolution-bucketing — all passing) |
 | Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -267,10 +267,10 @@ For each merged PR (newest first), capture:
 
 ### PR #28 — Fix resolved proposals showing as ongoing (#10, #11)
 - **Class**: bug-fix
-- **Hypothesis**: The `resolution_status === 'resolved'` filter check was missing or wrong-cased somewhere — resolved proposals leaked into the "Active" bucket. Fix: filter on both `resolution_status` and `resolutionStatus` (camelCase) values.
-- **Ideal test**: Pure unit test: given a list of proposals with mixed status fields, the bucketing function puts each in the correct bucket regardless of which casing the field uses.
-- **Tools needed**: pure unit test if the bucketing function is exported.
-- **Test status**: not-started
+- **Hypothesis (refined after reading the diff)**: `approvalStatus` was hardcoded to `'ongoing'` on the subgraph path (`ProposalsPage.jsx:258`) and only weakly derived on the Supabase path. So when Reality.eth → Registry metadata reported `resolution_status === 'resolved'`, the proposals list still rendered the "Ongoing" badge. Fix: codify a precedence rule — `resolution_status === 'resolved'` overrides `approval_status`, and the resulting bucket is `approved` if `resolution_outcome === 'yes'` else `refused`. Also widen the `resolved` flag in `useContractConfig.js` to OR over four sources (data + registry × status + outcome).
+- **Ideal test**: Spec-mirror test of the three rules — both bucketers + the resolved-flag derivation. Pure unit test, no DOM/network.
+- **Tools needed**: none (pure-math, inlined spec).
+- **Test status**: **landed-passing** (`auto-qa/tests/proposal-resolution-bucketing.test.mjs`, 11 cases — covers subgraph bucketer, supabase bucketer with priority ordering, resolved-flag truthiness across all four signal sources including numeric-0 outcome, defensive null/undefined guards, and a cross-rule consistency invariant: any input that `isResolved=true` must NOT bucket to "ongoing")
 
 ### PR #27 — Restore landing page
 - **Class**: feature
