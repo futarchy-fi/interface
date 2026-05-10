@@ -312,8 +312,11 @@ async function bulkFetchPoolsByChain(proposals) {
     const poolMap = {};
     for (const pool of result?.data?.pools || []) {
         if (pool.type !== 'CONDITIONAL' && pool.type !== 'conditional') continue;
-        // Strip "<chainId>-" prefix to key by plain proposal address
-        const propAddr = (pool.proposal || '').split('-').slice(1).join('-').toLowerCase();
+        // Key by plain proposal address. The /candles/graphql proxy already
+        // strips the "<chainId>-" prefix from response IDs, so handle both
+        // shapes (prefixed for direct upstream, plain for proxied).
+        const raw = (pool.proposal || '').toLowerCase();
+        const propAddr = raw.includes('-') ? raw.split('-').slice(1).join('-') : raw;
         if (!propAddr) continue;
         if (!poolMap[propAddr]) poolMap[propAddr] = { yes: null, no: null };
         if (pool.outcomeSide === 'YES' || pool.outcomeSide === 'yes') {
