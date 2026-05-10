@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env** on api side (`docker compose config` returns 6 services; api env corrected to REGISTRY_URL + CANDLES_URL). Slice 4b-network-wire blocked by compose v2 include-conflict; 3 alternatives documented for next iteration. CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire** on api side (per-service `extends:` replaces `include:`; indexers dual-homed on harness-net + their own networks; api depends_on indexers declared). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1654,3 +1654,49 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
   - Slice 4 progress: ~33% done (4a-prep + 4a + 4b-plan +
     4b-include + 4b-api-env / ~12 sub-slices). Next:
     4b-network-wire approach (b).
+
+- **slice 4b-network-wire** (this iteration, on the api side)
+  — indexers wired into the harness compose via per-service
+  `extends:` (approach b from prior iteration's options list,
+  ADR-002's "wrapper" leg).
+
+  - **What changed in compose**:
+    * `include:` block REMOVED (it rejected same-name overrides)
+    * Top-level `networks:` expanded with `registry-net` +
+      `checkpoint-net`
+    * Top-level `volumes:` declared with
+      `registry-postgres-data` + `candles-postgres-data`
+    * 4 new service blocks: `registry-checkpoint`,
+      `registry-postgres`, `checkpoint`, `postgres` — each
+      uses `extends: { file:
+      ../../../futarchy-indexers/.../docker-compose.yml,
+      service: <bare name> }` to pull in the indexer's full
+      definition
+    * Two checkpoint services get harness overrides:
+      RPC_URL / GNOSIS_RPC_URL = http://anvil:8545; RESET=true;
+      networks dual-homed; depends_on anvil + their postgres
+    * api depends_on now safely declares registry-checkpoint
+      + checkpoint (service_started since indexers have no
+      healthcheck)
+
+  - **Compose extends merge confirmed via test**:
+    * Maps merge (env override layered on included defaults)
+    * Sequences replace (must repeat original network)
+    * Build context resolves to extended file's directory
+      (registry → /Users/kas/futarchy-indexers/futarchy-complete/checkpoint;
+      candles → /Users/kas/futarchy-indexers/proposals-candles/checkpoint)
+
+  - **Validation**: `docker compose config --quiet` succeeds;
+    `--services` returns 6; merged config shows
+    RPC_URL=http://anvil:8545 on registry, GNOSIS_RPC_URL on
+    candles, api depends_on lists all three.
+
+  - **Pinned for slice 4b-verify** (Docker daemon required,
+    mostly human work): actual `docker compose up -d`; indexers
+    can reach anvil over harness-net; api can resolve
+    registry-checkpoint:3000 + checkpoint:3000 GraphQL;
+    postgres healthchecks.
+
+  - Slice 4 progress: ~42% done (6 of ~12 sub-slices). Next:
+    slice 4b-verify (daemon smoke) OR slice 4c (interface-dev
+    block in compose).

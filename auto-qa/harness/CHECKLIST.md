@@ -625,16 +625,17 @@ freshly-generated addresses as recipients; documented in
       reads). Now `REGISTRY_URL` + `CANDLES_URL` +
       `FUTARCHY_MODE: checkpoint` wired to compose-internal
       service names + container port 3000.
-- [ ] **4b-network-wire — BLOCKED (decision deferred).**
-      Naive override attempt FAILED in compose v2.34:
-      `services.registry-checkpoint conflicts with imported
-      resource`. `include:` rejects same-name service
-      redefinition in parent. Three alternatives documented
-      (in api compose comments + PROGRESS): (a) include's
-      override-list form; (b) per-service `extends:` + drop
-      `include:`; (c) multi-file `-f` (rejected — breaks the
-      single-compose acceptance gate). Approach (b) is the
-      lead candidate, ADR-002's "wrapper" leg.
+- [x] **4b-network-wire — indexers wired via per-service
+      `extends:` (approach b)** (api side, commit pending).
+      Dropped `include:`; replaced with 4 `extends:` blocks
+      (registry-checkpoint, registry-postgres, checkpoint,
+      postgres). Two checkpoint services get harness
+      overrides: RPC env redirected at http://anvil:8545,
+      networks dual-homed (their own + harness-net),
+      depends_on anvil + postgres. Top-level networks +
+      volumes re-declared because extends only covers
+      service-level config. Api depends_on now includes
+      registry-checkpoint + checkpoint (service_started).
 - [ ] **4b-verify — full smoke test** (post-network-wire).
       `docker compose config --services` returns 6 (currently
       passes); `docker compose build api` still succeeds.
