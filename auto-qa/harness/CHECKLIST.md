@@ -689,9 +689,19 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 40 invariants (milestone, api side)**: 10
-      api-internal + 26 indexer probes + 4 chain-layer.
-      `apiUnifiedChartHasObservabilityHeaders` added
+      **Now 41 invariants (api side)**: 10 api-internal +
+      26 indexer probes + 5 chain-layer. 130 smoke tests
+      green.
+      `anvilClientVersionMentionsAnvil` added this slice
+      — chain-CLIENT identity pin (distinct from
+      anvilChainId chain-NETWORK pin). Together they
+      pin both layers of "right environment" — chain ID
+      for the network, client version for the EVM impl.
+      Catches running against a Gnosis fork on geth/
+      erigon where anvil_/evm_ extensions for
+      impersonation/snapshots/time-warp silently fail.
+      `apiUnifiedChartHasObservabilityHeaders` (previous
+      slice) added
       this slice — first response-HEADER validation in
       the catalog. Asserts X-Cache ∈ {HIT, MISS} AND
       X-Response-Time matches /^\d+ms$/. New pattern:
@@ -700,8 +710,8 @@ freshly-generated addresses as recipients; documented in
       only checks: refactor that drops cache layer
       instrumentation; refactor that adds a third state
       ('STALE') without telling ops; timing regression
-      that emits 'NaN ms' or raw integer. 126 smoke
-      tests green. Still to add: candlesAggregation
+      that emits 'NaN ms' or raw integer. Still to add:
+      candlesAggregation
       (Candle.volume = sum of contained Swap amounts
       within period), full chartShape ID-pair match,
       conservation, TWAP monotonicity, cross-run rate
