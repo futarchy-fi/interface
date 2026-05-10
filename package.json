@@ -18,7 +18,9 @@
     "auto-qa:extract-graphql": "node auto-qa/tools/extract-graphql.mjs",
     "auto-qa:probe-graphql": "node auto-qa/tools/probe-graphql.mjs",
     "auto-qa:test": "node --test 'auto-qa/tests/**/*.test.mjs'",
-    "auto-qa:e2e": "npm --prefix auto-qa/harness run phase-status"
+    "auto-qa:e2e": "npm --prefix auto-qa/harness run phase-status",
+    "auto-qa:e2e:smoke:wallet": "npm --prefix auto-qa/harness run smoke:wallet",
+    "auto-qa:e2e:wallet:demo": "npm --prefix auto-qa/harness run wallet:demo"
   },
   "dependencies": {
     "@balancer-labs/sdk": "^1.1.6",

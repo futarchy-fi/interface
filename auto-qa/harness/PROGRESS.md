@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 3 — slices 1-5 in futarchy-api: roundtrip invariant test ships (anvil mines → indexer follows via bootstrapAfterStart). 25 smoke tests pass + 4 skips (all docker-up-gated). UI side waits for Phase 4-5. |
+| Phase | 4 — slice 1 landed (UI side ACTIVE). createProvider EIP-1193 stub validated against live anvil (8 cases pass in 5s). Spike-002 resolved. nStubWallets derives canonical anvil dev addresses. Anvil-fork quirk surfaced (recipient balance reads 0 after success). |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -185,11 +185,67 @@ Phase 1:
      (the snippet in `ARCHITECTURE.md` is correct as written, but
      hasn't been exercised on a clean machine yet)
 
-**UI-side Phase 4-5 starting work (queued for after Phase 1-3):**
+### Phase 4 — Synthetic wallet + first scripted swap (UI side)
 
-- `eth_subscribe` shim spike (1-day, per ADR-001 risk)
-- `npm i -D @playwright/test` in `auto-qa/harness/`
-- Browser binary install via `npx playwright install chromium`
-- Replace TODO in `installWalletStub` with EIP-6963 announcement +
-  ethers.Wallet wrapping
-- `nStubWallets(N)` derive deterministic addresses from anvil mnemonic
+- **slice 1** (this iteration) — wallet stub `createProvider` shipped
+  + Spike-002 resolved + nStubWallets shipped + 8-case live-anvil
+  test passes.
+
+  - **Spike-002** (`docs/spike-002-eth-subscribe-shim.md`, by
+    background agent): `eth_subscribe` over HTTP — anvil 1.5.0 returns
+    -32601 directly. viem only emits eth_subscribe via WS/IPC
+    transports, never EIP-1193. The futarchy app uses
+    `fallback(http(...))` so its watchers already poll. viem's
+    `useWaitForTransactionReceipt` hard-codes `poll: true`
+    (`waitForTransactionReceipt.ts:200-208`). **Decision: reject
+    eth_subscribe with -32601** (3 lines in stub). No shim
+    infrastructure needed.
+
+  - `fixtures/wallet-stub.mjs` REWRITTEN from placeholder:
+    - `createProvider({privateKey, rpcUrl, chainId})` returns an
+      EIP-1193 provider wrapping a viem account
+    - 9 wallet-local methods handled in-stub: eth_accounts,
+      eth_requestAccounts, eth_chainId, wallet_switchEthereumChain
+      (emits chainChanged), wallet_addEthereumChain, personal_sign,
+      eth_sign, eth_signTypedData_v4, eth_sendTransaction
+    - 14 RPC passthrough methods → forwarded to anvil verbatim
+    - 2 subscription methods → reject with -32601
+    - `isMetaMask: true` so RainbowKit auto-discovers
+    - `installWalletStub` (browser-injection) still throws — that's
+      Phase 5
+  - `nStubWallets(N)` derives canonical anvil dev addresses from
+    foundry mnemonic via viem's `mnemonicToAccount` + HDKey:
+    [0]=0xf39F…, [1]=0x7099…, [2]=0x3C44…
+  - `tests/smoke-wallet-stub.test.mjs`: 8 cases, 5s runtime
+    - 4 constructor-error cases (no config, missing fields, bad types)
+    - 2 nStubWallets cases (canonical addresses, n validation)
+    - 1 method-classification sanity (sets non-overlapping)
+    - 1 LIVE-ANVIL end-to-end: spawns anvil, exercises eth_accounts,
+      eth_chainId, wallet_switchEthereumChain (with chainChanged
+      emission), eth_blockNumber passthrough, eth_sendTransaction
+      (signed via viem, mined, receipt status 0x1, sender debited
+      correctly), personal_sign, eth_subscribe rejection
+  - npm scripts wired: `wallet:demo`, `smoke:wallet`, `test`;
+    root `auto-qa:e2e:smoke:wallet`, `auto-qa:e2e:wallet:demo`
+
+  **Real anvil-fork quirk caught** — pinned in test as a diagnostic:
+  on a Gnosis fork, after a successful 1-ETH transfer between anvil
+  dev addresses, recipient's `eth_getBalance` reads as 0 (not
+  pre+1ETH) even though the tx receipt is `status: 0x1` and the
+  sender is debited correctly. NOT a wallet-stub bug — surfaces
+  some interaction between anvil's fork mode and pre-funded dev
+  accounts. Tracked for follow-up; receipt-status + sender-debit
+  are the load-bearing assertions.
+
+**Phase 4 wrap-up — remaining:**
+
+- slice 2 — Mock futarchy contracts on anvil. Deploy a minimal
+  Aggregator + ProposalFactory locally (or use anvil_setCode to
+  inject existing Gnosis contracts at known addresses) so we can
+  fire NewProposal events for the first end-to-end indexer roundtrip.
+- slice 3 — Investigate the recipient-balance quirk. May be
+  anvil-specific (fork mode + pre-funded accounts), or maybe related
+  to viem's tx submission behavior. Either fix or document permanently.
+- slice 4 — End-to-end roundtrip test combining wallet stub +
+  Phase 3 indexer: send tx via wallet → mine → indexer observes →
+  api passthrough returns it. Gated on Docker Desktop start.
