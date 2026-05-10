@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep** on api side (orchestrator stub fixed: same path/port/env/Node-version pattern as 4c-prep + a deeper scope concern surfaced — assertion scripts don't exist yet, so 4d split into 4d-prep / 4d-scenarios / 4d-activate). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold)** on api side (orchestrator/invariants.mjs + scenario-runner.mjs shipped with 2 starter invariants — apiHealth + apiCanReachRegistry; 6 smoke tests green; HARNESS_COMPOSE-gated runner per ADR-002 wrapper leg). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1841,3 +1841,55 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     4d-scenarios (NEW CODE — build the assertion library) OR
     slice 4e (acceptance gate, blocked on 4b-verify +
     4c-verify + 4d-activate).
+
+- **slice 4d-scenarios (scaffold)** (this iteration, on the
+  api side) — the FIRST meaningful new code in slice 4 (not
+  just compose wiring or stub fixes). Picked path (a): a
+  HARNESS_COMPOSE=1-gated unified runner. Same binary works
+  in compose mode (hits already-running endpoints) and
+  eventually in native mode (will delegate to services.mjs).
+
+  - **What landed (api side)**:
+    * `auto-qa/harness/orchestrator/invariants.mjs` — the
+      assertion library. Exports `INVARIANTS` array and
+      `runAllInvariants(ctx)` aggregator. First 2 invariants:
+      `apiHealth` (api/health 200) and `apiCanReachRegistry`
+      (api/registry/graphql proxies __typename probe).
+      Aggregator runs all checks without short-circuiting so
+      one broken layer doesn't hide downstream failures.
+    * `auto-qa/harness/orchestrator/scenario-runner.mjs` —
+      CLI entry point. Reads service URLs from env
+      (API_URL, REGISTRY_URL, CANDLES_URL, RPC_URL); gates
+      on HARNESS_COMPOSE=1; supports HARNESS_DRY_RUN=1 for
+      offline catalog dump; exits 2 in native mode with a
+      pointer to start-indexers.mjs + tests/.
+    * `auto-qa/harness/tests/smoke-scenario-runner.test.mjs`
+      — 6 tests against an in-process node:http fixture
+      mimicking api response shapes. INVARIANTS shape;
+      happy path; 2 failure paths (verifying no
+      short-circuit); CLI dry-run; CLI native-mode
+      rejection. All 6 green.
+    * `auto-qa/harness/package.json` — 3 new scripts:
+      `scenarios:dry`, `scenarios:run`, `smoke:scenarios`.
+
+  - **What this enables**:
+    * Slice 4d-activate: replace the placeholder
+      `tail -f /dev/null` command in the orchestrator
+      compose block with `npm run scenarios:run`. Atomic
+      uncomment now that the runner exists.
+    * Future iterations ADD invariants to the array
+      without touching scenario-runner.mjs — clean
+      separation between assertion library (data) and
+      runner (control flow).
+
+  - **Validation**:
+    * `npm run smoke:scenarios` → 6/6 pass (155ms)
+    * `npm run scenarios:dry` → exits 0; prints catalog
+    * Native-mode rejection prints clear pointer + exits 2
+
+  - Slice 4 progress: ~67% done (10 of ~15+ sub-slices —
+    4d-scenarios decomposes further into per-invariant
+    sub-slices over time). Next bot-doable: slice
+    4d-activate (atomic uncomment + replace placeholder
+    command) OR 4d-scenarios-more (next invariant —
+    apiCanReachCandles, mirroring the registry pattern).

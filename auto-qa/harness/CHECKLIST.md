@@ -676,13 +676,23 @@ freshly-generated addresses as recipients; documented in
       4a-prep + 4c-prep, plus a deeper finding: ARCHITECTURE
       assertion scripts (orchestrator/invariants.mjs) don't
       exist yet.
-- [ ] **4d-scenarios — build the missing assertion scripts.**
-      ARCHITECTURE envisions invariants.mjs + scenario-runner.
-      The existing orchestrator/services.mjs assumes native
-      topology (would conflict with compose). Decide between
-      (a) HARNESS_COMPOSE-gated scenario-runner that switches
-      between topologies, or (b) defer compose orchestrator,
-      treat compose as a "bring up stack" tool.
+- [x] **4d-scenarios (slice 1: scaffold + 2 invariants)**
+      (api side, commit pending). Picked path (a):
+      HARNESS_COMPOSE=1-gated unified runner. Shipped:
+      `orchestrator/invariants.mjs` (assertion library +
+      INVARIANTS array; first 2 invariants — `apiHealth`
+      + `apiCanReachRegistry`), `orchestrator/scenario-runner.mjs`
+      (CLI; reads service URLs from env; HARNESS_DRY_RUN=1
+      flag for offline catalog dump; exits 2 in native mode
+      with pointer to start-indexers.mjs + tests/),
+      `tests/smoke-scenario-runner.test.mjs` (6 tests, all
+      green). New npm scripts: `scenarios:dry`,
+      `scenarios:run`, `smoke:scenarios`.
+- [ ] **4d-scenarios-more — add remaining invariants** per
+      PROGRESS invariant tables (apiCanReachCandles,
+      rateSanity, probabilityBounds, candlesAggregation,
+      chartShape, conservation). Each is a small additive
+      slice on the now-stable INVARIANTS array.
 - [ ] **4d-activate — atomic uncomment** after 4d-scenarios.
       Adds 8th service to compose stack.
 - [ ] **4e — single `docker compose up -d`** brings the full
