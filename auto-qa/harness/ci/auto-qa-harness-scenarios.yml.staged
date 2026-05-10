@@ -1,0 +1,85 @@
+name: auto-qa harness — scenarios suite
+
+# Phase 7 slice 3c — second workflow file for the Forked Replay
+# Harness (see `auto-qa/harness/PROGRESS.md`). Runs the full
+# Playwright scenarios suite end-to-end: chromium browser + the
+# real futarchy Next.js dev server + the captured bug-shape
+# scenarios.
+#
+# Kept SEPARATE from the lightweight drift-check workflow
+# (`auto-qa-harness.yml`) so the maintainer can promote each
+# independently — drift-check is fast (<1 min, no browser);
+# this one is heavier (~5-10 min) and gets its own gate.
+#
+# Trigger is `workflow_dispatch` ONLY for v1, mirroring slice 3a's
+# conservative roll-out. Smoke-test manually first; later slices
+# add nightly + PR triggers.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scenarios-suite:
+    name: Playwright scenarios suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          # Two lockfiles: the Next.js dev server runs from the repo
+          # root, and the harness has its own Playwright/viem deps.
+          cache-dependency-path: |
+            package-lock.json
+            auto-qa/harness/package-lock.json
+
+      - name: Install root deps (Next.js dev server)
+        # The harness's playwright config auto-launches
+        # `npm --prefix ../../ run dev`, so the root install is
+        # required even though tests live in auto-qa/harness/.
+        run: npm ci
+
+      - name: Install harness deps
+        working-directory: auto-qa/harness
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('auto-qa/harness/package-lock.json') }}
+
+      - name: Install Chromium (with system deps)
+        # Cache miss: install both the browser binary and its OS deps.
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: auto-qa/harness
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Chromium system deps (cache hit path)
+        # Cache hit: browser binary is cached but apt deps aren't.
+        # `install-deps` is fast and idempotent.
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: auto-qa/harness
+        run: npx playwright install-deps chromium
+
+      - name: Run Playwright scenarios suite
+        env:
+          # No anvil in CI; point Wagmi at a public Gnosis RPC for the
+          # tests that just need a working wallet provider. The
+          # wallet-signing eth_sendTransaction case auto-skips when
+          # anvil is missing (see `whichAnvil()` in
+          # `flows/wallet-signing.spec.mjs`).
+          HARNESS_FRONTEND_RPC_URL: https://rpc.gnosischain.com
+        working-directory: auto-qa/harness
+        run: npm run ui:full
+
+      # Slice 3d will add `actions/upload-artifact@v4` here,
+      # conditional on `failure()`, to capture playwright-report/
+      # + test-results/ for debugging.

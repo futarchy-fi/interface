@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase **7 slice 3a** (CI workflow STAGED) landed. `auto-qa/harness/ci/auto-qa-harness.yml.staged` contains the scenarios catalog drift check workflow. Awaiting one-time maintainer promotion to `.github/workflows/` (the bot's OAuth token lacks workflow scope). 21/21 browser tests green; CI check is fast (<1 min, no browser/Next.js). |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c** STAGED. `auto-qa/harness/ci/auto-qa-harness.yml.staged` (drift check, fast) and `auto-qa-harness-scenarios.yml.staged` (full Playwright scenarios suite, heavier) both await maintainer promotion to `.github/workflows/` (the bot's OAuth token lacks workflow scope). 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1274,7 +1274,85 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     * 3d — `actions/upload-artifact@v4` block conditional on
       failure (Playwright traces / screenshots / videos)
 
-**Smoke summary (UI side, post-Phase 7 slice 3a):**
+- **slice 3c** (this iteration) — **second CI workflow STAGED**:
+  the heavier Playwright-scenarios runner. Kept as a SEPARATE
+  workflow file from slice 3a's drift check so the maintainer
+  can promote each independently and gate them differently.
+
+  - **What landed**:
+    * `auto-qa/harness/ci/auto-qa-harness-scenarios.yml.staged`
+      (NEW) — second workflow YAML.
+    * `auto-qa/harness/ci/README.md` updated to list both staged
+      files + recommended promote order.
+
+  - **The workflow** (`auto-qa-harness-scenarios.yml`):
+    ```
+    scenarios-suite:
+      - actions/checkout@v4
+      - actions/setup-node@v4 (Node 22, npm cache on
+        BOTH lockfiles — root + auto-qa/harness)
+      - npm ci at root (Next.js dev server)
+      - npm ci in auto-qa/harness (Playwright + viem)
+      - actions/cache@v4 ~/.cache/ms-playwright keyed on
+        harness lockfile hash
+      - cache miss: npx playwright install --with-deps chromium
+        cache hit:  npx playwright install-deps chromium
+      - npm run ui:full in auto-qa/harness, env
+        HARNESS_FRONTEND_RPC_URL=https://rpc.gnosischain.com
+    ```
+    Trigger is `workflow_dispatch` ONLY for v1 (mirroring slice
+    3a's conservative roll-out — second workflow file landing
+    can't unexpectedly red-light unrelated PRs either). Timeout
+    20 min; expected wall-clock ~5-10 min cold (~2-3 min once
+    the browser cache hits).
+
+  - **Why a SEPARATE file (not a second job in slice 3a's
+    workflow)**:
+    * Different cost profile: drift check <1 min vs scenarios
+      suite ~5-10 min — different cadence sensible (drift could
+      run on every PR; scenarios maybe nightly + manual)
+    * Atomic promote-per-slice: maintainer can promote drift
+      check first, smoke-test, then promote scenarios separately
+    * Reduced blast radius: misconfigured scenarios YAML can't
+      red-light the drift check
+    * Different cache-dep paths: drift check only needs the
+      harness lockfile; scenarios needs both root + harness
+
+  - **Why `HARNESS_FRONTEND_RPC_URL=https://rpc.gnosischain.com`
+    instead of localhost:8546**: there's no anvil in the GitHub
+    runner. The wallet-signing eth_sendTransaction case
+    auto-skips when `whichAnvil()` returns null; the other tests
+    just need a working JSON-RPC endpoint for Wagmi to bootstrap
+    (chain ID lookup, etc).
+
+  - **Browser-cache pattern** (the trickiest piece): Playwright
+    caches its browser binaries in `~/.cache/ms-playwright`,
+    which `actions/cache@v4` can persist across runs. But the
+    apt-level system deps (e.g. libnss3) aren't cached and must
+    be reinstalled each run. The two-step pattern is:
+    * cache miss → `playwright install --with-deps chromium`
+      (binary + deps in one command)
+    * cache hit → `playwright install-deps chromium`
+      (apt-only, ~10-30s)
+    Reduces warm-cache install time from ~60s to ~10s without
+    risking missing system deps.
+
+  - **Promote command** (one-time maintainer task on interface
+    side, AFTER smoke-testing slice 3a):
+    ```bash
+    cp auto-qa/harness/ci/auto-qa-harness-scenarios.yml.staged \
+       .github/workflows/auto-qa-harness-scenarios.yml
+    git add .github/workflows/auto-qa-harness-scenarios.yml
+    git commit -m "ci: promote auto-qa harness scenarios-suite"
+    git push
+    ```
+
+  - **Local validation**: harness `npm ci` succeeded; `npm run
+    ui:full` was last run end-to-end during slice 3a iteration
+    (30 tests, all green); YAML parses cleanly via
+    `python3 -c 'import yaml; yaml.safe_load(open(...))'`.
+
+**Smoke summary (UI side, post-Phase 7 slice 3c):**
 
 ```
 Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
@@ -1285,5 +1363,6 @@ Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
 Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
 Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
 + scenarios:catalog drift check (CI workflow + local)  ✓ <1s
++ scenarios suite CI workflow (STAGED, awaits promote)  ⏳
                                        TOTAL: 30 pass + 0 skip
 ```
