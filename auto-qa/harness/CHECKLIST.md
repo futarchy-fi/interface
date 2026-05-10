@@ -689,14 +689,12 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 8 invariants (api side): 5 GraphQL probes + 3
-      chain-layer (`anvilBlockNumber` and `anvilChainId`
-      added this slice — eth_blockNumber > 0 + eth_chainId
-      == 0x64 / 100 / Gnosis; complement `rateSanity` for
-      full chain-process+state coverage). Refactored the
-      JSON-RPC mock in the smoke fixture to parse the
-      request body and branch on method (was eth_call-only).
-      16 smoke tests green. Still to add: probabilityBounds,
+      Now 10 invariants (api side): 5 api-internal probes
+      (apiHealth + 2 GraphQL passthroughs + `apiWarmer` and
+      `apiSpotCandlesValidates` added this slice for
+      endpoint-coverage + validation-regression detection)
+      + 2 direct-indexer probes + 3 chain-layer probes.
+      21 smoke tests green. Still to add: probabilityBounds,
       candlesAggregation, chartShape, conservation,
       cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api

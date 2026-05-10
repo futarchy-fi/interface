@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 8 invariants: 3 api-passthrough + 2 direct-probe + 3 chain-layer; 16 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 10 invariants: 5 api-internal + 2 direct-probe + 3 chain-layer; 21 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2097,3 +2097,41 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     candlesAggregation, chartShape, conservation) all need
     real pool data or multiple contract calls — meatier
     than the simple GraphQL/RPC probes shipped so far.
+
+- **slice 4d-scenarios-more (apiWarmer + apiSpotCandlesValidates)**
+  (this iteration, on the api side) — two new api-internal
+  invariants cover the previously-unmonitored `/warmer`
+  endpoint and add a validation-regression check that
+  doesn't need real data:
+  * `apiWarmer` — GET `/warmer`, assert 200 + JSON. Doesn't
+    peek at body shape (over-coupling would make it fragile).
+  * `apiSpotCandlesValidates` — GET `/api/v1/spot-candles`
+    WITHOUT ticker, assert 400 + JSON `{error: ...}`.
+    Catches three failure modes in one check: validation
+    removed (200 with garbage), validation crashes (5xx),
+    route disconnected (404).
+
+  - **Why these two**: existing 8 invariants covered one
+    api endpoint (/health), 2 GraphQL passthroughs, 2
+    direct-indexer probes, 3 chain-layer RPC. They don't
+    exercise other api endpoints OR input-validation paths.
+    This slice picks off two — the warmer endpoint
+    (lowest-risk: pure liveness) and the validation
+    behavior (interesting bug class: 400→200 silently
+    breaks downstream consumers).
+
+  - **Smoke fixture extensions**: `/warmer` + 
+    `/api/v1/spot-candles` GET routes added with toggles
+    (`warmerOk`, `warmerContentType`,
+    `spotCandlesNoTickerStatus`, `spotCandlesNoTickerBody`).
+
+  - **Smoke test coverage**: 5 new tests (happy + failures
+    for each); 21/21 pass (was 16). Now 10 invariants in
+    catalog.
+
+  - Slice 4 progress: ~88% (16 of ~18 sub-slices —
+    4d-scenarios-more keeps absorbing one or two
+    invariants per iteration). The api-internal/RPC/GraphQL
+    layers are now well covered (10 invariants); meaningful
+    next additions step into data-shape validation (real
+    pool data, cross-layer reconciliation).
