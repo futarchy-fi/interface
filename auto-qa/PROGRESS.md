@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 18 |
-| PRs catalogued | 40 / ~65 |
-| PRs classified | 40 |
-| Tests added | 78 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window + 14 impact-formula + 11 proposal-resolution-bucketing — all passing) |
+| Iterations completed | 19 |
+| PRs catalogued | **42 / 42 (full coverage)** — repo PRs span #23..#65 with one gap at #38; no PRs #1-22 exist |
+| PRs classified | 42 |
+| Tests added | 84 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap + 6 twap-window + 14 impact-formula + 11 proposal-resolution-bucketing + 6 footer-links — all passing) |
 | Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -303,6 +303,29 @@ For each merged PR (newest first), capture:
 - **Ideal test**: Visual regression
 - **Test status**: deferred
 
+## Open PRs (not yet merged — catalogued for completeness)
+
+### PR #41 — Fix footer documentation access with in-app documents hub (OPEN)
+- **Class**: bug-fix
+- **Hypothesis**: External `https://docs.futarchy.fi` redirected unreliably to a GitHub README in some browsers / wallet webviews. Fix: route the footer through an in-app `/documents` page (alias `/docs`) with curated links.
+- **Ideal test**: Two layers — (a) static lint that the Footer's Documentation link resolves to an in-repo route (`/documents` or `/docs`), not a bare external URL; (b) Playwright smoke that navigates to both `/documents` and `/docs` and asserts a non-empty list of links + that no link 404s.
+- **Tools needed**: cheap text grep on `Footer.jsx`; Playwright for the navigation test.
+- **Test status**: **partially landed** (`auto-qa/tests/footer-links.test.mjs`, 6 cases — pins NAV_LINKS structural invariants AND accepts BOTH the current external URL and post-PR-#41 in-app routes, so it stays green across the merge transition. The Playwright navigation layer remains a follow-up.)
+
+### PR #40 — Add position tab indicator and auto-switch after trade (OPEN)
+- **Class**: feature/UX
+- **Hypothesis**: n/a
+- **Ideal test**: Component test — given a wallet with non-zero `YES - NO` token balance, the Position tab renders the green dot indicator. Auto-switch is a side-effect of the swap-success callback; would need an integration test.
+- **Tools needed**: React component-test harness (Storybook play function or Testing Library) + ability to mock wallet balances.
+- **Test status**: not-started
+
+### PR #36 — Fix chart zoom reset on data refresh (OPEN)
+- **Class**: bug-fix
+- **Hypothesis**: A monolithic `useEffect` in `SubgraphChart.jsx` re-ran on every dependency change (60s auto-resync, dark-mode toggle, line-visibility toggle, spot-price update), destroying and rebuilding the chart and discarding the user's zoom/pan state. Fix: split into two effects (chart creation vs. data update via `setData()`), gate `fitContent()` behind a `hasInitiallyFit` ref so it only fires once.
+- **Ideal test**: Playwright — load market page, zoom in, wait 65s for auto-resync, assert visible time range hasn't reset. Pure unit version: extract the dependency-array logic and assert the data-update effect doesn't include the resync trigger.
+- **Tools needed**: Playwright + a stable fixture market with chart data.
+- **Test status**: not-started
+
 ## Tooling backlog
 
 Ranked by how many catalogued bugs each tool would have caught.
@@ -317,8 +340,7 @@ Ranked by how many catalogued bugs each tool would have caught.
 
 ## Notes for future iterations
 
-- PRs #32–#60 still need to be catalogued (older history). Pull more via `gh pr list --state merged --limit 100`.
-- Also catalogue closed-without-merge PRs and direct-to-main commits.
+- **Catalogue is complete** as of iteration 19 — all 42 PRs (range #23..#65 with gap at #38) are documented, including the 3 currently-open PRs #36, #40, #41. New PRs should be added to the ledger at PR-merge time.
 - Repeat the same exercise on `futarchy-fi/futarchy-api` in alternating iterations.
 - Do NOT modify production code, even if the test exposes a bug. Document the failure here.
 
