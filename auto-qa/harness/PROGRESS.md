@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold)** on api side (orchestrator/invariants.mjs + scenario-runner.mjs shipped with 2 starter invariants — apiHealth + apiCanReachRegistry; 6 smoke tests green; HARNESS_COMPOSE-gated runner per ADR-002 wrapper leg). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE: anvil + api + 4 indexer services + interface-dev + orchestrator wired to scenario-runner.mjs). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1893,3 +1893,44 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     4d-activate (atomic uncomment + replace placeholder
     command) OR 4d-scenarios-more (next invariant —
     apiCanReachCandles, mirroring the registry pattern).
+
+- **slice 4d-activate** (this iteration, on the api side) —
+  the orchestrator block is UNCOMMENTED. The placeholder
+  `tail -f /dev/null` (kept through 4d-prep so the service
+  could exist structurally before the runner did) is replaced
+  with the real entry point: `node
+  orchestrator/scenario-runner.mjs`.
+
+  - **`docker compose config --services` returns 8** — the
+    full stack is now structurally complete: anvil, api,
+    registry-checkpoint, registry-postgres, checkpoint,
+    postgres, interface-dev, orchestrator.
+
+  - **Lifecycle**: orchestrator is one-shot. Container starts
+    → runs every invariant → exits 0 (all-pass) or 1
+    (any-fail). Other services keep running so you can
+    re-run with `docker compose run --rm orchestrator`
+    without bringing the stack down. Matches the eventual
+    CI workflow pattern (workflow checks orchestrator's
+    exit code).
+
+  - **Simplified vs prep**: the prep slice staged a
+    conditional `npm install` in the command. Unnecessary —
+    harness has zero deps; scenario-runner only uses Node 22
+    builtins. Replaced multi-line `sh -c` with clean
+    `["node", "orchestrator/scenario-runner.mjs"]`.
+    `orchestrator-node-modules` named volume kept (currently
+    empty) for future invariants that need viem etc.
+
+  - **What's left for slice 4 acceptance gate (4e)**:
+    * 4b-verify, 4c-verify, 4d-verify (Docker daemon
+      required, mostly human): bring up subsets of the
+      stack, verify each layer talks to the next.
+    * 4e (acceptance gate): single `docker compose up -d`
+      works on a fresh checkout. Trivial after the verifies.
+
+  - Slice 4 progress: ~73% done (11 of ~15+ sub-slices). All
+    bot-doable structural work in slice 4 is now complete
+    except slice 4d-scenarios-more (incremental: add more
+    invariants). Remaining sub-slices need Docker daemon
+    and are mostly human work.

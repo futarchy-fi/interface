@@ -693,8 +693,13 @@ freshly-generated addresses as recipients; documented in
       rateSanity, probabilityBounds, candlesAggregation,
       chartShape, conservation). Each is a small additive
       slice on the now-stable INVARIANTS array.
-- [ ] **4d-activate — atomic uncomment** after 4d-scenarios.
-      Adds 8th service to compose stack.
+- [x] **4d-activate — orchestrator block UNCOMMENTED** (api
+      side, commit pending). Replaced `tail -f /dev/null`
+      placeholder with `node orchestrator/scenario-runner.mjs`.
+      `docker compose config --services` returns 8 — full
+      stack structurally complete. Lifecycle is one-shot:
+      orchestrator runs invariants, exits 0/1; other services
+      keep running.
 - [ ] **4e — single `docker compose up -d`** brings the full
       stack cleanly on a fresh checkout. The slice 4
       acceptance gate.
