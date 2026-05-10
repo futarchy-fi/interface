@@ -14,7 +14,9 @@
     "build-storybook": "storybook build",
     "copy-structure": "node copyStructure.mjs",
     "getpoolprice": "node getAlgebraPoolPrice.js",
-    "start-proposal": "node scripts/proposal-cli.js"
+    "start-proposal": "node scripts/proposal-cli.js",
+    "auto-qa:extract-graphql": "node auto-qa/tools/extract-graphql.mjs",
+    "auto-qa:test": "node --test 'auto-qa/tests/**/*.test.mjs'"
   },
   "dependencies": {
     "@balancer-labs/sdk": "^1.1.6",

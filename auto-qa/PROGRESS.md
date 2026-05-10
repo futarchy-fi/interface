@@ -13,11 +13,12 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 1 |
+| Iterations completed | 2 |
 | PRs catalogued | 5 / ~65 |
 | PRs classified | 5 |
-| Tests added | 0 |
-| Tools needed but not installed | (TBD — see "Tooling backlog" below) |
+| Tests added | 4 (`extractor-sanity.test.mjs` — all passing) |
+| Tools shipped | 1 (`auto-qa/tools/extract-graphql.mjs`) |
+| Test runner | `node --test` via `npm run auto-qa:test` |
 
 ## Catalogue methodology
 
@@ -74,7 +75,7 @@ Ranked by how many catalogued bugs each tool would have caught.
 
 | Rank | Tool | Catches | Effort |
 |---|---|---|---|
-| 1 | **GraphQL schema-compat checker** — extract every GraphQL string from the frontend, validate against live Checkpoint introspection. Static, no UI needed. | #62, #63, #65 (3/5) + every future Checkpoint shape mismatch | Medium |
+| 1 | **GraphQL schema-compat checker** — extract every GraphQL string from the frontend, validate against live Checkpoint introspection. Static, no UI needed. **Step 1 done**: extractor at `auto-qa/tools/extract-graphql.mjs` finds 32 queries across 19 files (run `npm run auto-qa:extract-graphql --summary`). Step 2 next: feed the queries through graphql-js validator against live introspection. | #62, #63, #65 (3/5) + every future Checkpoint shape mismatch | Medium |
 | 2 | **Companies/market page render smoke test** — Playwright test that loads `futarchy.fi/companies` + a known market page and asserts non-empty data. | #61, #62, #64, #65 (4/5) | Medium-High (browser, network) |
 | 3 | **Bulk-pool-address unit test with recorded fixture** — calls `bulkFetchPoolsByChain` with a known input, asserts non-empty output. | #64 | Low |
 
@@ -86,3 +87,20 @@ Ranked by how many catalogued bugs each tool would have caught.
 - Also catalogue closed-without-merge PRs and direct-to-main commits.
 - Repeat the same exercise on `futarchy-fi/futarchy-api` in alternating iterations.
 - Do NOT modify production code, even if the test exposes a bug. Document the failure here.
+
+## Inventory snapshot (iteration 2)
+
+The extractor found **32 GraphQL queries across 19 files**. The 6 highest-density files are:
+
+```
+4  src/components/debug/CreateOrganizationModal.jsx
+4  src/hooks/usePoolData.js
+4  src/services/subgraphClient.js
+2  src/components/debug/OrganizationManagerModal.jsx
+2  src/hooks/useSearchProposals.js
+2  src/utils/SubgraphPoolFetcher.js
+2  src/utils/subgraphTradesClient.js
+```
+
+Each of these is a candidate for the next-step compat checker — they are the
+surface area against the Checkpoint indexer.
