@@ -689,19 +689,21 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 22 invariants (api side): 5 api-internal + 14
+      Now 23 invariants (api side): 5 api-internal + 15
       indexer probes (2 `__typename` liveness + 6
       data-aware coverage + 4 single-row data-SHAPE +
-      2 MULTI-ROW data-SHAPE: `candleTimeMonotonic`
-      (strict desc) + `swapTimeMonotonicNonStrict`
-      (non-strict — multiple swaps share a block ts) added
-      this slice; first cross-row checks in the catalog,
-      establishing the access pattern future cross-row
-      invariants like TWAP monotonicity will reuse) + 3
-      chain-layer probes. 51 smoke tests green. Still
+      2 multi-row data-SHAPE + 1 CROSS-LAYER MATCH:
+      `apiCandlesMatchesDirect` added this slice — first
+      true api↔indexer agreement check. Issues the same
+      GraphQL query via api passthrough AND direct in
+      parallel; compares ids + times pair-wise. Catches
+      api caching drift, adapter rewriting, schema-
+      translation bugs that no other invariant sees) +
+      3 chain-layer probes. 56 smoke tests green. Still
       to add: probabilityBounds, candlesAggregation
-      (cross-layer Candle vs Swap), chartShape,
-      conservation, cross-run monotonicity on rateSanity.
+      (Candle aggregates derive correctly from contained
+      Swaps), chartShape, conservation, cross-run
+      monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
