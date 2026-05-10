@@ -715,10 +715,24 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 51 invariants (api side)**: 14 api-internal +
-      27 indexer probes + 10 chain-layer. 172 smoke tests
+      **Now 52 invariants (api side)**: 14 api-internal +
+      28 indexer probes + 10 chain-layer. 176 smoke tests
       green.
-      `apiWarmerBodyShape` added this slice — second body-
+      `candlesIndexerSchemaHasRequiredTypes` added this
+      slice — first GraphQL INTROSPECTION probe; new
+      qualitative dimension. All previous indexer probes
+      query DATA (pools/swaps/candles); this queries the
+      SCHEMA (`__schema { types { name } }`) to verify
+      the entity types themselves still exist. Asserts
+      Pool, Swap, Candle types (the three entities the
+      harness queries). Catches schema-rename regressions
+      that data probes surface as misleading "indexer
+      empty" errors — this catches the rename DIRECTLY
+      with a clear "schema missing required type"
+      diagnostic. Also catches type drops + introspection
+      disablement.
+
+      `apiWarmerBodyShape` (previous slice) — second body-
       shape probe in the catalog; sister to apiHealthBodyShape.
       Together they cover the two main observability
       endpoints (/health + /warmer). Asserts /warmer body
