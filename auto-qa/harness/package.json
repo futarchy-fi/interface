@@ -8,6 +8,8 @@
         "phase-status": "node -e \"console.log('Forked Replay Harness — Phase 4 (synthetic wallet). See auto-qa/harness/PROGRESS.md');\"",
         "wallet:demo": "node fixtures/wallet-stub.mjs",
         "smoke:wallet": "node --test tests/smoke-wallet-stub.test.mjs",
+        "smoke:contracts": "node --test tests/smoke-contract-calls.test.mjs",
+        "contracts:demo": "node scripts/contracts.mjs",
         "test": "node --test 'tests/**/*.test.mjs'",
         "ui": "echo 'TODO Phase 5 — Playwright suite runner' && exit 1",
         "replay": "echo 'TODO Phase 5 — full chain↔api↔ui replay' && exit 1"

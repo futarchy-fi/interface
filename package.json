@@ -20,6 +20,8 @@
     "auto-qa:test": "node --test 'auto-qa/tests/**/*.test.mjs'",
     "auto-qa:e2e": "npm --prefix auto-qa/harness run phase-status",
     "auto-qa:e2e:smoke:wallet": "npm --prefix auto-qa/harness run smoke:wallet",
+    "auto-qa:e2e:smoke:contracts": "npm --prefix auto-qa/harness run smoke:contracts",
+    "auto-qa:e2e:contracts:demo": "npm --prefix auto-qa/harness run contracts:demo",
     "auto-qa:e2e:wallet:demo": "npm --prefix auto-qa/harness run wallet:demo"
   },
   "dependencies": {

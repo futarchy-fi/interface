@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 4 — slices 1+3 landed. createProvider EIP-1193 stub validated against live anvil (8 cases pass in ~4s, recipient credit now real-asserted). Spike-002 resolved. nStubWallets canonical. Anvil dev-account quirk RESOLVED (lazy-funding behavior, fix is fresh-recipient addresses). |
+| Phase | 4 — slices 1+2+3 landed. Wallet stub + contract-call surface (read/write/event-decode) both validated against live Gnosis fork. WXDAI deposit smoke proves end-to-end contract path. Spike-002 + dev-account quirk both resolved. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -270,13 +270,56 @@ Phase 1:
     generation. (deps remain in package.json — future cleanup if
     we never need them.)
 
+- **slice 2** (this iteration) — `scripts/contracts.mjs` +
+  `tests/smoke-contract-calls.test.mjs`. Foundation for scripted
+  contract calls (read + write + event-decode). Reuses the existing
+  Gnosis fork — no new contracts to deploy, since the real ones
+  ARE already on the fork.
+
+  - `scripts/contracts.mjs`: viem-based helpers (`readContract`,
+    `writeContract`, `getReceipt`, `parseEventLogs`, `publicClient`).
+    ABIs: `ERC20_ABI`, `WXDAI_ABI` (with WETH9-style Deposit/
+    Withdrawal events), `RATE_PROVIDER_ABI`. Address constants for
+    `sDAI` (0xaf2…701), `sDAI_RATE_PROVIDER` (0x89C…CeD), `WXDAI`
+    (0xe91…97d) sourced from production code.
+
+  - `tests/smoke-contract-calls.test.mjs` (new, 1 test, ~5.5s):
+    * READ paths (4): sDAI symbol="sDAI", decimals=18,
+      totalSupply=62.4M sDAI (real live state), sDAI rate=1.239
+      (real live monotonically-increasing rate)
+    * WRITE path: wallet deposits 1 ETH into WXDAI via
+      `writeContract`, tx mines (status=0x1), parseEventLogs decodes
+      the Deposit(dst, wad) event, balance check confirms +1 WXDAI
+      on wallet
+
+  - **Discovery during slice 2**: WXDAI follows the WETH9 pattern —
+    `deposit()` emits `Deposit(dst, wad)`, NOT ERC20 `Transfer`.
+    Topic hash `0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c`
+    = `keccak256("Deposit(address,uint256)")`. Test initially
+    expected `Transfer` and failed; pinpointed via diagnostic of the
+    raw log topics. Updated `WXDAI_ABI` and the test header to pin
+    the correct event shape. Production code grep confirmed no
+    callers assume `Transfer` from WXDAI (no production bug).
+
+  - npm scripts: `smoke:contracts`, `contracts:demo` in harness;
+    `auto-qa:e2e:smoke:contracts`, `auto-qa:e2e:contracts:demo`
+    at root.
+
+**Smoke summary (UI side, post-Phase 4 slices 1+2+3):**
+
+```
+Phase 4 wallet-stub (8 cases)             ✓ ~4s
+Phase 4 contract-calls (1 case, 4 reads + 1 write + event decode + bal check)
+                                           ✓ ~5.5s
+                                  TOTAL: 9 pass + 0 skip
+```
+
 **Phase 4 wrap-up — remaining:**
 
-- slice 2 — Mock futarchy contracts on anvil. Deploy a minimal
-  Aggregator + ProposalFactory locally (or use `anvil_setCode` to
-  inject existing Gnosis contracts at known addresses) so we can
-  fire NewProposal events for the first end-to-end indexer roundtrip.
-  Foundation for Phase 6 scenario library.
 - slice 4 — End-to-end roundtrip test combining wallet stub +
   Phase 3 indexer: send tx via wallet → mine → indexer observes →
   api passthrough returns it. Gated on Docker Desktop start.
+- slice 5 (post-Phase 4) — Futarchy-specific contract surface:
+  add ABIs for FutarchyProposalFactory, AlgebraPool, sDAI deposit/
+  withdraw. Once Phase 3 indexer is live, deposit sDAI then verify
+  the futarchy events flow into the indexer + api.
