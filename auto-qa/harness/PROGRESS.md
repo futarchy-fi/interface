@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 0 — in progress (scaffold slice 1: README + package.json + npm script wiring) |
+| Phase | 0 — in progress (slices 1-5 landed; remaining: harness package.json npm install, ARCHITECTURE.md sister-link verification) |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -114,19 +114,63 @@ Single docker-compose starts all four services. Orchestrator owns the clock.
 
 ### Phase 0 — Scaffold
 
-- **slice 1** (this commit) — README, harness package.json with stub
-  scripts, .gitignore, root `npm run auto-qa:e2e` wired through
+- **slice 1** — README, harness package.json with stub scripts,
+  .gitignore, root `npm run auto-qa:e2e` wired through
   `npm --prefix auto-qa/harness run phase-status`. Verified the stub
   prints the phase status from the repo root. No deps installed yet.
 
-**Next slices for Phase 0:**
+- **slice 2** — `playwright.config.mjs` skeleton committed as PLAIN JS
+  (NOT importing `@playwright/test` since it's not installed yet).
+  Documents the eventual config: testDir → flows/, browser matrix
+  (chromium-first, firefox/webkit deferred to Phase 7), trace/screenshot/
+  video on failure, baseURL from `HARNESS_FRONTEND_URL` env, webServer
+  block to auto-launch local Next.js dev server, viewport 1440x900,
+  120s test timeout. Self-test mode prints the planned shape.
 
-- slice 2 — `playwright.config.mjs` skeleton (no install yet — placeholder
-  config that documents the eventual browser matrix)
-- slice 3 — `fixtures/wallet-stub.mjs` placeholder (interface-only stub
-  documenting the eventual EIP-1193 surface we need to mock)
-- slice 4 — Sister-repo handshake: top-level `harness/ARCHITECTURE.md`
-  in each repo with the cross-repo invariant table + a "how to clone
-  the sister repo" snippet
-- slice 5 — Decision doc: pick Synpress vs custom wallet stub (write a
-  1-page ADR-style note in `docs/`)
+- **slice 3** — `fixtures/wallet-stub.mjs` placeholder. Exports
+  `REQUIRED_METHODS` (18 EIP-1193 methods derived from grep across the
+  futarchy interface — eth_accounts, eth_requestAccounts, eth_chainId,
+  wallet_switchEthereumChain, wallet_addEthereumChain, personal_sign,
+  eth_signTypedData_v4, eth_sendTransaction, eth_estimateGas,
+  eth_gasPrice, eth_getTransactionReceipt, eth_getTransactionByHash,
+  eth_call, eth_getBalance, eth_blockNumber, eth_getCode, eth_subscribe,
+  eth_unsubscribe) and `REQUIRED_EVENTS` (5 events).
+  `installWalletStub` + `nStubWallets` throw "not implemented" with
+  pointers to ADR-001.
+
+- **slice 4** — `ARCHITECTURE.md` cross-repo handshake doc. Identical
+  copy lives in `futarchy-api/auto-qa/harness/ARCHITECTURE.md`.
+  Documents the 5-service topology, repo split table, boot sequence,
+  invariant catalogue, sibling-clone instructions, and 5 deferred
+  open questions.
+
+- **slice 5** — `docs/ADR-001-synpress-vs-custom-stub.md` written by
+  background agent. **Decision: custom EIP-1193 stub.** Injected via
+  Playwright `addInitScript`, announced as an EIP-6963 provider for
+  RainbowKit auto-discovery, wraps an `ethers.Wallet` (v5, matching the
+  main app), proxies non-signing methods to anvil. Wins on multi-account
+  parallelism, anvil dev-key handling, ~0 MB CI footprint, sub-50 ms
+  per-context boot, cross-browser reach, and a stable 9-method
+  maintenance surface. Synpress only wins on real-MetaMask UX realism
+  + complete EIP-1193 coverage; both addressed later via a separate
+  nightly smoke. Risk to address before Phase 5: 1-day spike on
+  `eth_subscribe` shim.
+
+**Phase 0 wrap-up — remaining:**
+
+- slice 6 — `npm install` inside `auto-qa/harness/` (no deps yet, but
+  generate the lockfile so future installs are reproducible)
+- slice 7 — Verify the `ARCHITECTURE.md` sister-link by running the
+  documented `git clone` snippet in a temp dir and confirming the
+  layout works
+- slice 8 — Add a `harness/CHECKLIST.md` enumerating the readiness
+  criteria for declaring Phase 0 complete and Phase 1 ready to start
+
+**After Phase 0 — Phase 5 entry criteria (UI side):**
+
+- [ ] `@playwright/test` installable in `auto-qa/harness/` without
+      conflicts with the root `interface` `package.json`
+- [ ] Custom wallet stub passes a smoke test against a synthetic
+      `window.ethereum` consumer
+- [ ] `eth_subscribe` shim spike completed (per ADR-001 risk)
+- [ ] Both ADRs reviewed + status changed from "Proposed" to "Accepted"
