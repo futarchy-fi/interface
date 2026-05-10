@@ -13,7 +13,7 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 12 |
+| Iterations completed | 13 |
 | PRs catalogued | 31 / ~65 |
 | PRs classified | 31 |
 | Tests added | 44 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction — all passing) |
