@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE: anvil + api + 4 indexer services + interface-dev + orchestrator wired to scenario-runner.mjs). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 3 invariants: apiHealth + apiCanReachRegistry + apiCanReachCandles; 7 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1934,3 +1934,31 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     except slice 4d-scenarios-more (incremental: add more
     invariants). Remaining sub-slices need Docker daemon
     and are mostly human work.
+
+- **slice 4d-scenarios-more (apiCanReachCandles)** (this
+  iteration, on the api side) — one new invariant added.
+  Mirrors the registry-probe pattern: POST `__typename` query
+  to api `/candles/graphql`, assert
+  `data.__typename === 'Query'`. Trace: api endpoint →
+  proxyCandlesQuery → candles-adapter → upstream Checkpoint
+  indexer. The bare `__typename` flows through cleanly
+  (doesn't trigger any of the adapter's schema-translation
+  branches).
+
+  - **Demonstrates the additive pattern** that slice
+    4d-scenarios established: new invariants are pure-
+    additive edits to the INVARIANTS array. Zero changes
+    to scenario-runner.mjs. Each new invariant ships with
+    smoke-test coverage.
+
+  - **Validation**: 7/7 smoke tests pass (147ms);
+    `npm run scenarios:dry` lists all 3 invariants;
+    `docker compose config --quiet` still passes.
+
+  - Slice 4 progress: ~75% (12 of ~16+ sub-slices). Next
+    bot-doable: another invariant — rateSanity (needs RPC
+    + ABI; meatier) OR registryDirect/candlesDirect (probe
+    indexers without going through api — validates the
+    network bridging from slice 4b-network-wire is correct
+    end-to-end).
+

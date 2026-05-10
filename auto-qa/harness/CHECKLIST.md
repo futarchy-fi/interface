@@ -688,11 +688,14 @@ freshly-generated addresses as recipients; documented in
       `tests/smoke-scenario-runner.test.mjs` (6 tests, all
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
-- [ ] **4d-scenarios-more — add remaining invariants** per
-      PROGRESS invariant tables (apiCanReachCandles,
-      rateSanity, probabilityBounds, candlesAggregation,
-      chartShape, conservation). Each is a small additive
-      slice on the now-stable INVARIANTS array.
+- [ ] **4d-scenarios-more — add remaining invariants**.
+      Now 3 invariants (api side): `apiHealth`,
+      `apiCanReachRegistry`, `apiCanReachCandles` (added
+      this slice — mirrors registry pattern; 7 smoke tests
+      green). Still to add: rateSanity (sDAI rate ≥ 1,
+      monotonic), probabilityBounds (price ∈ [0, 1]),
+      candlesAggregation, chartShape, conservation. Each is
+      a small additive slice on the INVARIANTS array.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
