@@ -65,11 +65,15 @@ const PROBE_ORG_ID = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 // embedded in the POST body. Returns the canned response for each
 // operation and 200/empty for anything unrecognized.
 //
-// `proposals` parameter lets each test seed a different
-// proposalentities response — slice 4a uses [], slice 4b uses a
-// list with mixed active/hidden metadata so the count cells
-// resolve to distinctive non-zero numbers.
-function makeGraphqlMockHandler({ proposals = [], onCall } = {}) {
+// Parameters:
+//   - proposals       — proposalentities payload (4a uses [], 4b uses
+//                       a mixed-visibility list)
+//   - orgMetadata     — string written to organizations[0].metadata
+//                       (parsed via JSON.parse by the consumer hook;
+//                       4c uses {chain: '10'} to flip the ChainBadge)
+//   - onCall          — observer for the operation name, useful in
+//                       failure logs
+function makeGraphqlMockHandler({ proposals = [], orgMetadata = null, onCall } = {}) {
     return async (route) => {
         const body = JSON.parse(route.request().postData() || '{}');
         const q = body.query || '';
@@ -91,7 +95,7 @@ function makeGraphqlMockHandler({ proposals = [], onCall } = {}) {
                     id:           PROBE_ORG_ID,
                     name:         PROBE_ORG_NAME,
                     description:  'Probe org returned by mocked GraphQL',
-                    metadata:     null,
+                    metadata:     orgMetadata,
                     metadataURI:  null,
                     owner:        '0x0000000000000000000000000000000000000000',
                     editor:       '0x0000000000000000000000000000000000000000',
@@ -212,5 +216,37 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row).toHaveCount(1);
         await expect(row.locator('td').nth(2)).toHaveText('8');
         await expect(row.locator('td').nth(3)).toHaveText('11');
+    });
+
+    test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Per useAggregatorCompanies::transformOrgToCard:
+        //   const meta = parseMetadata(org.metadata);     // JSON.parse the string
+        //   const chainId = meta.chain ? parseInt(meta.chain, 10) : 100;
+        // Per ChainBadge::CHAIN_CONFIG[10].shortName === 'Optimism'.
+        // Default chain is 100 → "Gnosis"; flipping to 10 must shift
+        // the badge text. This is a different formatter class from
+        // 4a/4b (string-passthrough / integer-toString) — int → enum
+        // mapping with a fallback case.
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            orgMetadata: JSON.stringify({ chain: '10' }),
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        // Chain cell is td[4]; ChainBadge renders shortName.
+        await expect(row.locator('td').nth(4)).toHaveText('Optimism');
     });
 });

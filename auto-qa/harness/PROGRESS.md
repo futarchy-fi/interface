@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slices 1+2+3+4a+4b landed. Slice 1: browser-injection smoke. Slice 2: in-page signing via `setupSigningTunnel` exposeBinding. Slice 3: futarchy Next.js dev server in the loop + RainbowKit modal lists "Futarchy Harness Wallet". Slice 4a: DOM↔API mechanism — mock GraphQL → assert probe org name renders in DOM. Slice 4b: first NUMERIC value through the pipeline — mock 8-active + 3-hidden proposals → assert `OrgRow` cells show "8" / "11" (verifies the visibility-filter logic in `transformOrgToCard`). 13/13 browser tests green. Currency-formatted price + cross-protocol reconciliation still ahead. |
+| Phase | 5 slices 1+2+3+4a+4b+4c v1 landed. Slices 1-3 prior. Slice 4a: DOM↔API mechanism (mock GraphQL → assert probe name in DOM). Slice 4b: integer counts through visibility filter (`OrgRow` cells "8" / "11"). Slice 4c v1: int → enum mapping formatter (mock `metadata.chain='10'` → ChainBadge cell shows "Optimism"). 14/14 browser tests green. Currency-formatted price (4c v2) + cross-protocol reconciliation (4d) still ahead. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -627,7 +627,51 @@ Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
     instead of treating the missing field as undefined) would
     surface as both cells showing "0".
 
-**Smoke summary (UI side, post-Phase 5 slice 4b):**
+- **slice 4c v1** (this iteration) — int → enum mapping
+  formatter through the same `/companies` data path. 4a proved
+  string passthrough, 4b proved integer toString through filter
+  logic, 4c v1 proves int → enum lookup. The original 4c spec
+  (currency-formatted price like "$0.42") is more complex and
+  needs a different page; staged as 4c v2 so we can keep
+  shipping per-iteration.
+
+  - **Refactor**: extended `makeGraphqlMockHandler` to accept
+    `orgMetadata` — the string written to
+    `organizations[0].metadata`. Defaults to `null` (4a/4b
+    behavior unchanged); 4c sets it to
+    `JSON.stringify({chain: '10'})`.
+
+  - **Data flow**: per `useAggregatorCompanies::transformOrgToCard`:
+    ```
+    const meta = parseMetadata(org.metadata);  // JSON.parse
+    const chainId = meta.chain ? parseInt(meta.chain, 10) : 100;
+    ```
+    Per `ChainBadge::CHAIN_CONFIG`:
+    ```
+    1 → 'ETH', 10 → 'Optimism', 100 → 'Gnosis',
+    137 → 'Polygon', 42161 → 'Arbitrum'
+    ```
+
+  - **Test setup**: mock `metadata = JSON.stringify({chain: '10'})`,
+    assert the row's chain cell (`td.nth(4)`) shows
+    "Optimism". Default chainId=100 would render "Gnosis", so
+    a regression in any link of the chain
+    (parseMetadata / parseInt / CHAIN_CONFIG entry / ChainBadge
+    rendering) lights up here.
+
+  - **Validated end-to-end**: 1 new test, 1.4s. All 3
+    dom-api-invariant tests together (4a + 4b + 4c): 21s
+    wall-clock with Next.js cold compile.
+
+  - **Bug-shapes this catches**:
+    * `parseInt(meta.chain, 10)` breaks if someone changes
+      `meta.chain` to expect a number (would render "Chain NaN")
+    * `CHAIN_CONFIG[10].shortName` → silent rename ("Op" instead
+      of "Optimism") would surface
+    * `transformOrgToCard` regression that drops the chainId
+      derivation would default to 100 → "Gnosis" instead
+
+**Smoke summary (UI side, post-Phase 5 slice 4c v1):**
 
 ```
 Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
@@ -635,19 +679,19 @@ Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
 Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
 Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
 Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
-Phase 5 dom-api-invariant (2 cases, chromium + Next.js) ✓ ~5.5s
-                                       TOTAL: 22 pass + 0 skip
+Phase 5 dom-api-invariant (3 cases, chromium + Next.js) ✓ ~7s
+                                       TOTAL: 23 pass + 0 skip
 ```
 
 **Phase 5 — remaining sub-slices:**
 
-- **4c** — currency-formatted price (e.g., usePoolData /
-  candle aggregates → "$0.42" style format). 4b proved the
-  pipeline carries integer counts; 4c should pin a value like
-  `0.42424242` and assert the DOM shows the formatter's exact
-  rendering. Will need to pick a concrete pool/price endpoint
-  and trace the formatter (decimals/currency/rounding) to know
-  what string to assert against.
+- **4c v2** — currency-formatted price ("$0.42" / "0.4242" /
+  whatever the real formatter does). 4c v1 covered enum-style
+  formatting; v2 should pin a numeric value that goes through
+  decimal / currency / rounding logic. Likely targets
+  `singleProposalTransformer.prices.{approval,refusal}_price`
+  on a `/proposals/[id]` route, or `usePoolData`'s spot price
+  derivation from sqrtPrice/tick.
 
 - **4d** — cross-protocol price reconciliation: when multiple
   sources (Algebra / CoW / Sushi) should agree, mock each to
