@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **33 invariants**: 8 api-internal + 21 indexer + 4 chain-layer; first chain-layer time-shape probe landed; 97 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **34 invariants**: 8 api-internal + 22 indexer + 4 chain-layer; **first ECONOMIC invariant landed** (probabilityBounds — close ∈ [0, 1] for PREDICTION pools); 101 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,67 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (probabilityBounds)**
+  (this iteration, on the api side) — FIRST ECONOMIC
+  INVARIANT in the catalog:
+  * `probabilityBounds` — for PREDICTION-type pools
+    (filtered via `candle.pool.type`), asserts
+    `latestCandle.close ∈ [0, 1]`. The close IS the
+    probability of YES outcome; values outside this
+    range are bugs.
+
+  - **Why economic invariants are a distinct
+    category**: Existing invariants validate
+    STRUCTURAL correctness ("data exists", "shape
+    matches", "FK resolves"). Economic invariants
+    validate ECONOMIC truths ("this number can only
+    be in this range because of how AMMs work").
+    Distinct value because a STRUCTURAL-only check
+    passes when raw uint256 values leak into the
+    response (close=1e18 has the right shape but is
+    wildly out of range).
+
+  - **Type-aware filtering**: only PREDICTION pools
+    have prices that are probabilities. CONDITIONAL
+    pools (YES_TOKEN/YES_CURRENCY ratios) and
+    EXPECTED_VALUE pools (projected token values)
+    have prices that CAN exceed 1 legitimately. The
+    invariant filters via candle.pool.type from the
+    indexer schema; vacuous when type is not
+    PREDICTION OR field is missing (older indexer /
+    schema migration in progress).
+
+  - **Bug shapes caught (distinct from
+    candleOHLCOrdering)**:
+    * Indexer raw uint256 leak — close=1e18 satisfies
+      "low ≤ high" if all four fields are 1e18, but
+      is wildly out of range. Test 3 verifies
+      candleOHLCOrdering STILL passes — distinguishes
+      magnitude bug from ordering bug.
+    * Sustained close > 1 — UI/AMM math bug
+    * close < 0 — sign bug
+
+  - **Fixture extension**: pools now carry `type`
+    field (default `PREDICTION` — most common futarchy
+    market type, makes invariant active in happy
+    path); candle.pool object also carries type;
+    new `poolType` knob lets tests override.
+
+  - **Smoke tests**: 4 new (happy with PREDICTION
+    pool, vacuous with CONDITIONAL pool, raw uint256
+    leak — verifies candleOHLCOrdering STILL passes,
+    negative close); 101/101 pass (was 97 — crossed
+    the 100-test mark). Now 34 invariants: 8
+    api-internal + 22 indexer + 4 chain-layer.
+
+  - Slice 4 progress: economic invariants column now
+    non-empty (1-of-5 documented economic invariants
+    covered). Remaining: candlesAggregation,
+    conservation, monotonicity (TWAP), no-phantom-
+    mints. Plus full chartShape match cross-layer.
+
 - **slice 4d-scenarios-more (anvilLatestBlockSensible)**
-  (this iteration, on the api side) — first chain-
+  (previous iteration, on the api side) — first chain-
   layer TIME-SHAPE probe:
   * `anvilLatestBlockSensible` — calls
     `eth_getBlockByNumber('latest', false)`, asserts

@@ -689,24 +689,22 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 33 invariants (api side): 8 api-internal + 21
+      Now 34 invariants (api side): 8 api-internal + 22
       indexer probes + 4 chain-layer.
-      `anvilLatestBlockSensible` added this slice —
-      first chain-layer time-shape probe, mirrors
-      swapTimestampSensible / candleTimeMonotonic at
-      the chain layer. Calls eth_getBlockByNumber(latest)
-      and asserts hash is a valid 0x+64hex string AND
-      timestamp ∈ [2020-01-01, now+1d]. Catches stuck-
-      clock bugs, wrong-fork-era misconfiguration, and
-      garbage block responses that the count-only
-      anvilBlockNumber probe misses. Chain-layer
-      coverage now spans count + identity + structural
-      + time + contract state. 97 smoke tests green.
-      Still to add: probabilityBounds, candlesAggregation
+      `probabilityBounds` added this slice — FIRST
+      ECONOMIC INVARIANT from PROGRESS's economic-
+      invariants table. For PREDICTION-type pools
+      (filtered via candle.pool.type), latest candle
+      close ∈ [0, 1]. Catches raw uint256 leaks
+      (close=1e18 satisfies OHLC ordering but is wildly
+      out of range), real probability bugs (close > 1
+      = "more than certain"), and sign bugs (close < 0)
+      that no STRUCTURAL invariant catches. 101 smoke
+      tests green. Still to add: candlesAggregation
       (Candle.volume = sum of contained Swap amounts
       within period), chartShape full match (api vs
-      indexer raw), conservation, cross-run
-      monotonicity on rateSanity.
+      indexer raw), conservation (∑YES + ∑NO = ∑sDAI),
+      monotonicity (TWAP), cross-run rate monotonicity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
