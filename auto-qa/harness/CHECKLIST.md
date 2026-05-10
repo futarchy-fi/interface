@@ -689,17 +689,16 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 18 invariants (api side): 5 api-internal + 10
-      indexer probes (2 `__typename` liveness + 6 data-aware
-      coverage + 2 first data-SHAPE invariants —
-      `candleOHLCOrdering` and `candleVolumesNonNegative`
-      added this slice; both query the latest candle and
-      validate aggregator-output sanity, vacuously true
-      when no candles exist) + 3 chain-layer probes. 39
-      smoke tests green. Still to add: probabilityBounds,
-      candlesAggregation (cross-layer Candle vs Swap),
-      chartShape, conservation, cross-run monotonicity on
-      rateSanity.
+      Now 20 invariants (api side): 5 api-internal + 12
+      indexer probes (2 `__typename` liveness + 6
+      data-aware coverage + 4 data-SHAPE: candle OHLC +
+      volumes + `swapAmountsPositive` and
+      `swapTimestampSensible` added this slice; data-shape
+      pattern now covers both Candle and Swap entities)
+      + 3 chain-layer probes. 45 smoke tests green. Still
+      to add: probabilityBounds, candlesAggregation
+      (cross-layer Candle vs Swap), chartShape,
+      conservation, cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.

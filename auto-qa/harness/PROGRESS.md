@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 18 invariants: 5 api-internal + 10 indexer + 3 chain-layer; 39 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 20 invariants: 5 api-internal + 12 indexer + 3 chain-layer; 45 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2312,3 +2312,40 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     distinct failure modes — existence vs shape vs
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
+
+- **slice 4d-scenarios-more (swapAmountsPositive +
+  swapTimestampSensible)** (this iteration, on the api
+  side) — extends data-shape pattern from Candle to Swap:
+  * `swapAmountsPositive` — amountIn > 0 AND amountOut > 0
+  * `swapTimestampSensible` — timestamp ∈ [2020-01-01,
+    now + 1 day]
+
+  - **Bug classes caught**:
+    * Amounts: Algebra Swap event has SIGNED amount0/1
+      (from-token negative). Indexer must Math.abs() into
+      unsigned amountIn/Out. If handler assigns signed
+      directly, one is ≤ 0. Distinct from candle-volume
+      aggregator bug (per-swap event-decoder bug).
+    * Timestamp: indexer reads from block context. Wrong
+      topic slot (off-by-one decoder) → 0 or garbage from
+      hash slot.
+
+  - **Vacuously true when no swaps**: same pattern as
+    candle-shape probes.
+
+  - **Fixture extension**: 3 new options
+    (latestSwapAmountIn/AmountOut/Timestamp); first swap
+    in response carries the field values.
+
+  - **Smoke tests**: 6 new (happy + various failure modes,
+    including a far-future-timestamp test for the garbage-
+    from-wrong-topic-slot case); 45/45 pass (was 39).
+    Now 20 invariants: 5 api-internal + 12 indexer (2
+    liveness + 6 data-aware coverage + 4 data-shape) + 3
+    chain-layer.
+
+  - Slice 4 progress: ~91% (21 of ~23 sub-slices).
+    Both Candle and Swap entities have data-shape coverage
+    (2 invariants each). Pool entity could get the same
+    treatment but indexer produces minimal Pool data so
+    value-add is lower.
