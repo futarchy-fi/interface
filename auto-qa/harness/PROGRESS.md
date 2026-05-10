@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **38 invariants**: 9 api-internal + 25 indexer + 4 chain-layer; first indexer-side enum validation landed; 118 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **39 invariants**: 9 api-internal + 26 indexer + 4 chain-layer; first registry-side hardcoded-address PINNING check landed; 121 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,61 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (registryHasFutarchyProdAggregator)**
+  (this iteration, on the api side) — high-value
+  PINNING check at the registry layer:
+  * `registryHasFutarchyProdAggregator` — asserts the
+    indexer has the production futarchy aggregator at
+    `0xc5eb43d53e2fe5fdde5faf400cc4167e5b5d4fc1`
+    (hardcoded in 3 api source files:
+    registry-adapter.js, unified-chart.js,
+    market-events.js).
+
+  - **Registry-side analog of anvilChainId**: chain
+    pin proves we forked Gnosis (not bare anvil);
+    registry pin proves the indexer was bootstrapped
+    with the right chain + start_block + contract
+    config. Together they pin "this is the right
+    environment, not some lookalike".
+
+  - **Why this catches what other invariants miss**:
+    A wrong-block bootstrap might produce ghost
+    aggregators — registryHasAggregators (existence)
+    PASSES because some aggregators exist; only this
+    invariant catches that the SPECIFIC prod one is
+    missing. Test 4 verifies this explicitly:
+    registryAggregatorsCount=3 + prod absent →
+    existence pass + this fail.
+
+  - **Bug shapes caught**: indexer started against
+    wrong block (before aggregator deployment);
+    indexer pointed at wrong chain; data wipe missed
+    re-sync.
+
+  - **Fixture extension**: new `includeFutarchyProdAggregator`
+    knob (default true) APPENDS prod address to the
+    aggregators list. Append (not prepend) keeps
+    existing tests that assert `mock-agg-0` at
+    index 0 unchanged. 2 existing tests updated to
+    set knob=false where they assert exact aggregator
+    counts.
+
+  - **Smoke tests**: 3 new (happy with prod present
+    + 2 total, vacuous-no-aggregators, prod missing
+    despite 3 aggregators existing — verifies
+    registryHasAggregators STILL passes); 121/121
+    pass (was 118). Now 39 invariants: 9 api-internal
+    + 26 indexer + 4 chain-layer.
+
+  - Slice 4 progress: hardcoded-address pinning is
+    now SYMMETRIC across chain + registry layers.
+    Both prove "right environment". Remaining bot-
+    doable: candlesAggregation, full chartShape
+    match, conservation, monotonicity (TWAP),
+    cross-run rate monotonicity.
+
 - **slice 4d-scenarios-more (poolTypeIsValidEnum)**
-  (this iteration, on the api side) — first
+  (previous iteration, on the api side) — first
   indexer-side enum validation:
   * `poolTypeIsValidEnum` — for all pools (first 50),
     asserts type ∈ {CONDITIONAL, PREDICTION,

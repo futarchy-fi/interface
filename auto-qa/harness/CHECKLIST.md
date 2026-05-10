@@ -689,21 +689,26 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 38 invariants (api side): 9 api-internal + 25
+      Now 39 invariants (api side): 9 api-internal + 26
       indexer probes + 4 chain-layer.
-      `poolTypeIsValidEnum` added this slice — first
-      indexer-side enum validation. For all pools
-      (first 50), asserts type ∈ {CONDITIONAL,
-      PREDICTION, EXPECTED_VALUE}. Catches schema
-      drift, null types, and typos like "PRDICTION"
-      that pass every other check while being silently
-      dropped by the api adapter. New pattern:
-      iterate-all-rows enum check (vs latest-row or
-      count-only). 118 smoke tests green. Still to
-      add: candlesAggregation (Candle.volume = sum of
-      contained Swap amounts within period), full
-      chartShape ID-pair match, conservation, TWAP
-      monotonicity, cross-run rate monotonicity.
+      `registryHasFutarchyProdAggregator` added this
+      slice — high-value PINNING check. Asserts the
+      indexer has the production futarchy aggregator
+      (0xc5eb43d5…d4fc1, hardcoded in 3 api source
+      files: registry-adapter.js, unified-chart.js,
+      market-events.js — the api literally cannot
+      function without this aggregator's data).
+      Registry-side analog of anvilChainId — chain
+      pin proves we forked Gnosis; this pin proves
+      the indexer was bootstrapped with the right
+      chain + start_block + contract config. Catches
+      indexer started against wrong block, wrong
+      chain, or data wipe missing re-sync. 121 smoke
+      tests green. Still to add: candlesAggregation
+      (Candle.volume = sum of contained Swap amounts
+      within period), full chartShape ID-pair match,
+      conservation, TWAP monotonicity, cross-run rate
+      monotonicity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
