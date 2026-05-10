@@ -715,10 +715,22 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 48 invariants (api side)**: 12 api-internal +
-      27 indexer probes + 9 chain-layer. 160 smoke tests
+      **Now 49 invariants (api side)**: 13 api-internal +
+      27 indexer probes + 9 chain-layer. 164 smoke tests
       green.
-      `swapAmountsAllRowsPositive` added this slice —
+      `apiHealthBodyShape` added this slice — first body-
+      shape probe on /health. STRENGTHENS apiHealth (status-
+      code-only) by validating `{ status: 'ok', timestamp:
+      <ISO 8601> }`. Both fields matter to downstream ops:
+      status='ok' is the load-balancer's string-match
+      "alive" marker; timestamp is what dashboards parse
+      for 'last-fresh' age. Catches refactors that keep
+      the endpoint serving 200 but change body shape:
+      string body, status renamed/wrong-value, timestamp
+      dropped, timestamp as Unix epoch number, timestamp
+      malformed.
+
+      `swapAmountsAllRowsPositive` (previous slice) —
       first iterate-all-rows extension on the swap side.
       Strengthens swapAmountsPositive (latest-only) into a
       per-row check across the first 50 swaps. Catches

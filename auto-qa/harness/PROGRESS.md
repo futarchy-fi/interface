@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **48 invariants**: 12 api-internal + 27 indexer + 9 chain-layer; iterate-all-rows pattern extended to swap amounts (catches partial-rewrite/per-block-decoder bugs LATEST-only checks miss); 160 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive + apiHealthBodyShape)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **49 invariants**: 13 api-internal + 27 indexer + 9 chain-layer; first body-shape probe on /health (catches LB string-match breakage + timestamp-format regressions invisible to status-code-only checks); 164 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,49 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (apiHealthBodyShape)**
+  (this iteration, on the api side) — first body-shape
+  probe on /health:
+
+  * STRENGTHENS the existing apiHealth (status-code-only)
+    into a body validation. Production /health emits
+    `{ status: 'ok', timestamp: <ISO 8601> }` — both
+    fields matter to downstream ops.
+
+  * Why both invariants exist:
+    - apiHealth (status-code-only) — catches "endpoint
+      dead" outright
+    - this one (body shape) — catches refactors that
+      keep the endpoint serving 200 but change body
+      shape, silently breaking downstream consumers
+
+  * Bug shapes caught (NOT caught by apiHealth):
+    refactor returns just the string 'ok' (not JSON);
+    status field renamed to 'state'; status value changed
+    ('healthy' instead of 'ok' — LB string-match silently
+    fails); timestamp dropped (dashboards parsing 'last-
+    fresh' age silently break); timestamp emitted as Unix
+    epoch number instead of ISO 8601 string (every ISO
+    parser breaks); timestamp string but malformed.
+
+  * ISO 8601 validation strategy: Date.parse() — robust
+    enough to accept canonical new Date().toISOString()
+    format and reject malformed inputs. Stricter regex
+    would be brittle (variant ISO formats are valid).
+
+  * Fixture extension: /health handler now defaults to
+    production shape (was `{ ok: true }`). New knobs:
+    healthStatus, healthTimestamp, healthBody (full-body
+    override).
+
+  * 49 invariants now: 13 api-internal (was 12) + 27
+    indexer + 9 chain-layer. Smoke tests: 4 new (default
+    happy; status renamed — sister apiHealth STILL passes;
+    timestamp dropped; timestamp as Unix epoch number).
+    164/164 pass. Api commit: `73a029e`.
+
 - **slice 4d-scenarios-more (swapAmountsAllRowsPositive)**
-  (this iteration, on the api side) — first iterate-all-
+  (previous iteration, on the api side) — first iterate-all-
   rows extension on the swap side:
 
   * Strengthens swapAmountsPositive (latest-only) into a
