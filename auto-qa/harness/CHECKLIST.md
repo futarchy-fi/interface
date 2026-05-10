@@ -689,25 +689,25 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 30 invariants (api side): 6 api-internal + 21
+      Now 31 invariants (api side): 7 api-internal + 21
       indexer probes + 3 chain-layer.
-      `apiSpotCandlesHappyPath` added this slice — first
-      api data-PLANE check (vs prior validation-only or
-      passthrough probes). Calls /api/v1/spot-candles?ticker=…
-      expecting 200 + JSON with spotCandles array. Walks
-      api's full data plane (request → validation →
-      fetchSpotCandles → spotCache → response transform
-      → JSON write); catches downstream-throw 500s,
-      response-shape regressions (renamed/dropped
-      spotCandles field), and status-code regressions
-      that bypass apiSpotCandlesValidates (which only
-      tests the 400-error path). Api coverage now spans
-      validation + data-plane + cross-layer. 85 smoke
-      tests green. Still to add: probabilityBounds,
-      candlesAggregation (Candle.volume = sum of
-      contained Swap amounts within period), chartShape
-      (api unified-chart vs indexer raw), conservation,
-      cross-run monotonicity on rateSanity.
+      `apiUnifiedChartShape` added this slice — second
+      api data-PLANE check (paired with last iteration's
+      apiSpotCandlesHappyPath, but for a much heavier
+      data path). Calls /api/v2/proposals/:id/chart
+      expecting 200 + JSON with candles.{yes,no,spot}
+      all arrays. Touches registry indexer (proposal
+      resolve), candles indexer (pool + candle fetch),
+      and chain layer (rate provider) in one request,
+      so a regression anywhere in that chain bubbles up.
+      First step toward the documented chartShape
+      invariant (api unified-chart vs indexer raw match)
+      — that future invariant will reuse the same shape
+      probe and add cross-checks. 89 smoke tests green.
+      Still to add: probabilityBounds, candlesAggregation
+      (Candle.volume = sum of contained Swap amounts
+      within period), chartShape full match,
+      conservation, cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.

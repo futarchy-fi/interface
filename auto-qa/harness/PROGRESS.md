@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **30 invariants**: 6 api-internal + 21 indexer + 3 chain-layer; first api data-PLANE check landed (vs prior validation-only or passthrough probes); 85 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **31 invariants**: 7 api-internal + 21 indexer + 3 chain-layer; second api data-PLANE check landed (apiSpotCandlesHappyPath + apiUnifiedChartShape now form a paired data-plane probe set); 89 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,77 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (apiUnifiedChartShape)**
+  (this iteration, on the api side) — second api
+  data-PLANE check, paired with last iteration's
+  apiSpotCandlesHappyPath:
+  * `apiUnifiedChartShape` — calls
+    `/api/v2/proposals/harness-probe-proposal/chart`,
+    asserts 200 + JSON content-type + body has
+    `candles.{yes, no, spot}` all arrays.
+
+  - **Both api data-plane probes follow the same
+    template but exercise dramatically different code
+    paths**:
+    * apiSpotCandlesHappyPath: light path (validate
+      ticker → fetchSpotCandles → spotCache →
+      transform). 1 indexer touch.
+    * apiUnifiedChartShape: heavy path (proposal
+      resolve via registry → pool fetch via candles →
+      currency rate via chain → parallel YES/NO/SPOT
+      candle fetch → response transform with
+      applyRateToCandles). 3 layer touches.
+
+  - **Why this is high-value coverage**: unified-
+    chart is the single API consumed by every
+    proposal page in the futarchy.fi UI. Yes/no/spot
+    price history all goes through it. A regression
+    in any of resolve, pool-fetch, rate-lookup, or
+    response-transform breaks the primary user-
+    visible chart. The shape probe catches the WHOLE
+    "endpoint up but data plane broken" class with
+    a single check.
+
+  - **Bug shapes caught (distinct from
+    apiSpotCandlesHappyPath)**:
+    * Proposal resolve returns null pools → yes/no
+      arrays missing → frontend crashes destructuring
+    * applyRateToCandles regression returns wrong
+      shape (Promise instead of array)
+    * Refactor that renames `spot` to `spotCandles`
+      (the field name diverged once already with
+      the sister endpoint — easy to confuse)
+    * Cache layer returns stale/wrong-shape (X-Cache:
+      HIT path differs from MISS path)
+
+  - **First step toward documented chartShape
+    invariant**: PROGRESS.md's cross-layer invariants
+    table calls for `api /v2/.../chart vs indexer raw`
+    match. This iteration ships the shape half;
+    future iteration adds cross-check (api candle
+    counts vs candles.{yes,no} direct queries) by
+    reusing the cross-layer match template.
+
+  - **Fixture extension**: route `/api/v2/proposals/
+    <id>/chart` (regex match because proposalId is a
+    path param) returns 200 + minimal-shape body by
+    default; new unifiedChartStatus / unifiedChartBody
+    knobs for drift simulation.
+
+  - **Smoke tests**: 4 new (happy-empty, happy-with-
+    data, data-plane error / 500 — verifies apiHealth
+    STILL passes distinguishing endpoint-broken from
+    api-down, missing yes array / refactor that drops
+    a side); 89/89 pass (was 85). Now 31 invariants:
+    7 api-internal + 21 indexer + 3 chain-layer.
+
+  - Slice 4 progress: 2-of-3 documented /api/v*
+    endpoints now have happy-path data-plane coverage.
+    Cross-layer invariants table from PROGRESS.md is
+    now ~50% covered.
+
 - **slice 4d-scenarios-more (apiSpotCandlesHappyPath)**
-  (this iteration, on the api side) — first api
+  (previous iteration, on the api side) — first api
   data-PLANE check in the catalog:
   * `apiSpotCandlesHappyPath` — calls
     `/api/v1/spot-candles?ticker=harness-probe-ticker`,
