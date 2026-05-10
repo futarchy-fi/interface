@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slice 1 landed (browser-injection smoke). Playwright + chromium installed; `installWalletStub` browser wrapper now wires window.ethereum + EIP-6963 announcement; 6/6 wallet-injection browser tests green in 2.4s. Phase 4 slices 1+2+3 prior — wallet stub + contract-call surface validated against live Gnosis fork. Phase 5 slices 2/3/4 + Phase 4 slice 4 still pending. |
+| Phase | 5 slices 1+2 landed. Slice 1: browser-injection smoke (Playwright + chromium, EIP-6963 announce, 6 tests). Slice 2: in-page signing via `setupSigningTunnel` exposeBinding — personal_sign / eth_signTypedData_v4 / eth_sendTransaction (live anvil) all working. 9/9 browser tests green in ~5.6s. Phase 4 slices 1+2+3 prior. Phase 5 slices 3/4 + Phase 4 slice 4 still pending. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -404,14 +404,75 @@ Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
                                        TOTAL: 15 pass + 0 skip
 ```
 
+- **slice 2** (this iteration) — in-page signing via tunnel.
+  Original plan said "inline @noble/secp256k1 in the page"; took
+  a sharply better path: use Playwright's `exposeBinding` to
+  register a node-side handler that the in-page stub calls for
+  any SIGNING_METHODS request. The privateKey lives in node, the
+  page only sees the signature/hash result, and we reuse viem's
+  well-tested `signMessage` / `signTypedData` / `sendTransaction`
+  helpers — ~30 lines of fixture code instead of bundling and
+  embedding ~30 KB of ESM crypto + EIP-712 hashing + EIP-1559
+  serialization as a string blob in `addInitScript`.
+
+  - **`setupSigningTunnel(context, {privateKey, rpcUrl, chainId})`**
+    in `fixtures/wallet-stub.mjs`:
+    * Validates inputs, builds a viem `walletClient` with
+      `account = privateKeyToAccount(privateKey)` + `chain` +
+      `transport: http(rpcUrl)`
+    * Calls `context.exposeBinding('__harnessSign', handler)` so
+      every page in the context gets `window.__harnessSign`
+    * Handler dispatches on method:
+        - `personal_sign` / `eth_sign` →
+          `walletClient.signMessage`
+        - `eth_signTypedData_v4` → parses JSON, calls
+          `walletClient.signTypedData`
+        - `eth_sendTransaction` → `walletClient.sendTransaction`
+          (viem fetches nonce/chainId/gas + signs + broadcasts +
+          returns tx hash)
+    * Address mismatches throw with a clear message; viem-level
+      errors propagate
+
+  - **In-page stub change** (`installWalletStub` in same file):
+    when a SIGNING_METHODS request comes in, check
+    `typeof window.__harnessSign === 'function'`. If yes, forward
+    via the binding and re-shape the result/error so EIP-1193's
+    `.code` field is preserved. If no, keep slice-1 behavior and
+    reject -32601. This means slice-1's "signing methods rejected"
+    test STILL passes unchanged (no tunnel installed = no
+    signing = -32601). Confirmed in the green re-run.
+
+  - **`flows/wallet-signing.spec.mjs`** — 3 browser tests, all
+    green in ~5s combined:
+    1. `personal_sign` — page calls
+       `eth_accounts` then `personal_sign("Hello, harness! …")`,
+       node uses `viem.recoverMessageAddress({message, signature})`
+       and asserts equality with `wallet.address`
+    2. `eth_signTypedData_v4` — minimal `Greeting{from,message}`
+       EIP-712 payload; page signs; node uses
+       `viem.recoverTypedDataAddress({...payload, signature})`;
+       asserts equality
+    3. `eth_sendTransaction` — spawns local anvil (skips when
+       missing) and sends 0.5 XDAI from the wallet to a freshly-
+       generated recipient (the dev-account lazy-funding quirk
+       from Phase 4 slice 3 still applies, so recipient must be
+       fresh). Polls `eth_getTransactionReceipt` because viem
+       returns the hash before anvil's auto-mine settles.
+       Asserts `receipt.status === '0x1'` and recipient balance
+       == 0.5 XDAI
+
+**Smoke summary (UI side, post-Phase 5 slice 2):**
+
+```
+Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
+Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
+Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
+Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
+                                       TOTAL: 18 pass + 0 skip
+```
+
 **Phase 5 — remaining slices:**
 
-- slice 2 — inline @noble/secp256k1 in the page so signing methods
-  (personal_sign, eth_signTypedData_v4, eth_sendTransaction) work
-  against `window.ethereum` in the browser, not just in
-  node:test's `createProvider`. Will need browser tests that sign +
-  recover the address, then send a 1-XDAI tx through the in-page
-  stub and decode the receipt.
 - slice 3 — drop `HARNESS_NO_WEBSERVER`, let Playwright launch the
   Next.js dev server, navigate to a real page, and confirm
   Wagmi/RainbowKit auto-discovers the harness wallet via the

@@ -5,7 +5,7 @@
  * implementation, NOT Synpress. Wraps a viem account, proxies non-signing
  * RPC methods to the local anvil fork over HTTP.
  *
- * Two layers:
+ * Three layers:
  *
  *   - createProvider(config) → in-process EIP-1193 provider (testable
  *     in node:test, no browser needed). Used by Phase 4 unit tests.
@@ -15,6 +15,16 @@
  *     the page, sets `window.ethereum`, and announces it via
  *     EIP-6963 so RainbowKit auto-discovers it. Used by Phase 5
  *     browser tests.
+ *
+ *   - setupSigningTunnel(context, {privateKey, rpcUrl, chainId}) →
+ *     Phase 5 slice 2. Exposes `window.__harnessSign` in the page
+ *     (via Playwright's `exposeBinding`) backed by a node-side viem
+ *     wallet client. The privateKey NEVER enters the page; the in-
+ *     page wallet stub forwards SIGNING_METHODS through this binding
+ *     and returns the result. If the tunnel isn't installed, the
+ *     stub falls back to rejecting signing methods with -32601
+ *     (slice-1 default). Avoids inlining @noble/secp256k1 + EIP-712
+ *     hashing + EIP-1559 serialization into a string blob.
  *
  * The EIP-1193 method dispatch table is the source of truth for what
  * the harness actually supports. Three classes:
@@ -469,10 +479,25 @@ export function installWalletStub(config) {
         }
 
         if (SIGNING_METHODS.has(method)) {
-            // Phase 5 slice 1: signing not yet enabled in-page.
-            // Slice 2 will inline @noble/secp256k1 to support this.
-            const e = new Error(method + ' not yet supported by harness in-page wallet stub (Phase 5 slice 2)');
-            e.code = -32601; throw e;
+            // Phase 5 slice 2: forward to the signing tunnel
+            // (window.__harnessSign, wired via setupSigningTunnel
+            // in node — backed by viem). Tunnel keeps the privateKey
+            // out of the page entirely. If the tunnel isn't installed,
+            // fall back to slice-1 behavior (reject -32601).
+            if (typeof window.__harnessSign !== 'function') {
+                const e = new Error(method + ' not supported (signing tunnel not installed; call setupSigningTunnel from node)');
+                e.code = -32601; throw e;
+            }
+            try {
+                return await window.__harnessSign({ method, params: _params });
+            } catch (err) {
+                // Re-throw with EIP-1193-shaped error so consumers can
+                // inspect .code. exposeBinding loses non-enumerable
+                // properties on Error, so we synthesize a fresh one.
+                const e = new Error(err?.message || (method + ' failed'));
+                e.code = err?.code ?? -32603;
+                throw e;
+            }
         }
 
         if (SUB_METHODS.has(method)) {
@@ -527,6 +552,115 @@ export function installWalletStub(config) {
     }
 })();
 `;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Signing tunnel (Phase 5 slice 2)
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Wire `window.__harnessSign` in every page of `context` to a node-side
+ * viem wallet client. The in-page wallet stub forwards
+ * `personal_sign` / `eth_signTypedData_v4` / `eth_sendTransaction`
+ * through this binding when present.
+ *
+ * Avoids the alternative (inlining @noble/secp256k1 + EIP-712 hashing
+ * + EIP-1559 tx serialization as a ~30 KB string blob in the
+ * addInitScript). Net effect from the dApp's perspective is identical
+ * — `await window.ethereum.request({method: 'personal_sign', params:
+ * […]})` returns a signature.
+ *
+ * The privateKey lives in the node test process; the page only sees
+ * the signature/hash result. setupSigningTunnel must be called BEFORE
+ * the first `page.goto()` so the binding is in place when the stub
+ * script runs (Playwright's `exposeBinding` is registered on the
+ * context, applied per-page).
+ *
+ * @param {import('@playwright/test').BrowserContext} context
+ * @param {{privateKey: `0x${string}`, rpcUrl: string, chainId: number}} cfg
+ * @returns {Promise<void>}
+ */
+export async function setupSigningTunnel(context, cfg) {
+    if (!context || typeof context.exposeBinding !== 'function') {
+        throw new Error('setupSigningTunnel: context with exposeBinding required');
+    }
+    const { privateKey, rpcUrl, chainId } = cfg ?? {};
+    if (!privateKey || !isHex(privateKey)) {
+        throw new Error('setupSigningTunnel: privateKey (0x-hex) required');
+    }
+    if (!rpcUrl) throw new Error('setupSigningTunnel: rpcUrl required');
+    if (!Number.isInteger(chainId) || chainId < 1) {
+        throw new Error('setupSigningTunnel: chainId required');
+    }
+
+    const account = privateKeyToAccount(privateKey);
+    const chain = {
+        id: chainId,
+        name: `harness-${chainId}`,
+        nativeCurrency: { name: 'XDAI', symbol: 'XDAI', decimals: 18 },
+        rpcUrls: { default: { http: [rpcUrl] } },
+    };
+    const walletClient = createWalletClient({
+        account, chain, transport: http(rpcUrl),
+    }).extend(publicActions);
+
+    await context.exposeBinding('__harnessSign', async (_source, payload) => {
+        const { method, params } = payload ?? {};
+        const _params = params ?? [];
+
+        switch (method) {
+            case 'personal_sign': {
+                const [msg, addr] = _params;
+                if (addr && getAddress(addr) !== account.address) {
+                    throw new Error('personal_sign: address mismatch');
+                }
+                return walletClient.signMessage({
+                    message: isHex(msg) ? { raw: msg } : msg,
+                });
+            }
+
+            case 'eth_sign': {
+                // EIP-1193 spec: params[0]=address, params[1]=message.
+                // Anvil treats this identically to personal_sign.
+                const [addr, msg] = _params;
+                if (addr && getAddress(addr) !== account.address) {
+                    throw new Error('eth_sign: address mismatch');
+                }
+                return walletClient.signMessage({
+                    message: isHex(msg) ? { raw: msg } : msg,
+                });
+            }
+
+            case 'eth_signTypedData_v4': {
+                const [addr, dataStr] = _params;
+                if (addr && getAddress(addr) !== account.address) {
+                    throw new Error('eth_signTypedData_v4: address mismatch');
+                }
+                const data = typeof dataStr === 'string'
+                    ? JSON.parse(dataStr) : dataStr;
+                return walletClient.signTypedData(data);
+            }
+
+            case 'eth_sendTransaction': {
+                const tx = _params[0];
+                // viem fills nonce/chainId/gas/fees by querying rpcUrl,
+                // signs the EIP-1559 tx, and broadcasts via
+                // eth_sendRawTransaction. Returns the tx hash.
+                return walletClient.sendTransaction({
+                    to: tx.to,
+                    value: tx.value ? BigInt(tx.value) : undefined,
+                    data: tx.data,
+                    gas: tx.gas ? BigInt(tx.gas) : undefined,
+                });
+            }
+
+            default: {
+                const e = new Error(`__harnessSign: unsupported method ${method}`);
+                e.code = -32601;
+                throw e;
+            }
+        }
+    });
 }
 
 // ────────────────────────────────────────────────────────────────────
