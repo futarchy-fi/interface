@@ -1,0 +1,66 @@
+name: auto-qa harness smoke tests
+
+# Runs the harness's node:test smoke suite (4 files, 11 tests as
+# of slice 4d-smoke-ci-interface):
+#
+#   tests/smoke-wallet-stub.test.mjs       — EIP-1193 wallet stub
+#   tests/smoke-contract-calls.test.mjs    — viem call/sign helpers
+#   tests/smoke-scenarios-catalog.test.mjs — SCENARIOS.md drift
+#   tests/smoke-scenarios-by-route.test.mjs — by-route ergonomics
+#
+# All four are daemon-free: in-process viem + node:test + script
+# spawns. The full suite finishes in ~5s of test time + Node setup
+# overhead. No browser, no anvil, no compose.
+#
+# Sister to the api-side `auto-qa-harness-smoke.yml.staged` (slice
+# 3e there) — same shape, different harness. The two together give
+# both sides of the harness a workflow_dispatch entry point for
+# their fast unit-style smoke battery.
+#
+# Trigger is `workflow_dispatch` ONLY for this first version,
+# matching the conservative roll-out pattern of slices 3a + 3c.
+# After the maintainer promotes this file (see
+# `auto-qa/harness/ci/README.md`) and smoke-tests it via the
+# Actions UI, follow-up iterations can add:
+#
+#   pull_request:
+#     paths: ['auto-qa/harness/**']    # gate harness-touching PRs
+#   push:
+#     branches: ['auto-qa', 'main']    # catch direct merges
+#
+# Per Phase 7 slice 4d-smoke-ci-interface.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  harness-smoke:
+    name: Harness node:test smoke suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: auto-qa/harness/package-lock.json
+
+      - name: Install harness deps
+        working-directory: auto-qa/harness
+        run: npm ci
+
+      - name: Run smoke tests
+        # The full node:test glob `tests/**/*.test.mjs`. Includes
+        # the unit-level scenarios-catalog drift assertion (which
+        # also runs at workflow level via the sister
+        # auto-qa-harness.yml staged file's git-diff check) plus
+        # by-route ergonomics + wallet-stub + contract-calls.
+        # Output is plain node:test format — GitHub Actions parses
+        # pass/fail lines automatically.
+        working-directory: auto-qa/harness
+        run: npm test

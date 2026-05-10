@@ -590,6 +590,24 @@ freshly-generated addresses as recipients; documented in
       the 4 currently-staged CI workflows to promote;
       recommend doing this FIRST since it's pure node +
       no docker + no GH Actions secrets needed.
+- [x] **4d-smoke-ci-interface — symmetric smoke-test workflow
+      STAGED on interface side.** Sister to api's slice 3e —
+      `auto-qa/harness/ci/auto-qa-harness-smoke.yml.staged`
+      runs `npm test` in `auto-qa/harness/`, exercising the 4
+      daemon-free node:test smoke files (wallet-stub,
+      contract-calls, scenarios-catalog drift,
+      scenarios-by-route). Total runtime ~5s test time + Node
+      setup + npm ci. Trigger: `workflow_dispatch` matching
+      conservative roll-out. Updates `ci/README.md` with the
+      new staged-table row + recommended promote order.
+      YAML re-validated via `js-yaml@4`. Both sides of the
+      harness now have a workflow_dispatch entry point for
+      their fast unit-style smoke battery.
+- [ ] **4d-smoke-ci-interface-promote** — maintainer task:
+      copy this slice's staged file into
+      `.github/workflows/auto-qa-harness-smoke.yml` on the
+      **interface repo**. Independent of the other 3
+      currently-staged workflows; promote in any order.
 
 **Phase 7 slice 4 — IN PROGRESS (full-stack):**
 

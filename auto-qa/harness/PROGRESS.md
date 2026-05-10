@@ -2313,6 +2313,43 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-smoke-ci-interface (CI integration)**
+  (this iteration, on the interface side) — sister to
+  api's slice 3e shipped earlier. The interface harness
+  has 4 daemon-free node:test smoke files exercising
+  wallet-stub, contract-calls, scenarios-catalog drift,
+  and scenarios-by-route — but no CI workflow has been
+  running them. Both existing staged workflows on the
+  interface side cover only the Playwright UI suite (3c)
+  and SCENARIOS.md drift (3a).
+
+  * Adds `auto-qa/harness/ci/auto-qa-harness-smoke.yml.staged`
+    (~60 lines). Single job `harness-smoke` with 4 steps:
+    checkout, Node 22 with npm cache on harness lockfile,
+    `npm ci` in harness, `npm test`. Trigger:
+    `workflow_dispatch` only (matches conservative roll-out
+    of 3a/3c).
+
+  * `ci/README.md` updated: 3rd row in the staged-table,
+    promote order updated to put both fast workflows
+    (catalog-drift + smoke) before the heavier Playwright
+    workflow.
+
+  * CHECKLIST.md gains 2 new sub-slice items:
+    `4d-smoke-ci-interface` (✓, this slice) and
+    `4d-smoke-ci-interface-promote` (⏳, maintainer task).
+
+  * Both sides of the harness now have a workflow_dispatch
+    entry point for their fast unit-style smoke battery
+    (api 3e ran `npm run smoke:scenarios` + dry-run; this
+    slice runs the full `npm test` glob, which on the
+    interface side covers all 4 test files).
+
+  * Validation: 11/11 smoke tests pass locally
+    (`npm test` in harness dir, ~5s); YAML re-validated
+    via `js-yaml@4`; structure parses to the right job +
+    steps shape.
+
 - **slice 2-root-aliases (cross-repo wiring)**
   (this iteration, both sides) — tooling slice (no
   new scenario, no new script). Mirrors the api-side

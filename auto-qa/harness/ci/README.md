@@ -25,14 +25,16 @@ file from this location (Actions only scans `.github/workflows/`).
 | File                                         | Phase 7 sub-slice | Triggers           | Status       |
 |----------------------------------------------|-------------------|--------------------|--------------|
 | `auto-qa-harness.yml.staged`                 | 3a                | `workflow_dispatch` | ⏳ awaiting promotion |
+| `auto-qa-harness-smoke.yml.staged`           | 4d-smoke-ci-interface | `workflow_dispatch` | ⏳ awaiting promotion |
 | `auto-qa-harness-scenarios.yml.staged`       | 3c                | `workflow_dispatch` | ⏳ awaiting promotion |
 
 **Promote in this order**: `auto-qa-harness.yml.staged` first
-(fast drift check, low risk), smoke-test it via the Actions UI,
-then promote `auto-qa-harness-scenarios.yml.staged` (heavier
-Playwright run). Each is independent — neither depends on the
-other being live — but smoke-testing the cheap one first is the
-sane sequence.
+(fast SCENARIOS.md drift check, low risk), smoke-test it via the
+Actions UI, then `auto-qa-harness-smoke.yml.staged` (fast node:test
+suite, also low risk — daemon-free), then
+`auto-qa-harness-scenarios.yml.staged` (heavier Playwright run).
+Each is independent — neither depends on the others being live —
+but smoke-testing the cheap ones first is the sane sequence.
 
 ## Why this dance
 
