@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 25 invariants: 5 api-internal + 17 indexer + 3 chain-layer; first cross-entity FK check landed; 65 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 26 invariants: 5 api-internal + 18 indexer + 3 chain-layer; both swap + candle FK checks landed (full per-entity-emit-path FK coverage); 69 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,68 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (candlePoolReferentialIntegrity)**
+  (this iteration, on the api side) — candle analog of
+  the previous iteration's swapPoolReferentialIntegrity:
+  * `candlePoolReferentialIntegrity` — single GraphQL
+    query reads `candles(first: 1, ..., orderBy: time)
+    { id pool { id } } pools(first: 50) { id }`;
+    asserts `candle.pool.id ∈ Set(pools.map(p => p.id))`.
+
+  - **Why TWO FK checks (swap + candle) vs one
+    generic check**: the FK on swaps and the FK on
+    candles are set by DIFFERENT code paths in the
+    indexer:
+    * Swap.pool: set by the swap-event handler, one
+      derivation per Swap event
+    * Candle.pool: set by the period-aggregator, one
+      derivation per Candle bucket
+    An indexer with correct swap-handler FK derivation
+    but broken period-aggregator FK derivation passes
+    swapPoolReferentialIntegrity and FAILS this one.
+    The two together pin the FK contract on both
+    entity-emit paths.
+
+  - **Bug shapes caught (in addition to the swap-side
+    ones)**:
+    * Period-aggregator picks wrong pool when bucketing
+      swaps (uses last-seen pool ref instead of each
+      swap's own pool — would also light up
+      candlesAggregation when that lands)
+    * Pool deleted but candle aggregates weren't
+      garbage-collected (orphan candles — distinct from
+      orphan swaps because aggregators may emit
+      independently of swap ingestion)
+    * Aggregator handler returns null pool
+
+  - **Fixture extension**: every candle row now gets
+    `pool: {id}` field (default `mock-pool-0`); new
+    `candlePoolIds` array option for tests to override
+    per-candle FK and simulate orphan-candle scenarios
+    (mirrors `swapPoolIds` from previous slice).
+
+  - **Smoke tests**: 4 new (happy with FK intact,
+    vacuous when 0 candles, orphan candle from
+    aggregator FK bug — verifies SWAP FK STILL passes,
+    distinguishing aggregator vs swap-handler FK bug,
+    orphan-storm from all pools deleted); 69/69 pass
+    (was 65). Now 26 invariants: 5 api-internal + 18
+    indexer (2 liveness + 6 data-aware coverage + 4
+    single-row data-shape + 2 multi-row data-shape +
+    2 cross-layer match + 2 cross-entity FK) + 3
+    chain-layer.
+
+  - Slice 4 progress: ~96% (26 of ~27 sub-slices).
+    Symmetric build-out continues: cross-layer match
+    has both candles + registry; cross-entity FK now
+    has both swap + candle. Both entity-emit paths
+    covered. Next: candlesAggregation (Candle.volume =
+    sum of contained Swap amounts within period —
+    combines THE FK we just verified with quantitative
+    reconciliation).
+
 - **slice 4d-scenarios-more (swapPoolReferentialIntegrity)**
-  (this iteration, on the api side) — first cross-entity
+  (previous iteration, on the api side) — first cross-entity
   FK check in the catalog:
   * `swapPoolReferentialIntegrity` — single GraphQL
     query reads `swaps(first: 1, ...) { id pool { id } }
