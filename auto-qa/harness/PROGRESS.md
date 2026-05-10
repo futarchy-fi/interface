@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 3 invariants: apiHealth + apiCanReachRegistry + apiCanReachCandles; 7 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 5 invariants: 3 api-passthrough + 2 direct-probe; 9 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1961,4 +1961,52 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     indexers without going through api — validates the
     network bridging from slice 4b-network-wire is correct
     end-to-end).
+
+- **slice 4d-scenarios-more (registryDirect + candlesDirect)**
+  (this iteration, on the api side) — TWO new invariants in
+  one iteration; small, symmetrical, naturally paired.
+
+  - **What they do**: probe the indexer GraphQL endpoints
+    directly (`ctx.registryUrl`, `ctx.candlesUrl`) without
+    going through the api passthrough. Validates that the
+    orchestrator container can reach the indexers over
+    harness-net.
+
+  - **Why pair them with the api-passthrough invariants**:
+    if api↔registry passes but registryDirect fails (or
+    vice versa), it's a useful debug signal — the api is
+    reaching the indexer by some route the orchestrator
+    can't (DNS cache, connection pool, cached response).
+    Compose stack expects both routes to work.
+
+  - **Validates slice 4b-network-wire end-to-end** (or
+    will, once daemon-required smoke is human-run): the
+    orchestrator container is single-homed on harness-net,
+    indexers are dual-homed (registry-net + harness-net via
+    per-service `extends:` blocks). These two invariants
+    are the first to EXERCISE the bridging from the
+    orchestrator's vantage point.
+
+  - **What landed**:
+    * `orchestrator/invariants.mjs` — added registryDirect
+      + candlesDirect after apiCanReachCandles; both use
+      the now-stable invariant shape; both probe
+      `ctx.registryUrl` / `ctx.candlesUrl` directly.
+    * `tests/smoke-scenario-runner.test.mjs` — fixture
+      extended with `/registry-direct/graphql` +
+      `/candles-direct/graphql` paths (distinguished from
+      api-passthrough versions); new `fullCtx(fxUrl)`
+      helper bundles all the URLs cleanly; 2 new
+      failure-path tests verify direct-probe failures
+      don't short-circuit api-passthrough ones; CLI
+      dry-run test extended to assert all 5 invariants
+      appear in stdout.
+
+  - **Validation**: 9/9 smoke tests pass (167ms);
+    `npm run scenarios:dry` lists all 5 invariants;
+    `docker compose config --quiet` still passes.
+
+  - Slice 4 progress: ~80% (13 of ~16+ sub-slices) —
+    4d-scenarios-more is roughly half-way through the
+    planned per-invariant additions.
 

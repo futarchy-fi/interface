@@ -689,13 +689,16 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 3 invariants (api side): `apiHealth`,
-      `apiCanReachRegistry`, `apiCanReachCandles` (added
-      this slice — mirrors registry pattern; 7 smoke tests
-      green). Still to add: rateSanity (sDAI rate ≥ 1,
-      monotonic), probabilityBounds (price ∈ [0, 1]),
-      candlesAggregation, chartShape, conservation. Each is
-      a small additive slice on the INVARIANTS array.
+      Now 5 invariants (api side): `apiHealth`,
+      `apiCanReachRegistry`, `apiCanReachCandles`,
+      `registryDirect`, `candlesDirect` (the last 2 added
+      this slice — probe indexers WITHOUT going through
+      api; validates the orchestrator container can reach
+      the indexers over harness-net per slice
+      4b-network-wire). 9 smoke tests green. Still to add:
+      rateSanity (sDAI rate ≥ 1, monotonic),
+      probabilityBounds (price ∈ [0, 1]),
+      candlesAggregation, chartShape, conservation.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
