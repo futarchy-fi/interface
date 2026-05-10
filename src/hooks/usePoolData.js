@@ -20,45 +20,56 @@ const API_BASE_URL = normalizeBaseUrl(RAW_API_BASE_URL);
 
 console.log('Pool API URL configured as:', API_BASE_URL);
 
-const PROPOSAL_POOLS_QUERY = `
-  query GetProposalPools($proposalId: ID!) {
-    proposal(id: $proposalId) {
-      currencyToken { symbol }
-      pools {
-        id
-        outcomeSide
-        type
-        liquidity
-        volumeToken0
-        volumeToken1
-        token0 { symbol decimals role }
-        token1 { symbol decimals role }
-        tick
-      }
-    }
+// Checkpoint indexer shape: no nested entity refs (proposal, token0/token1
+// and currencyToken are flat string fields), no Proposal.pools reverse field,
+// no BigInt scalar. We assemble the equivalent shape with three flat top-level
+// queries in a single request and join in JS using a whitelistedtokens map.
+const buildProposalPoolsQuery = (proposalId) => `{
+  proposal(id: "${proposalId}") {
+    id
+    currencyToken
+    companyToken
   }
-`;
+  whitelistedtokens(where: { proposal: "${proposalId}" }, first: 100) {
+    address
+    symbol
+    decimals
+    role
+  }
+  pools(where: { proposal: "${proposalId}" }, first: 100) {
+    id
+    outcomeSide
+    type
+    liquidity
+    volumeToken0
+    volumeToken1
+    token0
+    token1
+    tick
+  }
+}`;
 
-const POOL_QUERY = `
-  query GetPoolData($poolId: ID!, $timestamp24hAgo: BigInt!) {
-    pool(id: $poolId) {
-      id
-      liquidity
-      volumeToken0
-      volumeToken1
-      token0 { symbol decimals role }
-      token1 { symbol decimals role }
-      tick
-    }
-    candles(
-      where: { pool: $poolId, time_gte: $timestamp24hAgo, period: 3600 }
-      orderBy: time
-      orderDirection: desc
-    ) {
-      volumeUSD
-    }
+const buildPoolQuery = (poolId) => `{
+  pool: pools(where: { id: "${poolId}" }, first: 1) {
+    id
+    liquidity
+    volumeToken0
+    volumeToken1
+    token0
+    token1
+    tick
+    proposal
   }
-`;
+}`;
+
+const buildTokensForPoolQuery = (proposalId) => `{
+  whitelistedtokens(where: { proposal: "${proposalId}" }, first: 100) {
+    address
+    symbol
+    decimals
+    role
+  }
+}`;
 
 // Helper to format a raw subgraph pool into our app's data structure
 const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
@@ -84,26 +95,33 @@ const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
     return t.symbol?.toLowerCase() === proposalCurrencySymbol.toLowerCase();
   };
 
+  // Checkpoint stores volumeToken0/1 as raw token-decimal strings (e.g.
+  // "6153878689256497859232" for ~6153.88 sDAI at 18 decimals). Divide
+  // by 10^decimals to express in human units.
+  const toHuman = (raw, dec) => parseFloat(raw || 0) / Math.pow(10, dec ?? 18);
+  const vol0 = toHuman(pool.volumeToken0, t0.decimals);
+  const vol1 = toHuman(pool.volumeToken1, t1.decimals);
+
   // Check Token 0
   if (isCurrencyRole(t0) || isCurrencySymbol(t0)) {
-    volumeTotal += parseFloat(pool.volumeToken0 || 0);
+    volumeTotal += vol0;
     currencyIsToken0 = true;
   }
 
   // Check Token 1
   if (isCurrencyRole(t1) || isCurrencySymbol(t1)) {
-    volumeTotal += parseFloat(pool.volumeToken1 || 0);
+    volumeTotal += vol1;
     currencyIsToken1 = true;
   }
 
   // Fallback if no clear currency
   if (volumeTotal === 0 && !currencyIsToken0 && !currencyIsToken1) {
-    const isCommonStable = (s) => s.includes('DAI') || s.includes('USDC');
-    if (isCommonStable(t0.symbol)) { volumeTotal += parseFloat(pool.volumeToken0 || 0); currencyIsToken0 = true; }
-    else if (isCommonStable(t1.symbol)) { volumeTotal += parseFloat(pool.volumeToken1 || 0); currencyIsToken1 = true; }
+    const isCommonStable = (s) => s?.includes('DAI') || s?.includes('USDC');
+    if (isCommonStable(t0.symbol)) { volumeTotal += vol0; currencyIsToken0 = true; }
+    else if (isCommonStable(t1.symbol)) { volumeTotal += vol1; currencyIsToken1 = true; }
     else {
       // Blind default: Assume Token 1 is currency (standard for most pairs)
-      volumeTotal += parseFloat(pool.volumeToken1 || 0);
+      volumeTotal += vol1;
       currencyIsToken1 = true;
     }
   }
@@ -195,8 +213,7 @@ const fetchBestPoolsForProposal = async (proposalId, chainId = 100) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: PROPOSAL_POOLS_QUERY,
-        variables: { proposalId: proposalId.toLowerCase() }
+        query: buildProposalPoolsQuery(proposalId.toLowerCase())
       })
     });
 
@@ -206,8 +223,35 @@ const fetchBestPoolsForProposal = async (proposalId, chainId = 100) => {
       return null;
     }
 
-    const pools = result.data.proposal.pools || [];
-    const currencySymbol = result.data.proposal.currencyToken?.symbol;
+    // Build a token map keyed by lowercased address, derived from
+    // whitelistedtokens. Used to enrich each pool's flat token0/token1
+    // address strings with { symbol, decimals, role } so the downstream
+    // formatter (which expects Graph-Node-shaped objects) keeps working.
+    const wls = result.data.whitelistedtokens || [];
+    const tokenByAddr = new Map();
+    for (const t of wls) {
+      if (!t.address) continue;
+      tokenByAddr.set(t.address.toLowerCase(), {
+        symbol: t.symbol || null,
+        decimals: t.decimals ?? 18,
+        role: t.role || null,
+      });
+    }
+    const enrichToken = (addr) => {
+      const lc = (addr || '').toLowerCase();
+      const meta = tokenByAddr.get(lc) || { symbol: null, decimals: 18, role: null };
+      return { id: lc, ...meta };
+    };
+
+    // Derive currencySymbol from any *_CURRENCY whitelistedtoken.
+    const currencyMeta = wls.find(t => t.role === 'YES_CURRENCY' || t.role === 'NO_CURRENCY');
+    const currencySymbol = currencyMeta?.symbol?.replace(/^(YES|NO)_/i, '') || null;
+
+    const pools = (result.data.pools || []).map(p => ({
+      ...p,
+      token0: enrichToken(p.token0),
+      token1: enrichToken(p.token1),
+    }));
 
     console.log(`[Pool Data] Found ${pools.length} pools for proposal on chain ${chainId}`);
 
@@ -290,19 +334,11 @@ const fetchSubgraphPoolData = async (poolId, chainId = 100) => {
       return null;
     }
 
-    const timestamp24hAgo = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
-
     // Use native fetch instead of graphql-request
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: POOL_QUERY,
-        variables: {
-          poolId: poolId.toLowerCase(),
-          timestamp24hAgo: timestamp24hAgo.toString() // BigInt requires string input
-        }
-      })
+      body: JSON.stringify({ query: buildPoolQuery(poolId.toLowerCase()) })
     });
 
     const result = await response.json();
@@ -312,10 +348,43 @@ const fetchSubgraphPoolData = async (poolId, chainId = 100) => {
       return null;
     }
 
-    const data = result.data;
-    if (!data || !data.pool) return null;
+    const pool = result.data?.pool?.[0];
+    if (!pool) return null;
 
-    return formatSubgraphPoolData(data.pool);
+    // Resolve token symbols/decimals/roles via the proposal's whitelistedtokens.
+    // proposal comes back from the proxy as a plain (already chain-prefix-stripped)
+    // address string in Checkpoint mode.
+    const proposalAddr = (pool.proposal || '').toLowerCase();
+    let tokenByAddr = new Map();
+    if (proposalAddr) {
+      try {
+        const tokensResp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: buildTokensForPoolQuery(proposalAddr) })
+        });
+        const tokensJson = await tokensResp.json();
+        for (const t of tokensJson.data?.whitelistedtokens || []) {
+          if (!t.address) continue;
+          tokenByAddr.set(t.address.toLowerCase(), {
+            symbol: t.symbol || null,
+            decimals: t.decimals ?? 18,
+            role: t.role || null,
+          });
+        }
+      } catch (_) { /* fall through with empty map */ }
+    }
+    const enrichToken = (addr) => {
+      const lc = (addr || '').toLowerCase();
+      const meta = tokenByAddr.get(lc) || { symbol: null, decimals: 18, role: null };
+      return { id: lc, ...meta };
+    };
+
+    return formatSubgraphPoolData({
+      ...pool,
+      token0: enrichToken(pool.token0),
+      token1: enrichToken(pool.token1),
+    });
 
 
   } catch (error) {
