@@ -715,10 +715,21 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 47 invariants (api side)**: 12 api-internal +
-      26 indexer probes + 9 chain-layer. 156 smoke tests
+      **Now 48 invariants (api side)**: 12 api-internal +
+      27 indexer probes + 9 chain-layer. 160 smoke tests
       green.
-      `anvilSnapshotCapabilityPresent` added this slice —
+      `swapAmountsAllRowsPositive` added this slice —
+      first iterate-all-rows extension on the swap side.
+      Strengthens swapAmountsPositive (latest-only) into a
+      per-row check across the first 50 swaps. Catches
+      bugs affecting SUBSETS of swaps without affecting
+      the latest: indexer reorgs, block-context-dependent
+      decoder bugs, partial-rewrite bugs, pool-specific
+      decoder bugs. Sister probe still passes when latest
+      is fine — only the iterate-all-rows check catches
+      historical corruption.
+
+      `anvilSnapshotCapabilityPresent` (previous slice) —
       ninth chain-layer invariant; second chain-CAPABILITY
       probe (sister to anvilImpersonationCapabilityPresent).
       Together they form the MINIMAL CAPABILITY SET
