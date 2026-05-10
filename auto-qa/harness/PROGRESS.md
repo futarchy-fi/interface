@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive + apiHealthBodyShape)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **49 invariants**: 13 api-internal + 27 indexer + 9 chain-layer; first body-shape probe on /health (catches LB string-match breakage + timestamp-format regressions invisible to status-code-only checks); 164 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil + chartCandlesAreSubsetOfDirect + anvilGasPricePresent + apiUnifiedChartXCacheTtlPresent + anvilNetworkVersionMatchesChainId + anvilImpersonationCapabilityPresent + anvilSnapshotCapabilityPresent + swapAmountsAllRowsPositive + apiHealthBodyShape + anvilTimeWarpCapabilityPresent)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **50 invariants**: 13 api-internal + 27 indexer + 10 chain-layer; **🎯 50-invariant milestone reached** — chain-CAPABILITY trio complete (impersonate + snapshot + time-warp = the minimal scenario primitive set); 168 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,57 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (anvilTimeWarpCapabilityPresent)**
+  (this iteration, on the api side) — 🎯 **50-invariant
+  milestone**; third chain-CAPABILITY probe (tenth chain-
+  layer invariant); COMPLETES the minimal capability TRIO:
+
+  * The trio that scenarios depend on:
+    1. impersonate → call function as arbitrary account
+    2. snapshot/revert → roll back state between tests
+    3. **TIME-WARP → simulate "wait N seconds/days"
+       without actually waiting (this slice)**
+
+  * Why time-warp is critical: ANY scenario involving a
+    time-gated state transition (resolution after deadline,
+    TWAP window calculation, vote-weight decay) cannot
+    run at all without it — wall-clock waits would make
+    CI runs hours-long.
+
+  * evm_setNextBlockTimestamp lineage: ganache-original
+    method, supported by anvil + hardhat + ganache. Same
+    support profile as evm_snapshot — wrong-fork clients
+    (geth/erigon/reth) lack it.
+
+  * Bug shapes caught (NOT caught by impersonate/snapshot
+    probes): --no-storage-caching disabling time-warp
+    specifically (snapshot can work while timestamp manip
+    is broken); RPC method-allowlisting blocking
+    setNextBlockTimestamp while allowing snapshot/revert;
+    anvil version regression dropping legacy alias.
+
+  * Side effect: probe sets next-block timestamp to
+    now+86400. No block mined in the probe; effect only
+    manifests if a scenario subsequently mines. Conservative
+    far-future value avoids year-2099 sentinel collisions.
+
+  * 50 invariants now: 13 api-internal + 27 indexer +
+    10 chain-layer (was 9). Smoke tests: 4 new + 1
+    fixture knob (timeWarpSupported: true | false |
+    'rpc-error') + 1 RPC dispatch case
+    (evm_setNextBlockTimestamp). Includes a "trio milestone
+    test" that explicitly verifies all three capability
+    probes pass on default fixture, documenting the trio
+    as a coherent set. 168/168 pass. Api commit: `4c966aa`.
+
+  * Chain layer now has TEN coverage points; the final
+    THREE are CAPABILITY probes covering the minimal
+    scenario primitive set. Without these, missing
+    capabilities would surface only when a scenario tried
+    to use them; now they surface immediately at probe time.
+
 - **slice 4d-scenarios-more (apiHealthBodyShape)**
-  (this iteration, on the api side) — first body-shape
+  (previous iteration, on the api side) — first body-shape
   probe on /health:
 
   * STRENGTHENS the existing apiHealth (status-code-only)
