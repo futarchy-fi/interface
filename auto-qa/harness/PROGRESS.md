@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 0 — code-complete (slices 1-8 landed). Two human gates remain: ADR review + sister-link verification. |
+| Phase | 1 — server-side slice 1 landed in futarchy-api (anvil fork, block clock, first smoke validated against Gnosis). UI side waits for Phase 4-5. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
