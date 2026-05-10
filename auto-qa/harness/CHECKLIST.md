@@ -689,19 +689,19 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 24 invariants (api side): 5 api-internal + 16
+      Now 25 invariants (api side): 5 api-internal + 17
       indexer probes (2 `__typename` liveness + 6
       data-aware coverage + 4 single-row data-SHAPE +
-      2 multi-row data-SHAPE + 2 CROSS-LAYER MATCH:
-      `apiCandlesMatchesDirect` (previous slice) +
-      `apiRegistryMatchesDirect` added this slice (single
-      query touches all 3 registry entity types
-      proposalEntities/organizations/aggregators; parallel
-      to api + direct, per-entity length + pair-wise id
-      compare. Catches per-entity cache drift like "api
-      caches proposalEntities but not organizations" that
-      a single-entity check would miss)) + 3 chain-layer
-      probes. 61 smoke tests green. Still to add:
+      2 multi-row data-SHAPE + 2 cross-layer MATCH +
+      1 CROSS-ENTITY FK: `swapPoolReferentialIntegrity`
+      added this slice — first cross-entity-within-indexer
+      check; query latest swap with `pool { id }` plus
+      pools list; assert swap.pool.id ∈ pools. Catches
+      orphan-swap from FK derivation bugs that pass all
+      existing existence + match checks because the
+      entities each look fine independently — only their
+      RELATIONSHIP is broken) + 3 chain-layer probes.
+      65 smoke tests green. Still to add:
       probabilityBounds, candlesAggregation (Candle
       aggregates derive correctly from contained Swaps),
       chartShape (api unified-chart vs indexer raw),
