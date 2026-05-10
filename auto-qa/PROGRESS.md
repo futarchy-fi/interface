@@ -13,10 +13,11 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 5 |
+| Iterations completed | 6 |
 | PRs catalogued | 20 / ~65 |
 | PRs classified | 20 |
-| Tests added | 9 (4 extractor-sanity + 2 graphql-compat + 3 endpoint-liveness — all passing) |
+| Tests added | 19 (4 extractor-sanity + 2 graphql-compat + 3 endpoint-liveness + 10 url-shapes — all passing) |
+| Known gaps documented | 1 (uppercase-`0X` prefix in proposalId param — see `url-shapes.test.mjs`) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
 | **Real bugs surfaced** | **16 broken GraphQL queries** (see `auto-qa/fixtures/known-graphql-failures.json`) |
@@ -110,7 +111,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: n/a
 - **Ideal test**: `GET /market/0xabc…` returns a 3xx redirect (or client-side rewrite) to `/market?proposalId=0xabc…`. Catches removal of the redirect rule.
 - **Tools needed**: HTTP client against the deployed site.
-- **Test status**: not-started
+- **Test status**: **landed-passing** (covered by `url-shapes.test.mjs` — `/market/<addr>` and `/markets/<addr>` extract correctly)
 
 ### PR #54 — Fix TWAP window for ended proposals
 - **Class**: bug-fix
@@ -131,7 +132,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: Milestones URL uses fragment (`#proposalId=…`) rather than search params. Swap quoter parsed only `?proposalId=…` and got undefined, so the quote call hit the wrong (or null) market.
 - **Ideal test**: Given a URL of each known shape (`?proposalId=`, `#proposalId=`, `/market/<addr>`, etc.), the quoter receives the same proposal ID.
 - **Tools needed**: Pure-JS URL parser test.
-- **Test status**: not-started
+- **Test status**: **landed-passing** (`auto-qa/tests/url-shapes.test.mjs` — 7 cases covering `#milestone:`, `#market:`, bare `#0x…`, plus precedence rules. Surfaced one gap: uppercase `0X` prefix is silently rejected — documented as a known gap.)
 
 ### PR #51 — Fix nonsense Liquidity widget value on market page
 - **Class**: bug-fix
