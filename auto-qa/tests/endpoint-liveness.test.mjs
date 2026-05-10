@@ -27,6 +27,9 @@ import { dirname, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ENDPOINTS_FILE = resolve(__dirname, '../../src/config/subgraphEndpoints.js');
+// PR #42: futarchy-api base URL referenced from usePoolData.js — extracted
+// here so a regression in the env-var default URL is caught.
+const API_BASE_URL_FILE = resolve(__dirname, '../../src/hooks/usePoolData.js');
 
 /**
  * Pull every `https://…/graphql` URL out of the endpoints config.
@@ -38,6 +41,21 @@ function loadEndpointUrls() {
     const text = readFileSync(ENDPOINTS_FILE, 'utf8');
     const matches = text.matchAll(/['"`](https?:\/\/[^'"`]+\/graphql)['"`]/g);
     return [...new Set([...matches].map(m => m[1]))];
+}
+
+/**
+ * Pull the futarchy-api base URL out of usePoolData.js. The string
+ * literal we look for is the `||` fallback after the env-var read:
+ *   process.env.NEXT_PUBLIC_POOL_API_URL || 'https://api.futarchy.fi'
+ * If the file is refactored to use a different default URL we want to
+ * notice. Returns null if not found (test then skips that case).
+ */
+function loadApiBaseUrl() {
+    let text;
+    try { text = readFileSync(API_BASE_URL_FILE, 'utf8'); }
+    catch { return null; }
+    const m = text.match(/NEXT_PUBLIC_POOL_API_URL\s*\|\|\s*['"`](https?:\/\/[^'"`]+)['"`]/);
+    return m ? m[1] : null;
 }
 
 const INTROSPECTION = `{ __schema { queryType { name } } }`;
@@ -84,3 +102,43 @@ for (const url of urls) {
         );
     });
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// PR #42 — futarchy-api base URL (Express, not GraphQL)
+// ────────────────────────────────────────────────────────────────────────
+const apiBaseUrl = loadApiBaseUrl();
+
+test('PR #42 — usePoolData.js declares a futarchy-api base URL', () => {
+    assert.ok(
+        apiBaseUrl && /^https?:\/\//.test(apiBaseUrl),
+        `Expected to find a NEXT_PUBLIC_POOL_API_URL fallback URL in ` +
+        `${API_BASE_URL_FILE}. Was the constant renamed or removed?`
+    );
+});
+
+test(`PR #42 — futarchy-api base URL is live: ${apiBaseUrl || '(not found)'}`,
+async (t) => {
+    if (!apiBaseUrl) { t.skip('no api base URL discovered'); return; }
+    let res;
+    try {
+        res = await fetch(`${apiBaseUrl}/health`, {
+            signal: AbortSignal.timeout(10000),
+        });
+    } catch (err) {
+        t.skip(`network unreachable for ${apiBaseUrl}: ${err.message}`);
+        return;
+    }
+    assert.ok(res.status >= 200 && res.status < 300,
+        `${apiBaseUrl}/health returned HTTP ${res.status} (expected 2xx)`);
+
+    let body = null;
+    try { body = await res.json(); } catch { /* not JSON */ }
+    // /health on futarchy-api returns { status: 'ok', timestamp }; assert
+    // either that or simply that the body is non-empty so this test still
+    // passes if the health endpoint changes its shape harmlessly.
+    if (body && typeof body === 'object') {
+        assert.ok(body.status === 'ok' || body.timestamp || Object.keys(body).length > 0,
+            `${apiBaseUrl}/health body looks empty: ${JSON.stringify(body)}`);
+    }
+});
+

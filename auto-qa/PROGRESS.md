@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 7 |
+| Iterations completed | 8 |
 | PRs catalogued | 31 / ~65 |
 | PRs classified | 31 |
-| Tests added | 19 (4 extractor-sanity + 2 graphql-compat + 3 endpoint-liveness + 10 url-shapes — all passing) |
+| Tests added | 21 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes — all passing) |
 | Known gaps documented | 1 (uppercase-`0X` prefix in proposalId param — see `url-shapes.test.mjs`) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -202,7 +202,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: After GCP migration, the env-var `NEXT_PUBLIC_FUTARCHY_API_URL` (or similar) defaulted to a stale URL. Frontend talked to the dead AWS endpoint. Same root family as the subgraph URL fix.
 - **Ideal test**: Endpoint-liveness invariant — already covered by `endpoint-liveness.test.mjs` in the subgraph case; could be extended to also check the futarchy-api base URL by reading `usePoolData.js` for the `RAW_API_BASE_URL`.
 - **Tools needed**: Same as endpoint-liveness, just point at a different URL constant.
-- **Test status**: not-started (close win — extend existing test)
+- **Test status**: **landed-passing** (`endpoint-liveness.test.mjs` extended — 2 new cases: extracts the URL from `usePoolData.js` and probes `${url}/health` for HTTP 2xx)
 
 ### PR #39 — Better post-trade panel
 - **Class**: feature/UX
