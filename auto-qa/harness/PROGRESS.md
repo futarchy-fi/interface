@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 29 invariants: 5 api-internal + 21 indexer + 3 chain-layer; **all 4 documented FK relationships now covered** (Swap→Pool, Candle→Pool, Organization→Aggregator, ProposalEntity→Organization); 81 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **30 invariants**: 6 api-internal + 21 indexer + 3 chain-layer; first api data-PLANE check landed (vs prior validation-only or passthrough probes); 85 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,67 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (apiSpotCandlesHappyPath)**
+  (this iteration, on the api side) — first api
+  data-PLANE check in the catalog:
+  * `apiSpotCandlesHappyPath` — calls
+    `/api/v1/spot-candles?ticker=harness-probe-ticker`,
+    asserts 200 + JSON content-type + body has
+    `spotCandles` array.
+
+  - **Why this is a distinct coverage class**: all
+    prior api-side invariants probed liveness
+    (apiHealth, apiWarmer), validation paths
+    (apiSpotCandlesValidates — 400 branch only),
+    raw passthroughs (apiCanReachRegistry/Candles),
+    or cross-layer match (apiCandlesMatchesDirect /
+    apiRegistryMatchesDirect). NONE exercised the
+    api's full data plane: request → validation →
+    downstream call → response transform → JSON write.
+    This closes that gap.
+
+  - **Bug shapes caught (distinct from the 400-path
+    probe)**:
+    * Validation passes but downstream throws → 500
+      (the 400-path probe keeps passing because it
+      tests a different request)
+    * Response transform regression — code returns
+      raw spotData instead of `{spotCandles: …}`,
+      OR field renamed/dropped
+    * Status-code regression — endpoint silently
+      returns 204/202
+
+  - **Empty-array semantics**: `spotCandles: []` is
+    the documented happy-path empty case (api wraps
+    in `{spotCandles: []}` even when upstream returns
+    nothing). So `length === 0` is PASSING, not
+    vacuous.
+
+  - **Fixture extension**: /api/v1/spot-candles
+    handler now dispatches on `?ticker=` presence;
+    new spotCandlesWithTickerStatus / Body knobs for
+    drift simulation. URL match relaxed from `===`
+    to `startsWith` to handle the query string.
+
+  - **Smoke tests**: 4 new (happy-empty, happy-with-
+    data, data-plane error / 500 — verifies
+    apiSpotCandlesValidates STILL passes
+    distinguishing 400-path from data-plane bugs,
+    response-shape regression / wrong key); 85/85
+    pass (was 81). Now 30 invariants: 6 api-internal
+    + 21 indexer (2 liveness + 6 data-aware coverage
+    + 4 single-row data-shape + 2 multi-row data-shape
+    + 2 cross-layer match + 4 cross-entity FK + 1
+    cross-entity time-coherence) + 3 chain-layer.
+
+  - Slice 4 progress: api-side coverage now spans ALL
+    three modes (validation, data-plane, cross-layer)
+    — completes the api-internal arc. Next:
+    candlesAggregation, conservation, probabilityBounds,
+    chartShape.
+
 - **slice 4d-scenarios-more (proposalEntityOrganizationReferentialIntegrity)**
-  (this iteration, on the api side) — closes the
+  (previous iteration, on the api side) — closes the
   registry FK chain coverage:
   * `proposalEntityOrganizationReferentialIntegrity`
     — single GraphQL query reads `proposalEntities

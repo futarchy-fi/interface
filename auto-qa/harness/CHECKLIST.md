@@ -689,24 +689,25 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 29 invariants (api side): 5 api-internal + 21
-      indexer probes (2 `__typename` liveness + 6
-      data-aware coverage + 4 single-row data-SHAPE +
-      2 multi-row data-SHAPE + 2 cross-layer MATCH +
-      4 cross-entity FK + 1 cross-entity TIME-COHERENCE:
-      `proposalEntityOrganizationReferentialIntegrity`
-      added this slice — closes the registry FK chain
-      coverage. With this in place ALL 4 documented FK
-      relationships in the system have a check:
-      Swap→Pool, Candle→Pool, Organization→Aggregator,
-      ProposalEntity→Organization. Catches orphan-
-      proposal from proposal-event handler FK bugs) +
-      3 chain-layer probes. 81 smoke tests green. Still
-      to add: probabilityBounds, candlesAggregation
-      (Candle.volume = sum of contained Swap amounts
-      within period), chartShape (api unified-chart vs
-      indexer raw), conservation, cross-run monotonicity
-      on rateSanity.
+      Now 30 invariants (api side): 6 api-internal + 21
+      indexer probes + 3 chain-layer.
+      `apiSpotCandlesHappyPath` added this slice — first
+      api data-PLANE check (vs prior validation-only or
+      passthrough probes). Calls /api/v1/spot-candles?ticker=…
+      expecting 200 + JSON with spotCandles array. Walks
+      api's full data plane (request → validation →
+      fetchSpotCandles → spotCache → response transform
+      → JSON write); catches downstream-throw 500s,
+      response-shape regressions (renamed/dropped
+      spotCandles field), and status-code regressions
+      that bypass apiSpotCandlesValidates (which only
+      tests the 400-error path). Api coverage now spans
+      validation + data-plane + cross-layer. 85 smoke
+      tests green. Still to add: probabilityBounds,
+      candlesAggregation (Candle.volume = sum of
+      contained Swap amounts within period), chartShape
+      (api unified-chart vs indexer raw), conservation,
+      cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
