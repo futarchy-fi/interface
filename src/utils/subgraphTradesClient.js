@@ -101,7 +101,12 @@ export async function fetchSwapsFromSubgraph(chainId, poolAddresses, userAddress
         whereClause = `{ pool_in: ${JSON.stringify(poolIds)} }`;
     }
 
-    const query = `{
+    // Checkpoint exposes tokenIn/tokenOut/pool as scalar strings (addresses) and
+    // already inlines symbolIn/symbolOut/decimalsIn/decimalsOut on the swap, so we
+    // don't need nested entity selections. We fetch swaps + the relevant pool
+    // metadata in parallel and stitch them client-side to keep the same
+    // {tokenIn, tokenOut, pool} object shape downstream code expects.
+    const swapsQuery = `{
         swaps(
             where: ${whereClause}
             first: ${limit}
@@ -115,44 +120,62 @@ export async function fetchSwapsFromSubgraph(chainId, poolAddresses, userAddress
             amountIn
             amountOut
             price
-            tokenIn {
-                id
-                symbol
-                decimals
-                role
-            }
-            tokenOut {
-                id
-                symbol
-                decimals
-                role
-            }
-            pool {
-                id
-                name
-                type
-                outcomeSide
-            }
+            tokenIn
+            tokenOut
+            symbolIn
+            symbolOut
+            decimalsIn
+            decimalsOut
+            pool
+        }
+    }`;
+
+    const poolsQuery = `{
+        pools(where: { id_in: ${JSON.stringify(poolIds)} }) {
+            id
+            name
+            type
+            outcomeSide
         }
     }`;
 
     try {
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
-        });
+        const [swapsRes, poolsRes] = await Promise.all([
+            fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: swapsQuery }) }),
+            fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: poolsQuery }) }),
+        ]);
 
-        const result = await response.json();
-
-        if (result.errors) {
-            console.error('[SubgraphTradesClient] GraphQL error:', result.errors[0]?.message);
-            return { swaps: [], error: result.errors[0]?.message };
+        const swapsJson = await swapsRes.json();
+        if (swapsJson.errors) {
+            console.error('[SubgraphTradesClient] GraphQL error:', swapsJson.errors[0]?.message);
+            return { swaps: [], error: swapsJson.errors[0]?.message };
         }
 
-        const swaps = result.data?.swaps || [];
-        console.log(`[SubgraphTradesClient] ✅ Fetched ${swaps.length} swaps`);
+        const poolsJson = await poolsRes.json();
+        const poolMap = new Map();
+        for (const p of (poolsJson.data?.pools || [])) {
+            poolMap.set(p.id?.toLowerCase(), p);
+        }
 
+        // Stitch into the legacy nested shape so the rest of the file
+        // (formatting / classification) doesn't need to change.
+        const swaps = (swapsJson.data?.swaps || []).map(s => {
+            const poolMeta = poolMap.get((s.pool || '').toLowerCase());
+            return {
+                id: s.id,
+                transactionHash: s.transactionHash,
+                timestamp: s.timestamp,
+                origin: s.origin,
+                amountIn: s.amountIn,
+                amountOut: s.amountOut,
+                price: s.price,
+                tokenIn:  { id: s.tokenIn,  symbol: s.symbolIn,  decimals: s.decimalsIn,  role: null },
+                tokenOut: { id: s.tokenOut, symbol: s.symbolOut, decimals: s.decimalsOut, role: null },
+                pool: poolMeta || { id: s.pool, name: null, type: null, outcomeSide: null },
+            };
+        });
+
+        console.log(`[SubgraphTradesClient] ✅ Fetched ${swaps.length} swaps`);
         return { swaps, error: null };
 
     } catch (error) {
