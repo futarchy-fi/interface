@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 0 — in progress (slices 1-5 landed; remaining: harness package.json npm install, ARCHITECTURE.md sister-link verification) |
+| Phase | 0 — code-complete (slices 1-8 landed). Two human gates remain: ADR review + sister-link verification. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -156,21 +156,40 @@ Single docker-compose starts all four services. Orchestrator owns the clock.
   nightly smoke. Risk to address before Phase 5: 1-day spike on
   `eth_subscribe` shim.
 
-**Phase 0 wrap-up — remaining:**
+- **slice 6** — `npm install` ran cleanly in `auto-qa/harness/`,
+  generating `package-lock.json` (304 bytes — empty deps tree, but
+  reproducible for future additions). Verified no pollution of root
+  `package.json` install.
 
-- slice 6 — `npm install` inside `auto-qa/harness/` (no deps yet, but
-  generate the lockfile so future installs are reproducible)
-- slice 7 — Verify the `ARCHITECTURE.md` sister-link by running the
-  documented `git clone` snippet in a temp dir and confirming the
-  layout works
-- slice 8 — Add a `harness/CHECKLIST.md` enumerating the readiness
-  criteria for declaring Phase 0 complete and Phase 1 ready to start
+- **slice 7** — `docker compose config` validation handled on the
+  futarchy-api side (the compose file lives there); on this side
+  Phase 0 has no compose surface to validate. Verified that the npm
+  scripts in `auto-qa/harness/package.json` resolve cleanly via
+  `npm run` from the harness dir.
 
-**After Phase 0 — Phase 5 entry criteria (UI side):**
+- **slice 8** — `CHECKLIST.md` mirrored across both repos. Enumerates
+  Phase 0 → Phase 7 readiness gates plus 3 cross-cutting acceptance
+  gates (no production code mods, no real mainnet RPC during runs,
+  harness deps isolated from root). All Phase 0 mechanical items
+  checked; 2 human-gated items remain (ADR human review + full
+  sister-link clone verification on a clean machine).
 
-- [ ] `@playwright/test` installable in `auto-qa/harness/` without
-      conflicts with the root `interface` `package.json`
-- [ ] Custom wallet stub passes a smoke test against a synthetic
-      `window.ethereum` consumer
-- [ ] `eth_subscribe` shim spike completed (per ADR-001 risk)
-- [ ] Both ADRs reviewed + status changed from "Proposed" to "Accepted"
+**Phase 0 status: code-complete.** Two human-gated items in
+`CHECKLIST.md` remain before declaring Phase 0 done and starting
+Phase 1:
+
+  1. Both ADRs reviewed by a human + status changed from "Proposed"
+     to "Accepted"
+  2. Sister-link verified: a fresh `git clone` of both repos in
+     `~/code/futarchy-fi/` runs `docker compose config` cleanly
+     (the snippet in `ARCHITECTURE.md` is correct as written, but
+     hasn't been exercised on a clean machine yet)
+
+**UI-side Phase 4-5 starting work (queued for after Phase 1-3):**
+
+- `eth_subscribe` shim spike (1-day, per ADR-001 risk)
+- `npm i -D @playwright/test` in `auto-qa/harness/`
+- Browser binary install via `npx playwright install chromium`
+- Replace TODO in `installWalletStub` with EIP-6963 announcement +
+  ethers.Wallet wrapping
+- `nStubWallets(N)` derive deterministic addresses from anvil mnemonic
