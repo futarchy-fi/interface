@@ -689,25 +689,25 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 27 invariants (api side): 5 api-internal + 19
+      Now 28 invariants (api side): 5 api-internal + 20
       indexer probes (2 `__typename` liveness + 6
       data-aware coverage + 4 single-row data-SHAPE +
       2 multi-row data-SHAPE + 2 cross-layer MATCH +
-      2 cross-entity FK + 1 CROSS-ENTITY TIME-COHERENCE:
-      `candleSwapTimeWindowConsistency` added this slice
-      — first invariant where both candle + swap are
-      checked against EACH OTHER (not just per-row);
-      asserts latestSwap.timestamp ≥ latestCandle.time.
-      Catches clock-skew + stale-swap-stream bugs that
-      pass all per-row time-shape probes. Establishes
-      the multi-entity-in-one-query pattern that
-      candlesAggregation will reuse with sum
-      reconciliation) + 3 chain-layer probes. 73 smoke
-      tests green. Still to add: probabilityBounds,
-      candlesAggregation (Candle.volume = sum of
-      contained Swap amounts within period), chartShape
-      (api unified-chart vs indexer raw), conservation,
-      cross-run monotonicity on rateSanity.
+      3 cross-entity FK + 1 cross-entity TIME-COHERENCE:
+      `organizationAggregatorReferentialIntegrity` added
+      this slice — registry-side FK check, mirrors the
+      candles-side swap/candle FK pattern. Pins the
+      upper link of the registry FK chain (Aggregator
+      ← Organization ← ProposalEntity). The remaining
+      ProposalEntity → Organization link is next
+      iteration. Catches orphan-org from FK derivation
+      bugs in the org-event handler) + 3 chain-layer
+      probes. 77 smoke tests green. Still to add:
+      proposalEntity → organization FK, plus
+      probabilityBounds, candlesAggregation (Candle.volume
+      = sum of contained Swap amounts within period),
+      chartShape (api unified-chart vs indexer raw),
+      conservation, cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
