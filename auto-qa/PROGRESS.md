@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 10 |
+| Iterations completed | 11 |
 | PRs catalogued | 31 / ~65 |
 | PRs classified | 31 |
-| Tests added | 29 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math — all passing) |
+| Tests added | 36 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math — all passing) |
 | Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -227,10 +227,10 @@ For each merged PR (newest first), capture:
 
 ### PR #34 — Fix slippage calculation bug (Issue #5)
 - **Class**: bug-fix
-- **Hypothesis**: Slippage was computed using wrong formula (e.g. `(in - out)/in` instead of `(quoted - actual)/quoted`, or missing decimal normalization). Quoted amounts and minOut bounds didn't match user expectations.
-- **Ideal test**: Pure unit test of `computeSlippage(quotedOut, minOut, executedOut, decimals)` — for a known input set, assert the output matches a hand-computed expected value.
-- **Tools needed**: Pure unit test if the function is exported, otherwise Storybook for the slippage display.
-- **Test status**: not-started
+- **Hypothesis**: Lossy `Number()` float math for `minReceive` truncated precision past 2^53 wei. The displayed Min. Receive number diverged from the on-chain min-output bound. Fix: switch to `BigNumber` arithmetic.
+- **Ideal test**: Compute `minReceive` via both BigInt and lossy float; assert (a) BigInt is bit-exact for round numbers, (b) float SILENTLY differs at large amounts, (c) monotonic non-increasing in slippage, (d) bps rounding correct for fractional %.
+- **Tools needed**: Pure native-BigInt arithmetic, no ethers dep needed.
+- **Test status**: **landed-passing** (`auto-qa/tests/slippage-math.test.mjs` — 7 cases including the float-truncation property check)
 
 ### PR #33 — Fix trade simulation preview precision and add pool price after
 - **Class**: bug-fix
