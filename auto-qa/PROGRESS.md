@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 13 |
+| Iterations completed | 14 |
 | PRs catalogued | 31 / ~65 |
 | PRs classified | 31 |
-| Tests added | 44 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction — all passing) |
+| Tests added | 47 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction + 3 pagination-first-cap — all passing) |
 | Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -185,10 +185,10 @@ For each merged PR (newest first), capture:
 
 ### PR #44 — Fix /companies linkable proposals cutoff
 - **Class**: bug-fix
-- **Hypothesis**: The "linkable proposals" list on /companies was being cut off — likely `first: N` or pagination wasn't fetching all entries, or a date-range filter excluded too much. Some proposals that should appear in the linker were missing.
-- **Ideal test**: Open the linker, assert all proposals matching `(open OR resolved-recently) AND visibility==='public'` appear.
-- **Tools needed**: Component or Playwright test.
-- **Test status**: not-started
+- **Hypothesis**: `getLinkableProposals` queried `proposals(first: 50)` against a registry with 229 proposals. Ordered by hex `id` (random sort), so any proposal whose address sorted past position 50 was invisible to the admin UI. Fix: bump to `first: 1000`.
+- **Ideal test**: Lint-style scan: any GraphQL query on a growing entity (`proposals`, `pools`, `organizations`, `proposalentities`) with `first: <100` is flagged unless explicitly accepted. Catches future PR-#44-style silent-truncation bugs in any file.
+- **Tools needed**: Reuse the GraphQL extractor; pure regex scan.
+- **Test status**: **landed-passing** (`auto-qa/tests/pagination-first-cap.test.mjs` — 3 cases: surprise detection, accepted-list still-matches, diagnostic. ACCEPTED_SMALL_FIRST baseline records the 2 intentionally-narrow usages: search `proposals(first: 20)` and `pools(... id: "0xabc", first: 1)`.)
 
 ### PR #43 — Remove tickspread.com URL references
 - **Class**: refactor / cleanup (post-rebrand)
