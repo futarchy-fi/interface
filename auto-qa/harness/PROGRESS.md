@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 slices 1+2 landed. Slice 1: browser-injection smoke (Playwright + chromium, EIP-6963 announce, 6 tests). Slice 2: in-page signing via `setupSigningTunnel` exposeBinding — personal_sign / eth_signTypedData_v4 / eth_sendTransaction (live anvil) all working. 9/9 browser tests green in ~5.6s. Phase 4 slices 1+2+3 prior. Phase 5 slices 3/4 + Phase 4 slice 4 still pending. |
+| Phase | 5 slices 1+2+3a landed. Slice 1: browser-injection smoke. Slice 2: in-page signing via `setupSigningTunnel` exposeBinding. Slice 3a: futarchy Next.js dev server in the loop — `flows/app-discovery.spec.mjs` confirms `window.ethereum.isHarness` is observable in the real app context (cold compile ~17s, test ~1.7s). Webhook bug fixed: slice 1's `npm --prefix ../../..` was resolving to /Users/kas/, not the interface root. 10/10 browser tests green. Slice 3b (RainbowKit Connect modal assertion) + slice 4 (DOM↔API price invariant) still pending. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -471,12 +471,61 @@ Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
                                        TOTAL: 18 pass + 0 skip
 ```
 
+- **slice 3a** (this iteration) — futarchy Next.js dev server in
+  the loop. First slice that actually navigates to a real page
+  served by the futarchy app, instead of `about:blank`. The goal:
+  prove `addInitScript` runs early enough that `window.ethereum`
+  is set BEFORE app code (React, Wagmi, RainbowKit) reads it.
+
+  - **`flows/app-discovery.spec.mjs`** — single test that:
+    1. Skips when `HARNESS_NO_WEBSERVER=1` (slice 1+2 mode)
+    2. Installs the wallet stub via `addInitScript` BEFORE goto
+    3. Navigates to `/` (futarchy homepage) — `domcontentloaded`
+       wait
+    4. Asserts `window.ethereum.{isMetaMask,isHarness,
+       selectedAddress}` from the page context match what was
+       configured in node
+
+  - **Bug fix discovered along the way**: slice 1's webServer
+    block had `npm --prefix ../../.. run dev` — but from
+    `auto-qa/harness/` that resolves to `/Users/kas/`, not the
+    interface root. We never noticed because slice 1 + 2 ran with
+    `HARNESS_NO_WEBSERVER=1`. Corrected to `../../`. Bumped
+    webServer timeout from 120s to 180s (cold Next.js compile
+    can take 30-90s).
+
+  - **New npm scripts**: `ui:full` (drops HARNESS_NO_WEBSERVER) and
+    `ui:full:ui` (interactive) in harness; `auto-qa:e2e:ui:full`
+    and `auto-qa:e2e:ui:full:ui` at root.
+
+  - **Knob**: `HARNESS_FRONTEND_RPC_URL` overrides the dev
+    server's `NEXT_PUBLIC_RPC_URL`. For this iteration, used
+    `https://rpc.gnosischain.com` so the app can hydrate cleanly
+    without needing a local anvil. Slice 3 onwards will swap to
+    `http://localhost:<anvil>` once anvil is bundled into the
+    full harness lifecycle.
+
+  - **Validated end-to-end** — single run, cold Next.js compile,
+    test passes:
+    ```
+    Phase 5 slice 3a app-discovery (1 case)              ✓ ~1.7s
+    + cold Next.js compile + first navigation             ~17s
+    Total wall-clock                                      ~20s
+    ```
+
+  - **Compile-time noise observed (pre-existing, not harness-
+    introduced)**: MetaMask SDK warns about missing optional
+    `@react-native-async-storage/async-storage`; Next.js warns
+    about a `<script>` tag in `next/head`. Both are app issues
+    that don't break hydration; flagged here for context.
+
 **Phase 5 — remaining slices:**
 
-- slice 3 — drop `HARNESS_NO_WEBSERVER`, let Playwright launch the
-  Next.js dev server, navigate to a real page, and confirm
-  Wagmi/RainbowKit auto-discovers the harness wallet via the
-  EIP-6963 announcement.
+- slice 3b — once we're past the "does the wallet inject" gate,
+  open RainbowKit's Connect modal and assert "Futarchy Harness
+  Wallet" appears in the wallet list (proving the EIP-6963
+  announce is reaching RainbowKit's discovery). Optional follow-
+  up: click the wallet, assert successful connect.
 - slice 4 — the canonical Phase 5 invariant: navigate to a
   proposal page, scrape the visible price, compare to the api
   response that produced it.

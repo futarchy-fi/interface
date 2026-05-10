@@ -13,6 +13,8 @@
         "test": "node --test 'tests/**/*.test.mjs'",
         "ui": "HARNESS_NO_WEBSERVER=1 playwright test",
         "ui:ui": "HARNESS_NO_WEBSERVER=1 playwright test --ui",
+        "ui:full": "playwright test",
+        "ui:full:ui": "playwright test --ui",
         "ui:report": "playwright show-report",
         "replay": "echo 'TODO Phase 5 — full chain↔api↔ui replay' && exit 1"
     },

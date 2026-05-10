@@ -68,15 +68,26 @@ export default defineConfig({
 
     // Auto-launch local Next.js when not running inside docker compose.
     // The HARNESS_NO_WEBSERVER env opts out (compose mode runs the
-    // dev server itself).
+    // dev server itself; slices 1+2 also opt out since they only
+    // need about:blank).
+    //
+    // Path is '../../' relative to this config — so Playwright runs
+    // `npm run dev` from `<repo>/interface/`, where `next dev` lives.
+    // Slice 1 had a stale '../../..' that pointed at /Users/kas/ —
+    // fixed in slice 3 when we first actually exercised the webServer.
     webServer: process.env.HARNESS_NO_WEBSERVER ? undefined : {
-        command: 'npm --prefix ../../.. run dev',
+        command: 'npm --prefix ../../ run dev',
         url: BASE_URL,
         reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
+        timeout: 180_000, // cold Next.js compile can be slow
         env: {
-            // Force Wagmi/RainbowKit at the local anvil fork.
-            NEXT_PUBLIC_RPC_URL: process.env.HARNESS_ANVIL_URL || 'http://localhost:8546',
+            // Force Wagmi/RainbowKit at the local anvil fork by
+            // default; slice 3 overrides via HARNESS_FRONTEND_RPC_URL
+            // when an anvil isn't running.
+            NEXT_PUBLIC_RPC_URL:
+                process.env.HARNESS_FRONTEND_RPC_URL ||
+                process.env.HARNESS_ANVIL_URL ||
+                'http://localhost:8546',
             NEXT_PUBLIC_API_URL: process.env.HARNESS_API_URL || 'http://localhost:3031',
         },
     },
