@@ -715,10 +715,22 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 54 invariants (api side)**: 14 api-internal +
-      30 indexer probes + 10 chain-layer. 184 smoke tests
+      **Now 55 invariants (api side)**: 14 api-internal +
+      31 indexer probes + 10 chain-layer. 188 smoke tests
       green.
-      `candleVolumesAllRowsNonNegative` added this slice —
+      `candleOHLCAllRowsConsistent` added this slice —
+      third iterate-all-rows extension; COMPLETES the
+      iterate-all-rows TRIAD on the indexer's main
+      accumulator entities (swap amounts + candle volumes
+      + candle OHLC). Each accumulator entity now has
+      BOTH latest-only + all-rows coverage. Catches per-
+      period min/max accumulator bugs, indexer reorg
+      corruption, pool-specific aggregator bugs, period-
+      boundary off-by-ones. Sister candleOHLCOrdering
+      still passes when latest is fine — only iterate-all-
+      rows catches historical corruption.
+
+      `candleVolumesAllRowsNonNegative` (previous slice) —
       iterate-all-rows extension on the candle side; sister
       to swapAmountsAllRowsPositive. Symmetrically completes
       the iterate-all-rows pattern across the two main
