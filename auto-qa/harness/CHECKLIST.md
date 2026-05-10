@@ -715,10 +715,23 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 50 invariants (api side, 🎯 milestone)**: 13
-      api-internal + 27 indexer probes + 10 chain-layer.
-      168 smoke tests green.
-      `anvilTimeWarpCapabilityPresent` added this slice —
+      **Now 51 invariants (api side)**: 14 api-internal +
+      27 indexer probes + 10 chain-layer. 172 smoke tests
+      green.
+      `apiWarmerBodyShape` added this slice — second body-
+      shape probe in the catalog; sister to apiHealthBodyShape.
+      Together they cover the two main observability
+      endpoints (/health + /warmer). Asserts /warmer body
+      conforms to getWarmerStatus() shape: active is non-
+      negative finite; maxEntries / refreshIntervalSec /
+      retentionDays are POSITIVE finite (0 = "disabled"
+      config sentinel = regression); entries is array.
+      Catches field rename, numeric type regression,
+      entries-changed-to-object, config sentinel hits.
+      Sister apiWarmer probe still passes when body is
+      valid JSON; only this body-shape catches these.
+
+      `anvilTimeWarpCapabilityPresent` (previous slice) —
       tenth chain-layer invariant; THIRD chain-CAPABILITY
       probe. COMPLETES the minimal capability TRIO that
       scenarios depend on: impersonate + snapshot/revert
