@@ -13,10 +13,10 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 11 |
+| Iterations completed | 12 |
 | PRs catalogued | 31 / ~65 |
 | PRs classified | 31 |
-| Tests added | 36 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math — all passing) |
+| Tests added | 44 (4 extractor-sanity + 2 graphql-compat + 5 endpoint-liveness + 10 url-shapes + 2 dead-references + 6 liquidity-math + 7 slippage-math + 8 snapshot-id-extraction — all passing) |
 | Known gaps documented | 2 (uppercase-`0X` prefix in proposalId param; **PR #47 supabase cleanup is partial — 10 imports remain**) |
 | Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
@@ -160,7 +160,7 @@ For each merged PR (newest first), capture:
 - **Hypothesis**: Snapshot proposal ID was being read from a hardcoded mapping or env var. Some proposals had it but the value was wrong/stale. Fix: read from on-chain metadata as single source of truth.
 - **Ideal test**: For a fixture proposal, `extractSnapshotProposalId(proposal)` returns the same value as `proposal.metadata.snapshot_proposal_id` from the registry.
 - **Tools needed**: Pure unit test with a metadata fixture.
-- **Test status**: not-started
+- **Test status**: **landed-passing** (`auto-qa/tests/snapshot-id-extraction.test.mjs` — 8 cases. Spec-mirror of `extractSnapshotIdFromMetadata` from `src/adapters/registryAdapter.js:286` (couldn't import directly — Next.js extension-less imports vs node:test strict ESM). Test matrix: object metadata, JSON-string metadata, null/undefined entity, missing metadata, missing snapshot_id, malformed JSON, non-string snapshot_id, slug-format ID.)
 
 ### PR #47 — Remove dead Supabase code and unreachable fallbacks
 - **Class**: refactor / cleanup
