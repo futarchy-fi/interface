@@ -689,23 +689,25 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 26 invariants (api side): 5 api-internal + 18
+      Now 27 invariants (api side): 5 api-internal + 19
       indexer probes (2 `__typename` liveness + 6
       data-aware coverage + 4 single-row data-SHAPE +
       2 multi-row data-SHAPE + 2 cross-layer MATCH +
-      2 CROSS-ENTITY FK: `swapPoolReferentialIntegrity`
-      (previous slice) + `candlePoolReferentialIntegrity`
-      added this slice. The two together pin the FK
-      contract on BOTH entity-emit paths (swap-handler
-      per-event + period-aggregator per-bucket); an
-      indexer with broken aggregator FK derivation but
-      correct swap-handler FK passes the swap check
-      and fails this one) + 3 chain-layer probes.
-      69 smoke tests green. Still to add:
-      probabilityBounds, candlesAggregation (Candle
-      aggregates derive correctly from contained Swaps),
-      chartShape (api unified-chart vs indexer raw),
-      conservation, cross-run monotonicity on rateSanity.
+      2 cross-entity FK + 1 CROSS-ENTITY TIME-COHERENCE:
+      `candleSwapTimeWindowConsistency` added this slice
+      — first invariant where both candle + swap are
+      checked against EACH OTHER (not just per-row);
+      asserts latestSwap.timestamp ≥ latestCandle.time.
+      Catches clock-skew + stale-swap-stream bugs that
+      pass all per-row time-shape probes. Establishes
+      the multi-entity-in-one-query pattern that
+      candlesAggregation will reuse with sum
+      reconciliation) + 3 chain-layer probes. 73 smoke
+      tests green. Still to add: probabilityBounds,
+      candlesAggregation (Candle.volume = sum of
+      contained Swap amounts within period), chartShape
+      (api unified-chart vs indexer raw), conservation,
+      cross-run monotonicity on rateSanity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
