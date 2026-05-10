@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **41 invariants**: 10 api-internal + 26 indexer + 5 chain-layer; chain-CLIENT identity pin landed; 130 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED on interface side + Phase 7 slice **3e** (smoke-tests CI) STAGED on api side + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove + poolTypeIsValidEnum + registryHasFutarchyProdAggregator + apiUnifiedChartHasObservabilityHeaders + anvilClientVersionMentionsAnvil)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **41 invariants**: 10 api-internal + 26 indexer + 5 chain-layer; chain-CLIENT identity pin landed; 130 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,48 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 3e (smoke-tests CI workflow STAGED on api side)**
+  (this iteration — docs-only mirror on interface side):
+
+  - **Per maintainer's CI question**: api-side smoke-test
+    workflow now staged in version control on the api repo
+    (`futarchy-api/auto-qa/harness/ci/auto-qa-harness-smoke.yml.staged`).
+    First staged workflow on the api side; all prior
+    staged workflows (3a, 3c, 3d) live here on interface
+    for the Playwright suite. 4 total CI workflows now
+    awaiting promotion (1 api + 3 interface).
+
+  - **What runs**: `npm run smoke:scenarios` (130+ tests
+    against in-process node:http fixture, ~1.5s test time
+    + Node setup, no docker, no real services). Plus a
+    second step verifying `HARNESS_DRY_RUN=1` catalog
+    listing works at the workflow level. Trigger:
+    `workflow_dispatch` only for v1, matching slices 3a +
+    3c. Total runtime <1 min.
+
+  - **Why this is the right next CI step**: cheapest of
+    the 4 staged workflows to promote (no docker, no
+    Playwright, no GH Actions secrets). Recommended
+    FIRST promotion target for the maintainer.
+
+  - **Why it lives on api side, not here**: the smoke-
+    test runner + fixture + 41 invariants all live in
+    `futarchy-api/auto-qa/harness/`. This repo's CI
+    staging area (`auto-qa/harness/ci/`) hosts only the
+    Playwright workflows that need browser deps. See
+    `auto-qa/harness/ci/README.md` here vs the new
+    one over on api side — they document the same
+    staging-dance pattern for their respective
+    workflow tracks.
+
+  - **Validation**: no code changes — just staged YAML
+    + README on api side. 130/130 smoke tests still
+    green. 41 invariants still in catalog. Doc mirror
+    here (status line + this entry). Api commit:
+    `10ab868`.
+
 - **slice 4d-scenarios-more (anvilClientVersionMentionsAnvil)**
-  (this iteration, on the api side) — chain-CLIENT
+  (previous iteration, on the api side) — chain-CLIENT
   identity pin:
   * `anvilClientVersionMentionsAnvil` — calls
     web3_clientVersion, asserts response contains

@@ -564,6 +564,32 @@ freshly-generated addresses as recipients; documented in
       `retention-days: 14`; `if-no-files-found: ignore` for
       green runs with no artifacts. Promotes together with
       slice 3c (same staged file).
+- [x] **3e — smoke-test workflow STAGED on api side
+      (docs-only mirror here).** The actual `.staged`
+      workflow file lives in `futarchy-api/auto-qa/harness/
+      ci/auto-qa-harness-smoke.yml.staged` (NEW, on api
+      side — first staged workflow on that side; all prior
+      staged workflows lived here on interface for the
+      Playwright suite). Job: `scenarios-smoke` —
+      checkout, Node 22 with npm cache on
+      `auto-qa/harness/package-lock.json`, `npm ci` in
+      harness, then `npm run smoke:scenarios` (130+ tests
+      against in-process node:http fixture, ~1.5s test
+      time + setup overhead). Adds a second step to
+      verify `HARNESS_DRY_RUN=1` catalog listing works
+      at the workflow level. Trigger: `workflow_dispatch`
+      (matches conservative roll-out of slices 3a + 3c).
+      Total runtime expected <1 min. Lives on api side
+      because the smoke runner + fixture + 41 invariants
+      all live in `futarchy-api/auto-qa/harness/`. Api
+      commit: `10ab868`.
+- [ ] **3e-promote** — maintainer task: copy
+      `auto-qa/harness/ci/auto-qa-harness-smoke.yml.staged`
+      into `.github/workflows/auto-qa-harness-smoke.yml`
+      on the **api repo** (not this one). Cheapest of
+      the 4 currently-staged CI workflows to promote;
+      recommend doing this FIRST since it's pure node +
+      no docker + no GH Actions secrets needed.
 
 **Phase 7 slice 4 — IN PROGRESS (full-stack):**
 
