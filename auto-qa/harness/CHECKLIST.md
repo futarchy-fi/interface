@@ -689,16 +689,16 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 5 invariants (api side): `apiHealth`,
-      `apiCanReachRegistry`, `apiCanReachCandles`,
-      `registryDirect`, `candlesDirect` (the last 2 added
-      this slice — probe indexers WITHOUT going through
-      api; validates the orchestrator container can reach
-      the indexers over harness-net per slice
-      4b-network-wire). 9 smoke tests green. Still to add:
-      rateSanity (sDAI rate ≥ 1, monotonic),
-      probabilityBounds (price ∈ [0, 1]),
-      candlesAggregation, chartShape, conservation.
+      Now 6 invariants (api side): 5 GraphQL probes (api
+      passthrough + direct-indexer pairs) plus `rateSanity`
+      (added this slice — eth_call to sDAI's getRate() at
+      0x89C80A4540A00b5270347E02e2E144c71da2EceD on Gnosis;
+      asserts ≥ 1e18; mirrors src/services/rate-provider.js;
+      first chain-layer invariant). 12 smoke tests green.
+      Still to add: probabilityBounds (price ∈ [0, 1]),
+      candlesAggregation, chartShape, conservation, plus
+      cross-run monotonicity on rateSanity (needs persistent
+      state).
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.
