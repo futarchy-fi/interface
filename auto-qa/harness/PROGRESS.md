@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 28 invariants: 5 api-internal + 20 indexer + 3 chain-layer; cross-entity FK pattern now extends to registry's Organization → Aggregator link; 77 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with 29 invariants: 5 api-internal + 21 indexer + 3 chain-layer; **all 4 documented FK relationships now covered** (Swap→Pool, Candle→Pool, Organization→Aggregator, ProposalEntity→Organization); 81 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,63 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (proposalEntityOrganizationReferentialIntegrity)**
+  (this iteration, on the api side) — closes the
+  registry FK chain coverage:
+  * `proposalEntityOrganizationReferentialIntegrity`
+    — single GraphQL query reads `proposalEntities
+    (first: 1) { id organization { id } } organizations
+    (first: 50) { id }`; asserts
+    `proposal.organization.id ∈ organizations`.
+
+  - **All 4 documented FK relationships now covered**:
+    * Pool ← Swap (swapPoolReferentialIntegrity)
+    * Pool ← Candle (candlePoolReferentialIntegrity)
+    * Aggregator ← Organization
+      (organizationAggregatorReferentialIntegrity)
+    * Organization ← ProposalEntity (THIS)
+
+  - **Bug shapes caught (lower-link specific)**:
+    proposal-event handler derives org id wrong (every
+    new proposal becomes orphan if FK reads wrong
+    topic slot); org deleted but proposals weren't
+    GC'd (orphan proposals — distinct from orphan
+    orgs because proposal sync may run independently
+    of org sync); schema migration that renamed
+    Organization without updating ProposalEntity FK.
+
+  - **Symmetric FK build-out is now complete** within
+    the indexer layer: candles indexer has 2 FK checks
+    (covering both entity-emit paths); registry
+    indexer has 2 FK checks (covering the full FK
+    chain).
+
+  - **Fixture extension**: each proposalEntity row now
+    gets `organization: {id}` (default mock-org-0);
+    new `proposalEntityOrganizationIds` array option
+    for tests to override per-proposal FK.
+
+  - **Smoke tests**: 4 new (happy with FK intact,
+    vacuous-no-proposals, orphan proposal — verifies
+    organizationAggregatorRefIntegrity STILL passes,
+    distinguishing proposal-handler vs org-handler FK
+    bugs, orphan-storm); 81/81 pass (was 77). Now 29
+    invariants: 5 api-internal + 21 indexer (2
+    liveness + 6 data-aware coverage + 4 single-row
+    data-shape + 2 multi-row data-shape + 2 cross-layer
+    match + 4 cross-entity FK + 1 cross-entity time-
+    coherence) + 3 chain-layer.
+
+  - Slice 4 progress: ~99% (29 of ~30 sub-slices).
+    Full FK chain coverage across both indexers
+    closes a natural arc that started 4 iterations
+    ago. Next arcs: candlesAggregation (sum
+    reconciliation), conservation, probabilityBounds,
+    chartShape — each exercises a different
+    correctness dimension.
+
 - **slice 4d-scenarios-more (organizationAggregatorReferentialIntegrity)**
-  (this iteration, on the api side) — cross-entity FK
+  (previous iteration, on the api side) — cross-entity FK
   pattern now extends to the registry indexer:
   * `organizationAggregatorReferentialIntegrity` —
     single GraphQL query reads `organizations(first: 1)
