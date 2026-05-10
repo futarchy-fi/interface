@@ -60,6 +60,7 @@ running assertions in registration order.
 
 ## Current scenarios
 
-| #  | File                              | Bug shape                                  | Notes |
-|----|-----------------------------------|--------------------------------------------|-------|
-| 01 | `01-stale-price-shape.scenario.mjs` | PR #64 stale-price-but-API-healthy       | Lifted from Phase 5 slice 4c v3b. Mocks both registry + candles GraphQL; asserts "0.4200 SDAI" renders in the EventHighlightCard via the prefetched-price short-circuit. |
+| #  | File                                | Bug shape                                                       | Notes |
+|----|-------------------------------------|-----------------------------------------------------------------|-------|
+| 01 | `01-stale-price-shape.scenario.mjs` | PR #64 stale-price-but-API-healthy                              | Lifted from Phase 5 slice 4c v3b. Mocks both registry + candles GraphQL; asserts "0.4200 SDAI" renders in the EventHighlightCard via the prefetched-price short-circuit. |
+| 02 | `02-registry-down.scenario.mjs`     | hard-crash / hung-spinner / leaked-error on registry 5xx        | First Phase 7 chaos scenario. Mocks REGISTRY → 502; asserts /companies degrades gracefully to "No organizations found" instead of crashing. |

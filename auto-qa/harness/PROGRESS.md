@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 slices **1+2** landed. Slice 1: ADR-002 picks executable `.scenario.mjs` modules + scenarios/ structure. Slice 2: **first real scenario captured** — `01-stale-price-shape.scenario.mjs` lifts slice 4c v3b's mocks + assertions into the Scenario format. Wrapper spec `flows/scenarios.spec.mjs` auto-discovers scenarios and emits one Playwright test per file. Mock helpers extracted into shared `fixtures/api-mocks.mjs` so the spec + scenarios reuse them. **Phase 6's "first real bug shape replayable" gate is now met.** 18/18 browser tests green (spec suite + scenario suite both passing). |
+| Phase | 5 done + Phase 6 done (slices 1+2; slice 3 catalog deferred until ≥3 scenarios) + Phase **7 slice 1** landed. Phase 7 slice 1: first chaos primitive — `02-registry-down.scenario.mjs` mocks REGISTRY GraphQL → 502 and asserts /companies degrades to "No organizations found". Composes with the Phase 6 scenario format with no format change. 19/19 browser tests green (added 1 chaos scenario). |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -960,4 +960,57 @@ Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
 Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
 Phase 6 scenarios (1 case, chromium + Next.js)         ✓ ~3s
                                        TOTAL: 27 pass + 0 skip
+```
+
+### Phase 7 — Chaos injection + nightly CI (UI side)
+
+- **slice 1** (this iteration) — first chaos primitive landed
+  via the Phase 6 scenario format. Validates the design choice
+  in ADR-002: "executable `.scenario.mjs` modules" composes with
+  chaos because mock handlers can return any HTTP status, not
+  just 200. No format change needed.
+
+  - **`scenarios/02-registry-down.scenario.mjs`**: mocks
+    REGISTRY GraphQL → `route.fulfill({status: 502, body:
+    {errors:[{message:'Bad Gateway (chaos: registry-down)'}]}})`,
+    asserts `/companies` shows "No organizations found" within
+    30s. The empty-state branch lives in
+    `OrganizationsTable.jsx::filteredOrgs.length === 0` — it
+    fires when both `useAggregatorCompanies` AND the carousel-
+    side `fetchProposalsFromAggregator` return empty results
+    after their `.catch` branches handle the 502.
+
+  - **Bug-shapes guarded**:
+    * Hard-crash on REGISTRY 5xx (page becomes unusable)
+    * Hung loading spinner with no terminal state
+    * Raw error envelope leaked to UI ("Bad Gateway: …" text)
+    * Silent broken state that fakes success
+
+  - **Composability proof**: the wrapper spec from Phase 6
+    slice 2 auto-discovered the new scenario without ANY code
+    change — adding a future bug-shape regression is a single
+    new file. This is the "scenario library" working as
+    intended.
+
+  - **Validated end-to-end**: the wrapper spec ran both 01
+    (happy-path) AND 02 (chaos) and both pass. 02 alone: 2.4s.
+    Both together: 20s wall-clock with cold compile.
+
+  - **Phase 7 — staging the rest**: slice 2 = more chaos
+    primitives (CANDLES timeout, WALLET RPC failure, mid-flight
+    failure); slice 3 = CI integration (nightly cron + artifact
+    upload); slice 4 = full-stack docker-compose. Per
+    CHECKLIST.md.
+
+**Smoke summary (UI side, post-Phase 7 slice 1):**
+
+```
+Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
+Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
+Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
+Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
+Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
+Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
+Phase 6+7 scenarios (2 cases, chromium + Next.js)      ✓ ~5s
+                                       TOTAL: 28 pass + 0 skip
 ```
