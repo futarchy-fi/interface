@@ -715,11 +715,23 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      **Now 53 invariants (api side)**: 14 api-internal +
-      29 indexer probes + 10 chain-layer. 180 smoke tests
+      **Now 54 invariants (api side)**: 14 api-internal +
+      30 indexer probes + 10 chain-layer. 184 smoke tests
       green.
-      `registryIndexerSchemaHasRequiredTypes` added this
-      slice — second GraphQL INTROSPECTION probe; sister
+      `candleVolumesAllRowsNonNegative` added this slice —
+      iterate-all-rows extension on the candle side; sister
+      to swapAmountsAllRowsPositive. Symmetrically completes
+      the iterate-all-rows pattern across the two main
+      accumulator-bearing entities (swap amounts + candle
+      volumes). Catches bugs affecting SUBSETS of candles
+      without affecting the latest: indexer reorgs, per-
+      period decoder bugs, partial-rewrite bugs, pool-
+      specific aggregator bugs. Sister candleVolumesNonNegative
+      still passes when latest is fine — only iterate-all-
+      rows catches historical corruption.
+
+      `registryIndexerSchemaHasRequiredTypes` (previous
+      slice) — second GraphQL INTROSPECTION probe; sister
       to candlesIndexerSchemaHasRequiredTypes on the
       registry side. Symmetrically completes schema-
       validation across both indexers. Asserts
