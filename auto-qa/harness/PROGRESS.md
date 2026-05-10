@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **34 invariants**: 8 api-internal + 22 indexer + 4 chain-layer; **first ECONOMIC invariant landed** (probabilityBounds — close ∈ [0, 1] for PREDICTION pools); 101 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **35 invariants**: 8 api-internal + 23 indexer + 4 chain-layer; universal price-sanity check closes the gap left by ordering+bounds invariants; 105 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,9 +2313,55 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (candlePricesNonNegative)**
+  (this iteration, on the api side) — universal
+  price-sanity probe:
+  * `candlePricesNonNegative` — for ALL pool types,
+    asserts latest candle's open/high/low/close ≥ 0.
+
+  - **Closes a gap left by candleOHLCOrdering +
+    probabilityBounds**:
+    * Ordering check passes when low and high are
+      both negative (low ≤ high holds for negatives)
+      or mixed-sign with ordering preserved.
+    * probabilityBounds catches close < 0 ONLY for
+      PREDICTION-type pools, and ONLY checks the
+      close field — non-PREDICTION pools and
+      negative open/high/low slip through.
+
+  - **Bug shapes caught**: sign-bug leak in price
+    derivation for non-PREDICTION pools (CONDITIONAL
+    + EXPECTED_VALUE); all-OHLC-negative aggregator
+    bug; mixed-sign OHLC where close is positive
+    but open/high/low aren't.
+
+  - **No fixture changes needed** — existing knobs
+    cover all OHLC fields; tests just override with
+    negative values.
+
+  - **Smoke tests**: 4 new (happy with all ≥ 0,
+    vacuous, all-negative for CONDITIONAL pool —
+    verifies BOTH candleOHLCOrdering AND
+    probabilityBounds STILL pass proving the gap
+    was real, mixed-sign for PREDICTION pool with
+    positive close — verifies probabilityBounds
+    STILL passes since close is fine, only the
+    universal check catches it); 105/105 pass (was
+    101). Now 35 invariants: 8 api-internal + 23
+    indexer + 4 chain-layer.
+
+  - Slice 4 progress: single-row data-shape coverage
+    for candle entities now spans 5 complementary
+    checks (ordering, volumes ≥ 0, time-monotonic
+    cross-row, prices ≥ 0, probability bounds for
+    PREDICTION). Each catches distinct bug classes.
+    Remaining: candlesAggregation, full chartShape
+    match cross-layer, conservation, monotonicity
+    (TWAP), cross-run rate monotonicity.
+
 - **slice 4d-scenarios-more (probabilityBounds)**
-  (this iteration, on the api side) — FIRST ECONOMIC
-  INVARIANT in the catalog:
+  (previous iteration, on the api side) — FIRST
+  ECONOMIC INVARIANT in the catalog:
   * `probabilityBounds` — for PREDICTION-type pools
     (filtered via `candle.pool.type`), asserts
     `latestCandle.close ∈ [0, 1]`. The close IS the
