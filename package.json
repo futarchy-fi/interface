@@ -16,6 +16,7 @@
     "getpoolprice": "node getAlgebraPoolPrice.js",
     "start-proposal": "node scripts/proposal-cli.js",
     "auto-qa:extract-graphql": "node auto-qa/tools/extract-graphql.mjs",
+    "auto-qa:probe-graphql": "node auto-qa/tools/probe-graphql.mjs",
     "auto-qa:test": "node --test 'auto-qa/tests/**/*.test.mjs'"
   },
   "dependencies": {

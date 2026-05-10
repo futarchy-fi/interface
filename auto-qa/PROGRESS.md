@@ -13,12 +13,13 @@ out fixes in a separate pass.
 | Field | Value |
 |---|---|
 | Branch | `auto-qa` (off `origin/main`) |
-| Iterations completed | 2 |
+| Iterations completed | 3 |
 | PRs catalogued | 5 / ~65 |
 | PRs classified | 5 |
-| Tests added | 4 (`extractor-sanity.test.mjs` — all passing) |
-| Tools shipped | 1 (`auto-qa/tools/extract-graphql.mjs`) |
+| Tests added | 6 (4 extractor-sanity + 2 graphql-compat — all passing) |
+| Tools shipped | 2 (`extract-graphql.mjs` + `probe-graphql.mjs`) |
 | Test runner | `node --test` via `npm run auto-qa:test` |
+| **Real bugs surfaced** | **16 broken GraphQL queries** (see `auto-qa/fixtures/known-graphql-failures.json`) |
 
 ## Catalogue methodology
 
@@ -75,7 +76,7 @@ Ranked by how many catalogued bugs each tool would have caught.
 
 | Rank | Tool | Catches | Effort |
 |---|---|---|---|
-| 1 | **GraphQL schema-compat checker** — extract every GraphQL string from the frontend, validate against live Checkpoint introspection. Static, no UI needed. **Step 1 done**: extractor at `auto-qa/tools/extract-graphql.mjs` finds 32 queries across 19 files (run `npm run auto-qa:extract-graphql --summary`). Step 2 next: feed the queries through graphql-js validator against live introspection. | #62, #63, #65 (3/5) + every future Checkpoint shape mismatch | Medium |
+| 1 | **GraphQL schema-compat checker** — extract every GraphQL string from the frontend, validate against live Checkpoint introspection. Static, no UI needed. **DONE**: extractor + runtime probe shipped. `npm run auto-qa:extract-graphql` finds 32 queries; `npm run auto-qa:probe-graphql -- --summary` sends each to the live API and reports validation errors. Surfaced 16 broken queries (see "Known failures" below). | #62, #63, #65 (3/5) + every future Checkpoint shape mismatch | DONE |
 | 2 | **Companies/market page render smoke test** — Playwright test that loads `futarchy.fi/companies` + a known market page and asserts non-empty data. | #61, #62, #64, #65 (4/5) | Medium-High (browser, network) |
 | 3 | **Bulk-pool-address unit test with recorded fixture** — calls `bulkFetchPoolsByChain` with a known input, asserts non-empty output. | #64 | Low |
 
@@ -87,6 +88,19 @@ Ranked by how many catalogued bugs each tool would have caught.
 - Also catalogue closed-without-merge PRs and direct-to-main commits.
 - Repeat the same exercise on `futarchy-fi/futarchy-api` in alternating iterations.
 - Do NOT modify production code, even if the test exposes a bug. Document the failure here.
+
+## Known failures (iteration 3 — schema-compat probe)
+
+The probe found **16 production queries that fail validation against the live Checkpoint schema** today. Highlights (full list in `auto-qa/fixtures/known-graphql-failures.json`):
+
+- `services/subgraphClient.js` — 4 queries, all Graph-Node-shaped (`BigInt`, nested entity selections on String scalars, `Proposal.pools` reverse field)
+- `useOrganization.js`, `useSearchProposals.js`, `ProposalsPage.jsx` — query `Proposal.pools` and `Organization.proposals` reverse fields that don't exist in Checkpoint
+- `OrganizationManagerModal.jsx` — `Aggregator.organizations` and `Organization.proposals` reverse fields
+- `EditCompanyModal.jsx`, `EditProposalModal.jsx` — wrong type names (`organizationEntity` should be `organization`; `proposalEntity` should be `proposalentity`)
+- `MarketPageShowcase.jsx:2028`, `SubgraphBulkPriceFetcher.js:36`, `SubgraphPoolFetcher.js:132` — syntax errors after `${...}` substitution (likely interpolating field names dynamically — fragile pattern)
+- `subgraphTradesClient.js:133` — String-vs-Int mismatch
+
+Per the /loop directive: production NOT modified. Tests assert the count (16) and identity match. New regressions trip the test loudly. When real fixes ship, regenerate the baseline.
 
 ## Inventory snapshot (iteration 2)
 
