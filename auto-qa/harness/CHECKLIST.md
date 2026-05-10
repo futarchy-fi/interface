@@ -689,25 +689,23 @@ freshly-generated addresses as recipients; documented in
       green). New npm scripts: `scenarios:dry`,
       `scenarios:run`, `smoke:scenarios`.
 - [ ] **4d-scenarios-more — add remaining invariants**.
-      Now 36 invariants (api side): 9 api-internal + 23
+      Now 37 invariants (api side): 9 api-internal + 24
       indexer probes + 4 chain-layer.
-      `chartCandleCountsBoundedByDirect` added this
-      slice — first true cross-layer count check for
-      the unified-chart endpoint. Asserts
-      `sum(api.candles.{yes,no}.length) ≤ direct
-      candle count`. Catches api filter regression
-      (returns ALL candles instead of pool-filtered
-      subset) or transform fabrication (api invents
-      candles not in indexer). Cross-layer match
-      family now spans 3 patterns: passthrough match,
-      multi-entity passthrough match, filtered subset.
-      Bridges to documented full chartShape invariant.
-      109 smoke tests green. Still to add:
+      `swapAmountsBoundedAbove` added this slice —
+      magnitude-upper-bound for swap amounts. Closes
+      the swap-side magnitude gap (candle side had
+      probabilityBounds + candlePricesNonNegative;
+      swap side only had >0 + range checks). Asserts
+      amountIn AND amountOut < 1e15 — catches raw
+      uint256 leaks (parseFloat returning 1e18) and
+      token-decimal misalignment. Magnitude-sanity
+      family now SYMMETRIC across candle and swap
+      sides (each has lower-bound + upper-bound).
+      113 smoke tests green. Still to add:
       candlesAggregation (Candle.volume = sum of
       contained Swap amounts within period), full
-      chartShape ID-pair match, conservation
-      (∑YES + ∑NO = ∑sDAI), monotonicity (TWAP),
-      cross-run monotonicity on rateSanity.
+      chartShape ID-pair match, conservation, TWAP
+      monotonicity, cross-run rate monotonicity.
 - [x] **4d-activate — orchestrator block UNCOMMENTED** (api
       side, commit pending). Replaced `tail -f /dev/null`
       placeholder with `node orchestrator/scenario-runner.mjs`.

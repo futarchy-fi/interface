@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **36 invariants**: 9 api-internal + 23 indexer + 4 chain-layer; first cross-layer count consistency for unified-chart endpoint landed; 109 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase 7 slices **3a + 3c + 3d** STAGED + Phase 7 slices **4a-prep + 4a + 4b-plan + 4b-include + 4b-api-env + 4b-network-wire + 4c-prep + 4c-activate + 4d-prep + 4d-scenarios (scaffold) + 4d-activate + 4d-scenarios-more (apiCanReachCandles + registryDirect + candlesDirect + rateSanity + anvilBlockNumber + anvilChainId + apiWarmer + apiSpotCandlesValidates + registryHasProposalEntities + candlesHasPools + candlesHasSwaps + candlesHasCandles + registryHasOrganizations + registryHasAggregators + candleOHLCOrdering + candleVolumesNonNegative + swapAmountsPositive + swapTimestampSensible + candleTimeMonotonic + swapTimeMonotonicNonStrict + apiCandlesMatchesDirect + apiRegistryMatchesDirect + swapPoolReferentialIntegrity + candlePoolReferentialIntegrity + candleSwapTimeWindowConsistency + organizationAggregatorReferentialIntegrity + proposalEntityOrganizationReferentialIntegrity + apiSpotCandlesHappyPath + apiUnifiedChartShape + apiMarketEventsShape + anvilLatestBlockSensible + probabilityBounds + candlePricesNonNegative + chartCandleCountsBoundedByDirect + swapAmountsBoundedAbove)** on api side (`docker compose config --services` returns 8 — full stack STRUCTURALLY COMPLETE; orchestrator now ships with **37 invariants**: 9 api-internal + 24 indexer + 4 chain-layer; magnitude-upper-bound check closes the swap-side gap; 113 smoke tests green). CI workflows still await maintainer promotion. 30/30 browser tests green; drift check <1 min, scenarios suite ~5-10 min cold. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -2313,8 +2313,61 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-scenarios-more (swapAmountsBoundedAbove)**
+  (this iteration, on the api side) — closes the
+  swap-side magnitude gap:
+  * `swapAmountsBoundedAbove` — for the latest swap,
+    asserts amountIn AND amountOut < 1e15.
+
+  - **Why this closes a real gap**: catalog had
+    asymmetric magnitude coverage —
+    * Candle side: `probabilityBounds` (close ≤ 1
+      for PREDICTION) + `candlePricesNonNegative`
+      (OHLC ≥ 0 universal)
+    * Swap side: only sign (swapAmountsPositive
+      checks > 0) + time range (swapTimestampSensible)
+    No upper-bound check on swap amounts existed —
+    a raw uint256 leak (amountIn = "1000000000000000000"
+    instead of decimal "1.0") would pass every
+    existing swap probe.
+
+  - **Threshold choice (1e15)**: even huge real
+    swaps ($1M sDAI = "1000000.0") are far below
+    1e15. Raw uint256 of any 18-decimal token is
+    ≥ 1e18, so the bound cleanly separates real
+    values from raw-int leaks with 3-orders-of-
+    magnitude margin.
+
+  - **Bug shapes caught**: raw uint256 leak (parseFloat
+    returns 1e18 for "1000000000000000000"); parseFloat
+    overflow / scientific-notation misformatting;
+    token-decimal misalignment (USDC's 6 decimals
+    applied to 18-decimal sDAI, scaling values by
+    1e12).
+
+  - **swapAmountsPositive STILL passes when this
+    fails**: test 3 verifies a raw-int-leak scenario
+    where amountIn=1e18. Sign check passes (1e18 > 0);
+    distinguishes magnitude bug from sign bug.
+    Same separation pattern as candlePricesNonNegative
+    + candleOHLCOrdering on the candle side.
+
+  - **No fixture changes**: existing knobs cover all
+    cases.
+
+  - **Smoke tests**: 4 new (happy with small decimals,
+    vacuous, raw uint256 leak amountIn=1e18 — verifies
+    swapAmountsPositive STILL passes, huge amountOut
+    from token-decimal misalignment); 113/113 pass
+    (was 109). Now 37 invariants: 9 api-internal +
+    24 indexer + 4 chain-layer.
+
+  - Slice 4 progress: magnitude-sanity family is now
+    SYMMETRIC across candle and swap sides — each
+    has lower-bound + upper-bound coverage.
+
 - **slice 4d-scenarios-more (chartCandleCountsBoundedByDirect)**
-  (this iteration, on the api side) — first true
+  (previous iteration, on the api side) — first true
   cross-layer count check for unified-chart endpoint:
   * `chartCandleCountsBoundedByDirect` — issues
     parallel calls to api `/api/v2/proposals/:id/
