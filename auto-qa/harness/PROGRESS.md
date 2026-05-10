@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 done (slice 3 catalog now unblocked, ≥3 scenarios exist) + Phase 7 slices **1+2 (CANDLES branch)** landed. Phase 7 slice 2: `03-candles-down.scenario.mjs` mocks REGISTRY healthy + CANDLES → 502. Asserts the carousel renders our event but the price degrades to "0.00 SDAI" — discovery: the per-pool fallback fetcher hits the SAME endpoint as the bulk prefetcher, so a CANDLES outage takes BOTH layers down. 20/20 browser tests green (3 scenarios). |
+| Phase | 5 done + Phase **6 fully done** (slice 3 catalog generator landed: `scripts/scenarios-catalog.mjs` auto-emits `scenarios/SCENARIOS.md` from each scenario's `bugShape` field; 3 scenarios indexed today) + Phase 7 slices 1+2 (CANDLES branch) landed. 20/20 browser tests green. |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -942,14 +942,50 @@ on-ramps to it.
     table indexing the captured scenarios. Becomes the human-
     readable bug-shape catalog as scenarios accumulate.
 
-**Phase 6 — remaining slices:**
+- **slice 3** (back-fill, this iteration's primary work) —
+  `scripts/scenarios-catalog.mjs` (~70 lines) auto-generates
+  `scenarios/SCENARIOS.md` from each scenario's `bugShape`
+  field. Sliced 3 was originally deferred ("worth doing once
+  we have ≥3 scenarios"); landing 03-candles-down in Phase 7
+  slice 2 unblocked it. Looped back to ship.
 
-- **slice 3** — `scenarios:catalog` script that emits a
-  `SCENARIOS.md` index from each scenario's `bugShape`. Worth
-  doing once we have ≥3 scenarios — for now the README table is
-  enough.
+  - **What the script does**:
+    1. `readdirSync(scenarios/)` filter `*.scenario.mjs`, sort
+    2. `await Promise.all(files.map(...))` — dynamic-import
+       each scenario module
+    3. Validate required fields (`name` / `description` /
+       `bugShape` / `route`); throw with file context if any
+       are missing
+    4. Build a markdown table; escape `|` in bugShape /
+       description so the table layout survives content with
+       pipes
+    5. `writeFileSync(scenarios/SCENARIOS.md, ...)`
 
-**Smoke summary (UI side, post-Phase 6 slice 2):**
+  - **npm scripts**: `scenarios:catalog` in harness;
+    `auto-qa:e2e:scenarios:catalog` at root. Both forms work.
+
+  - **README.md slimmed**: the per-file notes table is now
+    "authoring notes" (one cell per file: why-this-scenario-
+    exists context). The canonical bug-shape index lives in
+    the auto-generated `SCENARIOS.md` so PRs that add scenarios
+    don't have to update two files.
+
+  - **Drift gate**: future CI step can `npm run auto-qa:e2e:scenarios:catalog`
+    then `git diff --exit-code scenarios/SCENARIOS.md` to fail
+    builds where the catalog is out of date with the scenarios
+    directory. Pinned in CHECKLIST as a Phase 7 slice 3 (CI
+    integration) item.
+
+  - **Validated end-to-end**: ran the script, got
+    `✓ Wrote /Users/kas/interface/auto-qa/harness/scenarios/SCENARIOS.md (3 scenarios)`,
+    inspected the output — all 3 scenarios indexed correctly
+    with the right bug-shape strings, routes, descriptions.
+
+**Phase 6 status: COMPLETE.** All three CHECKLIST gates met
+(format decided, first scenario captured, wrapper-spec replay +
+catalog generator both in place).
+
+**Smoke summary (UI side, post-Phase 6 slice 3):**
 
 ```
 Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
@@ -958,8 +994,9 @@ Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
 Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
 Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
 Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
-Phase 6 scenarios (1 case, chromium + Next.js)         ✓ ~3s
-                                       TOTAL: 27 pass + 0 skip
+Phase 6+7 scenarios (3 cases, chromium + Next.js)      ✓ ~5s
++ scenarios:catalog script (1 run, no test runner)      ✓ <1s
+                                       TOTAL: 29 pass + 0 skip
 ```
 
 ### Phase 7 — Chaos injection + nightly CI (UI side)

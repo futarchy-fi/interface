@@ -60,8 +60,18 @@ running assertions in registration order.
 
 ## Current scenarios
 
-| #  | File                                | Bug shape                                                       | Notes |
-|----|-------------------------------------|-----------------------------------------------------------------|-------|
-| 01 | `01-stale-price-shape.scenario.mjs` | PR #64 stale-price-but-API-healthy                              | Lifted from Phase 5 slice 4c v3b. Mocks both registry + candles GraphQL; asserts "0.4200 SDAI" renders in the EventHighlightCard via the prefetched-price short-circuit. |
-| 02 | `02-registry-down.scenario.mjs`     | hard-crash / hung-spinner / leaked-error on registry 5xx        | First Phase 7 chaos scenario. Mocks REGISTRY → 502; asserts /companies degrades gracefully to "No organizations found" instead of crashing. |
-| 03 | `03-candles-down.scenario.mjs`      | price card hangs / crashes / shows fake number when candles down | Phase 7 slice 2. REGISTRY healthy + CANDLES → 502; asserts the carousel still renders our event but the price degrades to "0.00 SDAI" (per-pool fallback ALSO hits the dead candles endpoint). |
+The full bug-shape index is in [SCENARIOS.md](./SCENARIOS.md), which
+is auto-generated from each scenario's `bugShape` field by
+`scripts/scenarios-catalog.mjs` (run via
+`npm run auto-qa:e2e:scenarios:catalog`). Regenerate after
+adding or changing a scenario; the file is committed so PRs surface
+catalog drift.
+
+Below: per-file authoring notes (the why-this-scenario-exists
+context that doesn't fit in a one-cell description).
+
+| #  | File                                | Authoring notes |
+|----|-------------------------------------|-----------------|
+| 01 | `01-stale-price-shape.scenario.mjs` | Lifted from Phase 5 slice 4c v3b. The first scenario; proves the format end-to-end against the real futarchy app. |
+| 02 | `02-registry-down.scenario.mjs`     | First Phase 7 chaos primitive — REGISTRY out, carousel renders nothing. |
+| 03 | `03-candles-down.scenario.mjs`      | Phase 7 slice 2 — REGISTRY healthy, CANDLES out. Surfaced a harness-level finding: per-pool fallback hits the SAME endpoint as the bulk prefetcher, so a CANDLES outage takes both layers down at once. |
