@@ -1,0 +1,53 @@
+name: auto-qa harness
+
+# This is the FIRST workflow file in the repo (added by Phase 7
+# slice 3a of the Forked Replay Harness — see
+# `auto-qa/harness/PROGRESS.md`).
+#
+# Trigger is `workflow_dispatch` ONLY for this first version so
+# landing it can't unexpectedly red-light unrelated PRs. Manually
+# fire from the GitHub Actions UI to verify it works against this
+# repo's runner. After that's been smoke-tested, follow-up
+# iterations will add:
+#
+#   schedule:
+#     - cron: '0 4 * * *'           # nightly drift sweep
+#   pull_request:
+#     paths: ['auto-qa/harness/**'] # gate harness-touching PRs
+#
+# Per Phase 7 slice 3 in `auto-qa/harness/CHECKLIST.md`.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scenarios-catalog-drift:
+    name: Scenarios catalog drift check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: auto-qa/harness/package-lock.json
+
+      - name: Install harness deps
+        working-directory: auto-qa/harness
+        run: npm ci
+
+      - name: Regenerate scenarios catalog
+        working-directory: auto-qa/harness
+        run: npm run scenarios:catalog
+
+      - name: Verify catalog is in sync
+        # If a PR adds/changes a scenario without re-running the
+        # catalog script, this step fails. Fix locally with:
+        #   npm run auto-qa:e2e:scenarios:catalog
+        # then commit the regenerated SCENARIOS.md.
+        run: git diff --exit-code auto-qa/harness/scenarios/SCENARIOS.md

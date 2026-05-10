@@ -13,7 +13,7 @@ indexer, api) lives in `futarchy-api/auto-qa/harness/`.
 
 | Field | Value |
 |---|---|
-| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 (3 chaos scenarios: registry-down, candles-down, **candles-partial**) landed. Latest: `04-candles-partial.scenario.mjs` mocks 2 events but CANDLES returns prices for only 1 — asserts the priced card renders "0.4200 SDAI" while the unpriced card falls back to "0.00 SDAI". WALLET-RPC and mid-flight-failure sub-slices deprioritized after investigation (low blast radius / DOM-indistinguishable from existing scenarios on /companies). 21/21 browser tests green (4 scenarios + 17 prior). |
+| Phase | 5 done + Phase 6 fully done + Phase 7 slices 1+2 done + Phase **7 slice 3a** (CI workflow STAGED) landed. `auto-qa/harness/ci/auto-qa-harness.yml.staged` contains the scenarios catalog drift check workflow. Awaiting one-time maintainer promotion to `.github/workflows/` (the bot's OAuth token lacks workflow scope). 21/21 browser tests green; CI check is fast (<1 min, no browser/Next.js). |
 | Branch | `auto-qa` (both repos) |
 | Location | `auto-qa/harness/` in both `interface` and `futarchy-api` |
 | Runner | `npm run auto-qa:e2e` (separate from `npm run auto-qa:test`) |
@@ -1181,5 +1181,109 @@ Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
 Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
 Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
 Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
+                                       TOTAL: 30 pass + 0 skip
+```
+
+- **slice 3a** (this iteration) — **CI workflow STAGED** for
+  promotion to `.github/workflows/`. The harness has been usable
+  locally for many iterations; slice 3a starts the path to it
+  catching regressions IN CI without requiring a developer to
+  manually run anything.
+
+  - **What landed**:
+    * `auto-qa/harness/ci/auto-qa-harness.yml.staged` (NEW) —
+      the workflow YAML in version control under a `.staged`
+      extension so GitHub Actions doesn't try to run it from
+      this location.
+    * `auto-qa/harness/ci/README.md` (NEW) — explains the
+      staging dance + the promote command.
+
+  - **The workflow**: trigger is `workflow_dispatch` ONLY for
+    v1 (manual fire from GitHub Actions UI) — landing the
+    first workflow file can't unexpectedly red-light
+    unrelated PRs. Job:
+    ```
+    scenarios-catalog-drift:
+      - actions/checkout@v4
+      - actions/setup-node@v4 (Node 22, npm cache keyed on
+        auto-qa/harness/package-lock.json)
+      - working-directory: auto-qa/harness; npm ci
+      - working-directory: auto-qa/harness; npm run scenarios:catalog
+      - git diff --exit-code auto-qa/harness/scenarios/SCENARIOS.md
+    ```
+    Total runtime expected <1 min (no browser, no Next.js
+    dev server, just the lightweight catalog regenerator + diff).
+
+  - **Why staged not live**: GitHub blocks OAuth Apps without
+    `workflow` scope from creating/modifying `.github/workflows/*`
+    files. The bot's token is push-scoped only. The first
+    iteration of slice 3a tried to commit the workflow directly
+    and the push got rejected:
+    ```
+    ! [remote rejected] auto-qa -> auto-qa
+    (refusing to allow an OAuth App to create or update
+     workflow `.github/workflows/auto-qa-harness.yml`
+     without `workflow` scope)
+    ```
+    Recovered by:
+    1. `git reset --soft HEAD~1` to undo the rejected commit
+    2. `mv .github/workflows/auto-qa-harness.yml
+        auto-qa/harness/ci/auto-qa-harness.yml.staged`
+    3. `rm -rf .github` (was empty after the move)
+    4. Added `auto-qa/harness/ci/README.md` documenting the
+       promote command
+    The staging dance puts the content under code review +
+    version control without needing the workflow scope, then
+    a maintainer (or anyone with the right token) promotes
+    by copying the file into `.github/workflows/`.
+
+  - **Local validation** of the workflow's logic: re-ran the
+    equivalent steps manually — `npm ci` in auto-qa/harness/
+    succeeded with `found 0 vulnerabilities`; `npm run
+    scenarios:catalog` regenerated SCENARIOS.md cleanly;
+    `git diff --exit-code` returned 0 (catalog already in sync).
+
+  - **Drift-check value-add** (once promoted): the CI step
+    ensures any PR adding/changing a scenario also re-runs the
+    catalog generator. SCENARIOS.md is the human-readable
+    bug-shape index; without the drift check, it silently goes
+    stale.
+
+  - **Promote command** (one-time maintainer task):
+    ```bash
+    mkdir -p .github/workflows
+    cp auto-qa/harness/ci/auto-qa-harness.yml.staged \
+       .github/workflows/auto-qa-harness.yml
+    git add .github/workflows/auto-qa-harness.yml
+    git commit -m "ci: promote auto-qa harness scenarios-catalog-drift"
+    git push
+    ```
+    Pushes from a workflow-scoped token (or via the GitHub
+    web UI's "Add file" action) succeed where the bot's token
+    can't.
+
+  - **Next slices in CI staging**:
+    * 3b — once 3a is promoted + smoke-tested, broaden
+      triggers (`schedule: '0 4 * * *'` for nightly drift
+      sweep + `pull_request: paths: ['auto-qa/harness/**']`
+      for harness-touching PRs). Edit the staged file, commit,
+      maintainer re-promotes.
+    * 3c — separate job that runs the actual Playwright
+      scenarios suite (heavier; needs browser install + dev
+      server)
+    * 3d — `actions/upload-artifact@v4` block conditional on
+      failure (Playwright traces / screenshots / videos)
+
+**Smoke summary (UI side, post-Phase 7 slice 3a):**
+
+```
+Phase 4 wallet-stub (8 cases, node:test + live anvil)  ✓ ~4s
+Phase 4 contract-calls (1 case, reads+write+event)     ✓ ~5.5s
+Phase 5 wallet-injection (6 cases, chromium)           ✓ ~2.4s
+Phase 5 wallet-signing (3 cases, chromium + anvil)     ✓ ~5.6s
+Phase 5 app-discovery (2 cases, chromium + Next.js)    ✓ ~14s
+Phase 5 dom-api-invariant (6 cases, chromium + Next.js) ✓ ~14s
+Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
++ scenarios:catalog drift check (CI workflow + local)  ✓ <1s
                                        TOTAL: 30 pass + 0 skip
 ```

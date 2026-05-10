@@ -496,16 +496,49 @@ freshly-generated addresses as recipients; documented in
       reaches a page that surfaces partial loading states (e.g.
       a market detail page).
 
-**Phase 7 slice 3 — TODO (CI integration):**
+**Phase 7 slice 3 (CI integration) — IN PROGRESS:**
 
-- [ ] CI workflow (nightly cron): runs at least one scenario
-      end-to-end with artifact capture on failure
-- [ ] Per-failure artifacts: anvil state dump, indexer logs, api
-      logs, Playwright trace + screenshots + video (Playwright
-      already captures these per `playwright.config.mjs`'s
-      `trace: 'retain-on-failure'`, `screenshot: 'only-on-failure'`,
-      `video: 'retain-on-failure'`. The remaining work is the CI
-      step that uploads them as workflow artifacts.)
+- [x] **3a — first CI workflow STAGED for promotion.**
+      `auto-qa/harness/ci/auto-qa-harness.yml.staged` (NEW)
+      contains the workflow YAML in version control. Job:
+      `scenarios-catalog-drift` — checkout, setup Node 22, `npm
+      ci` in `auto-qa/harness/`, run the catalog generator,
+      `git diff --exit-code scenarios/SCENARIOS.md`. Trigger
+      is `workflow_dispatch` ONLY for v1 so landing it can't
+      unexpectedly red-light unrelated PRs. Total runtime
+      expected <1 min.
+
+      **Why staged not live**: GitHub blocks OAuth Apps
+      without `workflow` scope from creating/modifying
+      `.github/workflows/*` files. The staging dance puts the
+      content under code review without a workflow-scoped
+      token, then a maintainer (or anyone with the right token)
+      promotes the file by copying it into
+      `.github/workflows/`. See
+      `auto-qa/harness/ci/README.md` for the promote command.
+
+- [ ] **3a-promote** — maintainer task: copy
+      `auto-qa/harness/ci/auto-qa-harness.yml.staged` into
+      `.github/workflows/auto-qa-harness.yml` + commit + push.
+      One-time setup; subsequent edits to the staged file can
+      be re-promoted the same way (or just edited directly in
+      `.github/workflows/` if the contributor has workflow
+      scope).
+- [ ] **3b — promote triggers**: after smoke-testing 3a
+      manually, add `schedule: '0 4 * * *'` (nightly drift
+      sweep) and `pull_request: paths: ['auto-qa/harness/**']`
+      (gate harness-touching PRs without adding noise to
+      unrelated PRs).
+- [ ] **3c — full scenarios run in CI**: separate job that
+      runs the actual Playwright scenarios suite (needs
+      browser install + Next.js dev server). Heavier; gate
+      behind `workflow_dispatch` first, then maybe nightly.
+- [ ] **3d — per-failure artifact upload**: Playwright already
+      captures trace / screenshot / video per
+      `playwright.config.mjs`'s `retain-on-failure` settings.
+      The CI step that uploads those as workflow artifacts is
+      the remaining work — small `actions/upload-artifact@v4`
+      block conditional on failure.
 
 **Phase 7 slice 4 — TODO (full-stack):**
 
