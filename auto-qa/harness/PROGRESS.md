@@ -2313,6 +2313,143 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 79-page-error-monitor (Phase 6 —
+  second NEW TEST CAPABILITY: page-error
+  monitor that catches silent JS errors)**
+  (this iteration, on the interface side) —
+  Continues the capability-shaped slice pattern
+  established by slice 78. Catches a KIND no
+  DOM-text assertion can: silent JavaScript
+  errors that don't change visible page
+  content.
+
+  * **The KIND in one paragraph**: a page can
+    render successfully (page-shell mounts,
+    DOM text matches) WHILE emitting console
+    errors or having components silently fail.
+    Examples: TypeError caught by a try/catch
+    and logged; React render exception
+    swallowed by an error boundary so a
+    sibling component renders but the
+    regression-affected one doesn't; 404s on
+    referenced assets that browsers
+    auto-log to console. Every existing
+    DOM-text assertion misses these.
+
+  * **The capability** (`flows/scenarios.spec.mjs`
+    changes): two listeners attached to the
+    `page` BEFORE navigation:
+    - `page.on('pageerror', ...)` — uncaught
+      JS exceptions
+    - `page.on('console', ...)` filtered to
+      `msg.type() === 'error'` — explicit
+      error-level logs
+    Both feed `ctx.pageErrors` (also passed
+    to assertions). After all per-scenario
+    assertions complete, IF the scenario has
+    `assertNoPageErrors: true`, the runner
+    fails the test on any captured error not
+    matched by `excludePageErrors`. Listener
+    captures `msg.location()` URL so
+    resource-load errors are diagnosable
+    (the bare text "Failed to load resource"
+    is useless without the URL).
+
+  * **The scenario** (`scenarios/48-no-page-errors-companies.scenario.mjs`):
+    - Mounting anchor (PROBE_ORG_NAME visible)
+    - `assertNoPageErrors: true` flag triggers
+      the catch-all check
+    - `excludePageErrors` list filters known
+      non-fatal patterns
+
+  * **EMPIRICAL FINDING from first run**:
+    `/companies` 404s on
+    `/assets/fallback-company.png` — the
+    no-logo fallback referenced by
+    `useAggregatorCompanies.js:95`. The asset
+    doesn't exist in `public/` anywhere in
+    the repo. Every org card without
+    `metadata.logo` shows a broken image in
+    production. This is a REAL latent bug
+    surfaced by the capability — exactly the
+    KIND scenario 48 is designed to catch.
+    For now: excluded via
+    `/fallback-company\.png/i` so the test
+    can guard against NEW errors. Filed
+    against the bug; fix is one PR away
+    (commit a placeholder PNG or change the
+    fallback to a CSS-rendered placeholder).
+
+  * **Mechanical verification** (slice 74–78
+    pattern):
+    - Injected
+      `console.error('HARNESS-VALIDATION-PROBE
+      ...')` at the top of `CompaniesPage`
+      component
+    - Scenario 48 FAILED with: "Scenario
+      '48-no-page-errors-companies' produced
+      10 unexpected page error(s)" (10
+      because dev mode re-renders the
+      component multiple times in strict
+      mode)
+    - The probe message appeared in the
+      failure summary
+    - Restored → PASSES
+    Catches both classes of errors emitted
+    in render: console.error (probe matched
+    directly) AND pageerror (verified with
+    a separate `throw new Error()` mutation
+    not shown here but the listener is
+    wired).
+
+  * **Why this is a stepping-stone toward PR
+    #58 (TDZ crash)**: PR #58 is a TDZ
+    `ReferenceError: Cannot access 'tP'
+    before initialization` thrown
+    synchronously during render. In dev mode
+    React's strict-mode renders sometimes
+    surface this as a console.error, sometimes
+    via a render-error-boundary, sometimes
+    silently. Wiring the same monitor into
+    market-page scenarios (#10-#18, future
+    work) would catch the dev-mode-visible
+    variant. The production-mode-only variant
+    needs a build-mode test capability,
+    which is the next natural slice.
+
+  * **Capability re-use plan**: opt the
+    monitor in on EVERY happy-path scenario
+    over the next few slices. The
+    incremental cost is one config flag;
+    the catch surface grows linearly with
+    coverage. Chaos scenarios that EXPECT
+    errors continue not to opt in.
+
+  * **Catalog state**: 48 scenarios.
+    Mechanically verified: **5** (44, 45,
+    46, 47, 48). Mechanically-verified PR
+    coverage stays at 8 (the catch this
+    slice adds is a NEW KIND, not a new PR
+    instance) but the catch SURFACE expands
+    substantially — every future bug of
+    this kind, plus the latent
+    fallback-company.png finding.
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `scenarios:catalog` clean (48
+      scenarios)
+    - Scenario 48 wall-clock: ~3s warm
+    - src/ tree clean after both
+      verification mutations restored
+
+  * **Anti-pattern avoided**: shipping a
+    capability without a known-failing
+    verification path. Probed both the
+    happy case (PASS) and the regressed
+    case (FAIL with 10 captured errors)
+    before committing.
+
 - **slice 78-strict-schema-graphql-mock
   (Phase 6 — first NEW TEST CAPABILITY: a
   GraphQL mock that simulates schema strictness)**

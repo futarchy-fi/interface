@@ -134,6 +134,44 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
                 chainId:    100,
             }));
 
+            // Step 79: page-error monitor. Attached BEFORE navigation
+            // so it catches errors emitted during initial render. Two
+            // event sources:
+            //   - `pageerror`: uncaught JS exceptions in the page
+            //     context (e.g., TDZ crashes from PR #58-style bugs,
+            //     React render exceptions that escape error boundaries)
+            //   - `console.error`: explicit error-level logs from the
+            //     page (e.g., useAggregatorProposals' console.warn on
+            //     subgraph errors — note: warn level NOT counted here,
+            //     only level === 'error')
+            // The collector lives on the assertion ctx so scenarios
+            // can examine it directly OR opt into the catch-all check
+            // via `assertNoPageErrors: true` (handled below the
+            // assertion loop). Existing scenarios are unaffected —
+            // they don't set the flag, the array fills silently.
+            const pageErrors = [];
+            page.on('pageerror', (err) => {
+                pageErrors.push({
+                    kind:    'pageerror',
+                    message: err.message,
+                    stack:   err.stack,
+                });
+            });
+            page.on('console', (msg) => {
+                if (msg.type() === 'error') {
+                    // Capture location too — browser-emitted resource
+                    // 404 errors (whose text is just "Failed to load
+                    // resource: ...") only become diagnosable when
+                    // the URL is included.
+                    const loc = msg.location?.();
+                    const url = loc?.url ? ` @ ${loc.url}` : '';
+                    pageErrors.push({
+                        kind:    'console.error',
+                        message: msg.text() + url,
+                    });
+                }
+            });
+
             // Apply mocks
             for (const [url, handler] of Object.entries(scenario.mocks ?? {})) {
                 await context.route(url, handler);
@@ -179,11 +217,45 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
                 withProxyPaused: proxyHandler
                     ? proxyHandler.withPaused
                     : (async (fn) => fn()),
+                // Step 79: live page-error log. Assertions can read
+                // this directly OR rely on the `assertNoPageErrors`
+                // flag-driven check below.
+                pageErrors,
             };
 
             // Run assertions in order
             for (const assertion of scenario.assertions ?? []) {
                 await assertion(page, ctx);
+            }
+
+            // Step 79: opt-in catch-all assertion that no page error
+            // fired during the scenario. Scenarios that EXPECT errors
+            // (e.g., scenario 02 simulates registry 502 which the
+            // consumer logs via console.warn — not error level — but
+            // future chaos scenarios may explicitly produce errors)
+            // do NOT set this flag. Scenarios that want to guard
+            // against silent JS regressions DO set it.
+            //
+            // `excludePageErrors` lets a scenario filter out
+            // known-benign errors via predicate or regex array.
+            // Default: any pageerror or console.error fails the test.
+            if (scenario.assertNoPageErrors) {
+                const excluded = scenario.excludePageErrors ?? [];
+                const matchesExcluded = (err) => excluded.some((rule) => {
+                    if (typeof rule === 'function') return rule(err);
+                    if (rule instanceof RegExp)    return rule.test(err.message);
+                    return err.message.includes(rule);
+                });
+                const fatal = pageErrors.filter((e) => !matchesExcluded(e));
+                if (fatal.length > 0) {
+                    const summary = fatal
+                        .map((e) => `[${e.kind}] ${e.message}`)
+                        .join('\n');
+                    throw new Error(
+                        `Scenario "${scenario.name}" produced ${fatal.length} ` +
+                        `unexpected page error(s):\n${summary}`,
+                    );
+                }
             }
         });
     }
