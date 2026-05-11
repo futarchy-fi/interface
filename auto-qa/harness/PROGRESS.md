@@ -2313,6 +2313,54 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 42-scenario-38-market-page-registry-rate-limited
+  (Phase 7 chaos library)** (this iteration, on
+  the interface side) — extends the rate-limited
+  row to /markets/[address]. Mirror of #36
+  applied to the market page's distinct
+  proposal-metadata-fetch path. Distinct from #24
+  (5xx → `.catch`) and #36 (same failure mode,
+  different page contract because /companies has
+  registry as foundation while market page has
+  it as enrichment).
+
+  * **The scenario** — `38-market-page-registry-
+    rate-limited` on /markets/<MARKET_PROBE_
+    ADDRESS>. Registry returns 429 +
+    Retry-After: 1 + JSON-shape error body,
+    candles happy. Same page-shell assertions
+    as prior market-page chaos slices.
+
+  * **Bug-shapes captured** (NEW vs #24 and
+    #36):
+    - Page CRASHES on 429 from registry
+      (treats response.json() as valid
+      registry data — downstream consumer
+      sees error envelope where it expected
+      proposalentities and crashes on
+      `.find()` or `.length`)
+    - Page-shell HANGS forever (429 doesn't
+      trigger `loading=false` because the
+      hook's `.catch` handles 5xx not 4xx)
+    - Page IMMEDIATELY RETRIES with no
+      Retry-After respect (worse on the
+      market page than on /companies because
+      it polls registry on every state change
+      for proposal-metadata refresh)
+    - Raw "rate limited" message rendered in
+      proposal title or chart placeholder
+    - "Market Not Found" FALSE-POSITIVE from
+      the 429-error path collapsing with the
+      missing-from-MARKETS_CONFIG gate
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no test infra changes)
+    - Scenario #38 itself: passed in 11.6s on
+      first run
+    - Catalog regenerated: 38 scenarios (was 37)
+    - Matrix: /markets/[address] now 13/14;
+      /companies stays at 14/14
+
 - **slice 41-scenario-37-candles-rate-limited
   (Phase 7 chaos library)** (this iteration, on
   the interface side) — fills the (CANDLES, rate-
