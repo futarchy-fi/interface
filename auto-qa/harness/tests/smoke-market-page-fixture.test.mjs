@@ -273,3 +273,48 @@ test('makeGraphqlMockHandler — accepts a market-shaped proposal row', async ()
     assert.equal(body.data.proposalentities[0].title, MARKET_PROBE_TITLE);
     assert.equal(body.data.proposalentities[0].organization.aggregator.id, PROBE_AGG_ID);
 });
+
+test('makeGraphqlMockHandler — matches multi-line proposalentities form', async () => {
+    // Step 5b regression guard. The market-page registry adapter
+    // (`src/adapters/registryAdapter.js::fetchProposalMetadataFromRegistry`)
+    // sends a multi-line GraphQL query — `proposalentities(\n      where:`.
+    // The original substring check `q.includes('proposalentities(where:')`
+    // ONLY matched the single-line `/companies` form, so the multi-line
+    // form fell through to `data = {}`, the registry hook saw "No
+    // ProposalMetadata found", flipped to the Supabase fallback (which
+    // can't reach the dummy URL in test), and the per-market config
+    // never resolved → useBalanceManager stayed gated → balance panel
+    // stuck on "Loading balances...". The fix replaces the substring
+    // check with `/proposalentities\s*\(/`, matching both forms. This
+    // test exercises the multi-line form verbatim against the actual
+    // registry-adapter template literal so the regression can't return
+    // silently.
+    const row = fakeMarketProposalEntity();
+    const handler = makeGraphqlMockHandler({ proposals: [row] });
+    let fulfilled = null;
+    const stubRoute = {
+        request: () => ({
+            postData: () => JSON.stringify({
+                query: `{
+    proposalentities(
+      where: { proposalAddress: "${MARKET_PROBE_ADDRESS.toLowerCase()}" },
+      first: 5
+    ) {
+      id
+      proposalAddress
+      metadata
+      title
+      organization { id name aggregator { id } }
+    }
+  }`,
+            }),
+        }),
+        fulfill: async (resp) => { fulfilled = resp; },
+    };
+
+    await handler(stubRoute);
+
+    const body = JSON.parse(fulfilled.body);
+    assert.equal(body.data.proposalentities.length, 1, 'multi-line form must hit the proposalentities branch');
+    assert.equal(body.data.proposalentities[0].title, MARKET_PROBE_TITLE);
+});

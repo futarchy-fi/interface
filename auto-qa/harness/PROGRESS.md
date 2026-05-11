@@ -2313,6 +2313,97 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-5b (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — diagnoses
+  the balance-display gate and ships a one-line fixture
+  fix that unblocks a long chain of downstream
+  consumers. The change itself is tiny; the value is in
+  the diagnosis.
+
+  * **The bug** — `makeGraphqlMockHandler`'s dispatch
+    branch checked `q.includes('proposalentities(where:')`
+    as a substring. That matches the `/companies` hooks'
+    SINGLE-LINE form
+    (`proposalentities(where: { organization_in: ... })`)
+    but NOT the market-page registry adapter's
+    MULTI-LINE form
+    (`proposalentities(\n      where: { proposalAddress: ... })`)
+    in `src/adapters/registryAdapter.js`. The multi-line
+    form fell through to `data = {}`, the registry
+    adapter's `find(e => ...aggregator.id === ...)`
+    returned null, the consumer logged
+    "[Registry] No ProposalMetadata found for this
+    address", and `useContractConfig` flipped to its
+    Supabase fallback. With Supabase pointed at the
+    dummy URL `https://harness-supabase.invalid`, the
+    fallback fetch threw `TypeError: Failed to fetch` →
+    `config = null` → `useBalanceManager.fetchAllBalances`
+    NEVER fired (gated on `stableConfig` which requires
+    `config?.BASE_TOKENS_CONFIG`) → balance panel stuck
+    on "Loading balances...". A pure substring match
+    masked all of this silently.
+
+  * **The fix** — change the substring check to a
+    regex: `/proposalentities\s*\(/`. Matches both
+    forms (the `/companies`-side single-line AND the
+    market-page multi-line). One line in
+    `fixtures/api-mocks.mjs`; one new smoke test
+    (`makeGraphqlMockHandler — matches multi-line
+    proposalentities form`) replays the registry
+    adapter's exact template-literal verbatim so the
+    regression can't return silently.
+
+  * **What unblocks downstream** — captured via probe
+    spec (then deleted): with the fix in place,
+    `useContractConfig` resolves a real `config` object,
+    `useBalanceManager` initializes with
+    `{hasConfig: true, address: true, isConnected: true}`,
+    `fetchAllBalances` fires,
+    `unifiedBalanceFetcher` calls
+    `getBestRpcProvider(100)`,
+    `[SubgraphTradesClient]` finds 2 pools and
+    fetches 0 swaps (the trade-history flow added in
+    5a). The Subgraph "discovery query" (proposal +
+    whitelistedtokens + pools) round-trips cleanly
+    through `makeMarketCandlesMockHandler`.
+
+  * **What's still gating "100.0000"** — `unifiedBalanceFetcher`
+    reads through `getBestRpcProvider(100)` which probes
+    the public Gnosis RPC list (rpc.gnosischain.com,
+    gnosis-rpc.publicnode.com, 1rpc.io/gnosis,
+    rpc.ankr.com/gnosis) and reads through the WINNER.
+    Those public endpoints DON'T have the wallet's
+    fork-funded YES/NO balances (which only exist on
+    local anvil at port 8546). The ERC1155 balanceOf
+    call returns 0 instead of 100. **Step 5c** will
+    route those public RPC URLs through anvil via
+    `context.route` so reads see the fork state.
+
+  * **Live re-validation**:
+    - 14/14 scenarios pass (~30s, no regressions)
+    - 57/57 smoke tests pass (was 56)
+    - Scenario #14 still asserts page-shell + Available
+      label only; "100.0000" assertion remains a TODO
+      pending step 5c
+
+  * **Multi-iteration plan progress**:
+    - ✓ Steps 1, 2, 2.5-2.9 (fork bootstrap)
+    - ✓ Step 4 (positions scenario, softened
+      assertions)
+    - ✓ Live-validation 1+2 (all 14 pass live)
+    - ✓ Step 5a (subgraph trades mocks)
+    - ✓ Step 5b (this slice — registry mock
+      multi-line match fix; per-market config now
+      resolves end-to-end)
+    - ✓ Step 6 (CI Foundry install)
+    - ⏳ Step 5c: route public Gnosis RPC URLs
+      through anvil so balanceOf reads see the fork
+      state. After this, the
+      `getByText('100.0000')` assertion can be
+      enabled in scenario #14.
+    - **Remaining maintainer task**: promote 4
+      staged workflows
+
 - **slice fork-bootstrap-step-5a (Phase 7 fork wiring)**
   (this iteration, on the interface side) — extends
   `makeMarketCandlesMockHandler` with 3 new query

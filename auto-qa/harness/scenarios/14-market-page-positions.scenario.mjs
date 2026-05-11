@@ -106,24 +106,21 @@ export default {
         },
 
         // **TODO (deferred to follow-up iteration)**: the canonical
-        // value-flow assertion `getByText('100.0000')` needs more
-        // mocks before it works end-to-end. Live-validation in this
-        // iteration surfaced that the page hits at least three
-        // unmocked endpoints during balance resolution:
-        //   - subgraph trades client (`utils/SubgraphTradesClient.js`)
-        //   - Snapshot voting API (gated by `NEXT_PUBLIC_USE_MOCK_SNAPSHOT`)
-        //   - external spot-price client
-        // While the on-chain reads (sDAI rate, ERC1155 balanceOf via
-        // useBalanceManager) DO succeed against the live anvil fork,
-        // the consuming React tree is gated on a Promise.all-style
-        // wait that includes one of the above, so the balance never
-        // commits to state. Closing the gap is a multi-iteration
-        // chunk: each new mock is its own fixture extension. For
-        // now, scenario #14 covers the LOAD-BEARING value flow:
-        // the page renders past the chain-validation gate AND
-        // surfaces the position-aware UI element. The actual
-        // "100.0000" assertion lives as a TODO here for the
-        // follow-up.
+        // value-flow assertion `getByText('100.0000')` is still gated
+        // by ONE remaining piece — `unifiedBalanceFetcher.js` calls
+        // `getBestRpcProvider(100)` which probes the public Gnosis
+        // RPC list (`rpc.gnosischain.com`, `gnosis-rpc.publicnode.com`,
+        // `1rpc.io/gnosis`, `rpc.ankr.com/gnosis`) and reads through
+        // the WINNER. Those public endpoints DON'T have our wallet's
+        // fork-funded YES/NO balances (which only exist on local
+        // anvil at port 8546). Step 5b unblocked the prerequisite
+        // chain — Registry mock now matches the multi-line query
+        // form so `useContractConfig` returns a real config →
+        // `useBalanceManager.fetchAllBalances` actually fires. Step
+        // 5c+ will route the public Gnosis RPC URLs through anvil
+        // via Playwright `context.route`, after which the
+        // ERC1155 balanceOf will return 100 YES + 100 NO and the
+        // panel will render "100.0000".
     ],
 
     timeout: 180_000,

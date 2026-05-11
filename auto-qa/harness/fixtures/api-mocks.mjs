@@ -101,7 +101,16 @@ export function makeGraphqlMockHandler({ proposals = [], orgMetadata = null, onC
                     editor:       '0x0000000000000000000000000000000000000000',
                 }],
             };
-        } else if (q.includes('proposalentities(where:')) {
+        } else if (/proposalentities\s*\(/.test(q)) {
+            // Matches both single-line ("proposalentities(where:") AND
+            // multi-line ("proposalentities(\n      where:") forms.
+            // The /companies hooks (useAggregatorCompanies,
+            // useAggregatorProposals) use single-line; the market-page
+            // adapter (registryAdapter.fetchProposalMetadataFromRegistry)
+            // uses multi-line. Without the regex, the multi-line form
+            // falls through to `data = {}` and the consumer sees
+            // "No ProposalMetadata found", flips to the Supabase
+            // fallback, and the per-market config never resolves.
             data = { proposalentities: proposals };
         } else {
             data = {};
