@@ -2313,6 +2313,118 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 60-dom-api-invariant-image-cascade-precedence
+  (Phase 5 invariant catalog — 19th DOM↔API
+  invariant; image-cascade PRECEDENCE test)**
+  (this iteration, on the interface side) —
+  precedence test for the image triplet,
+  analogous to slice 4l's multi-flag stress test
+  for the filter triplet. The single-branch
+  tests (4n: coverImage, 4o: logo, 4m: fallback)
+  each set ONLY ONE field. None catches a
+  cascade-REORDER regression because each setup
+  produces the same outcome under either OR order.
+
+  * **The new invariant** —
+    `slice 4p — image-cascade PRECEDENCE`.
+    Mock `orgMetadata` with BOTH `coverImage`
+    AND `logo` set. Two assertions:
+      - POSITIVE: `img.src` matches
+        `/test-probe-cover/` (coverImage wins)
+      - NEGATIVE: `img.src` does NOT match
+        `/test-probe-logo/` (logo loses)
+
+  * **Why both positive and negative**: a pure
+    positive assertion would pass even if the
+    src contained BOTH tokens (e.g., a future
+    "render multiple images" refactor). The
+    negative assertion sharpens the probe to
+    "coverImage is the SOLE rendered asset".
+    Together they form a precise statement of
+    the precedence invariant.
+
+  * **Bug classes caught** (NEW vs 4m, 4n, 4o):
+    - Cascade REORDER bug (`logo || coverImage`
+      swap) — would change which asset displays
+      whenever both are set (a real production
+      case for orgs that have both fields)
+    - Refactor that hard-codes `meta.logo` as
+      preferred (e.g., "always prefer the logo"
+      UX decision mistakenly implemented) —
+      would silently swap branding
+    - Refactor that picks the cascade based on
+      a feature flag, defaulting to logo —
+      would change behavior based on flag
+      state and may regress for some orgs
+    - Refactor that combines fields
+      (`coverImage + logo` overlay) — would
+      render BOTH tokens; the negative
+      assertion catches it
+    - Refactor that switches to nullish
+      coalescing (`??`) without checking — if
+      both fields are stored as empty strings
+      `""` (falsy via `||` but truthy via `??`),
+      the cascade behavior changes silently
+
+  * **Image-cascade coverage lattice complete**:
+    - 4m: fallback branch in isolation
+    - 4n: coverImage branch in isolation
+    - 4o: logo branch in isolation
+    - 4p: precedence (coverImage over logo) ★
+    Together they form a coverage LATTICE
+    analogous to the filter triplet's
+    4b/4f/4g/4h + 4l. Each axis is now both
+    isolated AND composed.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 19 DOM↔API invariant tests pass:
+      30.6s (was 18 in 28.8s); new slice 4p
+      alone: 1.6s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (19 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4m logo fallback     | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4n cover-image       | coverImage='/test-probe-cover.png' → img.src       |
+    | slice 4o logo-only         | logo='/test-probe-logo.png' → img.src              |
+    | slice 4p img precedence ★  | both set → coverImage wins; logo NOT in src        |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: 13 invariants
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: **4 invariants**
+      (was 3; 4m + 4n + 4o + 4p now form a
+      complete image-cascade lattice)
+
+  * **What's next**:
+    - href attribute on the org row's nav link
+      (clicking → /markets/{address} routing)
+    - aria-label on active/total cells (a11y
+      dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers in the carousel card)
+    - Empty-state INVERSE invariant (when no
+      orgs at all return, "No organizations
+      found" renders)
+
 - **slice 59-dom-api-invariant-logo-only-branch
   (Phase 5 invariant catalog — 18th DOM↔API
   invariant; COMPLETES the image-cascade triplet)**

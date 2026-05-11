@@ -933,6 +933,90 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         );
     });
 
+    test('slice 4p — image-cascade PRECEDENCE: BOTH coverImage AND logo set → coverImage wins (catches reorder regression)', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Precedence test for the image triplet, analogous to slice
+        // 4l's multi-flag stress test for the filter triplet. The
+        // single-branch tests (4n: coverImage, 4o: logo, 4m:
+        // fallback) each set ONLY ONE field. None of them catches a
+        // cascade-REORDER regression because each setup happens to
+        // produce the same outcome under either OR order.
+        //
+        // This slice mocks BOTH `coverImage` AND `logo`, which
+        // forces the cascade order to matter:
+        //   - Correct cascade `coverImage || logo || fallback`:
+        //     coverImage wins → "test-probe-cover" in src
+        //   - Reordered cascade `logo || coverImage || fallback`:
+        //     logo wins → "test-probe-logo" in src ← BUG
+        //
+        // Asserting the COVER token (not LOGO) is in the src is
+        // the precise statement of the precedence invariant.
+        //
+        // Bug classes caught (NEW vs 4m, 4n, 4o):
+        //   - Cascade REORDER bug (logo || coverImage swap) —
+        //     would change which asset displays whenever both
+        //     are set (a real production case for orgs that
+        //     have both fields)
+        //   - Refactor that hard-codes `meta.logo` as preferred
+        //     (e.g., "always prefer the logo" UX decision
+        //     mistakenly implemented) — would silently swap
+        //     branding for the affected orgs
+        //   - Refactor that picks the cascade based on
+        //     `meta.imagePreference` or a feature flag,
+        //     defaulting to logo — would change behavior
+        //     based on flag state
+        //   - Refactor that combines fields (`coverImage +
+        //     logo` overlay) — would render coverImage
+        //     primarily but a regression that only renders
+        //     logo would surface here
+        //
+        // Additional assertion: NOT containing the LOGO token.
+        // Pure positive assertion would pass even if the src
+        // contained BOTH tokens (e.g., a future "render multiple
+        // images" refactor). The negative assertion sharpens the
+        // probe to "coverImage is the SOLE rendered asset".
+        //
+        // This completes a full coverage lattice for the image
+        // cascade (analogous to the filter triplet's lattice
+        // formed by 4b/4f/4g/4h + 4l):
+        //   - 4m: fallback branch in isolation
+        //   - 4n: coverImage branch in isolation
+        //   - 4o: logo branch in isolation
+        //   - 4p: precedence (coverImage over logo)
+        // A future variant could also add (logo over fallback)
+        // but that's the same OR-falsy semantics as 4o so
+        // marginal value.
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            orgMetadata: JSON.stringify({
+                coverImage: '/test-probe-cover.png',
+                logo:       '/test-probe-logo.png',
+            }),
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        const img = row.locator('img').first();
+        // POSITIVE: coverImage must appear in the rendered src.
+        await expect(img).toHaveAttribute('src', /test-probe-cover/);
+        // NEGATIVE: the logo token must NOT appear (proving
+        // coverImage is the sole rendered asset; sharpens the
+        // probe against multi-image refactors).
+        await expect(img).not.toHaveAttribute('src', /test-probe-logo/);
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 
