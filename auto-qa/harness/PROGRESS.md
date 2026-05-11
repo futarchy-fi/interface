@@ -2313,6 +2313,112 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-18-drain-wait
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — extends `withPaused(fn)` with
+  a `{ drainMs }` option that sleeps after pausing
+  the proxy, before yielding to `fn`. Hypothesis
+  (from step 17): cold-anvil mutation timeouts are
+  caused by an in-flight eth_call backlog at anvil
+  that pause-only doesn't drain. Sleeping inside
+  the pause window lets the backlog clear before
+  our mutation lands. Backports `withProxyPaused`
+  to scenario #15 too so both mutation scenarios
+  share the shape. **Honest result**:
+  `drainMs: 5000` did NOT fix the cold flake —
+  same 2/4 mutation-scenario fail (#15 + #17 on
+  setStorageAt 60s timeout). Hypothesis falsified.
+
+  * **The mechanism (still in place)**:
+    ```js
+    handler.withPaused = async (fn, { drainMs = 0 } = {}) => {
+        handler.pause();
+        try {
+            if (drainMs > 0) {
+                await new Promise(r => setTimeout(r, drainMs));
+            }
+            return await fn();
+        } finally { handler.resume(); }
+    };
+    ```
+    Default of 0 keeps the warm path zero-overhead.
+    A scenario that specifies `drainMs: 5000` gets
+    a 5s drain window between gate-close and
+    mutation. Smoke tests cover both: drain-when-
+    requested + no-drain by default.
+
+  * **What we observed (cold-anvil, #15-#18 only,
+    `drainMs: 5000`)**:
+    - 2/4 fail (#15 + #17)
+    - Same exact error pattern as step 17:
+      `setStorageAt aborted after 60005ms`
+    - Pause is active (gate closed), drain ran
+      (the 5s sleep happens in the timeline), but
+      setStorageAt still doesn't get a response
+      from anvil within 60s
+
+  * **Why the drain hypothesis was wrong** (or
+    insufficient):
+    - Possibility A: 5s isn't long enough — the
+      backlog might be 30s+ on cold anvil. Step 19
+      could try `drainMs: 15000` (matches page's
+      auto-refresh cycle).
+    - Possibility B: anvil isn't queue-blocked at
+      all — it's stuck on something else (a
+      hanging upstream RPC, a fork-state-fetch
+      deadlock, GC pause, etc.). The drain
+      mechanism can't help here.
+    - Possibility C: anvil DID complete the
+      setStorageAt but the response was lost
+      between anvil and our fetch (network/buffer
+      issue). Drain doesn't help here either.
+    - Without anvil-side instrumentation we can't
+      distinguish A from B/C. The `--silent` flag
+      we pass to anvil suppresses its own log
+      output, so we don't see whether anvil is
+      busy or idle when our setStorageAt times out.
+
+  * **What to investigate NEXT** (step 19+):
+    - Try `drainMs: 15000` once to disambiguate A
+      from B/C. If 15s also fails, A is unlikely.
+    - Drop `--silent` from anvil's webServer args
+      and capture its log to a file; correlate
+      anvil log timestamps with the setStorageAt
+      timeout window. This is the cheapest
+      diagnostic for what anvil is actually doing
+      during the dead period.
+    - Test: can a Node-side direct call to anvil
+      (not via the test) succeed at the moment our
+      setStorageAt times out? If yes, the test
+      itself has a bug; if no, anvil really is
+      stuck.
+    - Pragmatic alternative: skip mutation
+      scenarios on cold-anvil runs (gate via env
+      var or a probe) and document them as
+      warm-only. The harness already runs warm at
+      18/18 (since step 12); the cold matrix only
+      adds value if we can stabilize it.
+
+  * **Live re-validation**:
+    - Smoke tests: 76/76 (was 74; +2 — drainMs
+      sleeps before fn, default 0 keeps fast path)
+    - Cold scenarios (#15-#18 only): 2/4 (#16 +
+      #18 canaries pass, #15 + #17 mutations fail
+      with same setStorageAt 60s timeout pattern
+      observed in steps 13/14/17)
+    - Warm not re-validated (no architectural
+      change for non-mutators; the
+      `withProxyPaused` pass-through path is
+      unchanged)
+
+  * **What this DOES give us going forward**: the
+    `drainMs` parameter is now a knob, not a
+    hard-coded constant. Next iteration can flip
+    it to `15000` or to a probe-based active wait
+    without re-architecting. The mechanism is the
+    right shape; the heuristic just needs more
+    investigation.
+
 - **slice fork-bootstrap-step-17-proxy-pause
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — adds `pause()`/`resume()`/

@@ -109,13 +109,22 @@ export default {
         // required, no mining required. 500 sDAI (down from
         // globalSetup's 1000) leaves wallet+position aggregating
         // to 600, which is unique on the page.
-        async (_page, { wallet, anvilUrl }) => {
-            await setErc20Balance(
-                anvilUrl,
-                SDAI_TOKEN_GNOSIS_ADDRESS,
-                wallet.address,
-                500n * 10n ** 18n,
-            );
+        //
+        // Step 18: backport `withProxyPaused` (added in step 17)
+        // + `drainMs: 5000`. On cold anvil, by the time we issue
+        // setStorageAt the page's eth_call backlog at anvil can be
+        // 30+s deep, blocking the write. Pausing the page proxy
+        // stops new traffic; the 5s drain wait lets the existing
+        // backlog at anvil clear before our mutation lands.
+        async (_page, { wallet, anvilUrl, withProxyPaused }) => {
+            await withProxyPaused(async () => {
+                await setErc20Balance(
+                    anvilUrl,
+                    SDAI_TOKEN_GNOSIS_ADDRESS,
+                    wallet.address,
+                    500n * 10n ** 18n,
+                );
+            }, { drainMs: 5000 });
         },
         // Step 4: assert the post-mutation state. Wallet sDAI = 500
         // means Available = 500 + min(YES 100, NO 100) = 600. The

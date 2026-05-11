@@ -620,10 +620,23 @@ export function makeAnvilRpcProxyHandler({
             g.resolve();
         }
     };
-    handler.withPaused = async (fn) => {
+    // Step 18: `drainMs` option — after pausing, sleep this many
+    // ms before yielding to `fn`. Pausing alone stops queue
+    // GROWTH (no new page traffic forwarded to anvil) but
+    // EXISTING in-flight requests at anvil keep blocking writes.
+    // Sleeping during the pause window lets that backlog drain
+    // before our mutation lands. Set to 0 (default) for the warm
+    // path where there's no backlog to wait on; set ~3-10s for
+    // cold-anvil scenarios that need to mutate after the page has
+    // been polling for a while.
+    handler.withPaused = async (fn, { drainMs = 0 } = {}) => {
         handler.pause();
-        try { return await fn(); }
-        finally { handler.resume(); }
+        try {
+            if (drainMs > 0) {
+                await new Promise((r) => setTimeout(r, drainMs));
+            }
+            return await fn();
+        } finally { handler.resume(); }
     };
 
     return handler;

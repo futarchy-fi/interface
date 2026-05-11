@@ -606,6 +606,41 @@ test('makeAnvilRpcProxyHandler — pause/resume counter composes (nested pairs)'
     }
 });
 
+test('makeAnvilRpcProxyHandler — withPaused({drainMs}) sleeps after pausing, before fn', async () => {
+    // Step 18: drainMs lets the existing in-flight anvil backlog
+    // drain after the proxy gate closes. The sleep happens
+    // INSIDE the pause window (so no new page traffic is being
+    // forwarded to anvil during the drain), and BEFORE fn runs
+    // (so the mutation lands when anvil is quiet).
+    const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546', cache: false });
+
+    const t0 = Date.now();
+    let fnRanAt = null;
+    await handler.withPaused(async () => {
+        fnRanAt = Date.now();
+    }, { drainMs: 100 });
+    const elapsed = Date.now() - t0;
+    const fnDelay = fnRanAt - t0;
+
+    assert.ok(fnDelay >= 100, `fn must run AFTER drainMs sleep — saw ${fnDelay}ms < 100ms`);
+    assert.ok(elapsed >= 100, `withPaused must wait the full drain window — saw ${elapsed}ms < 100ms`);
+});
+
+test('makeAnvilRpcProxyHandler — withPaused() with no opts skips the drain (default 0)', async () => {
+    // Warm-path mutations don't need the drain; default of 0 keeps
+    // them fast. Regression guard against accidentally making the
+    // drain mandatory.
+    const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546', cache: false });
+
+    const t0 = Date.now();
+    await handler.withPaused(async () => {
+        // no-op
+    });
+    const elapsed = Date.now() - t0;
+
+    assert.ok(elapsed < 50, `default withPaused must be sleep-free — saw ${elapsed}ms ≥ 50ms`);
+});
+
 test('makeAnvilRpcProxyHandler — withPaused(fn) always resumes, even on throw', async () => {
     // The convenience wrapper is the safer surface for scenarios:
     // it guarantees the gate gets released even when the wrapped

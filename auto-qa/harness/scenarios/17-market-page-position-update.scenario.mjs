@@ -103,6 +103,13 @@ export default {
         // anvil directly), so pausing the proxy stops PAGE traffic
         // but leaves OUR traffic free.
         async (_page, { wallet, anvilUrl, withProxyPaused }) => {
+            // Step 18: `drainMs: 5000` lets anvil's existing
+            // in-flight eth_call backlog drain before we issue the
+            // mutation. Step 17's plain pause stopped queue GROWTH
+            // but didn't help with queue DRAIN — on cold anvil,
+            // the backlog at mutation time can be 30+s deep.
+            // 5s is a starting heuristic; if cold-anvil still
+            // flakes, bump to 10s.
             await withProxyPaused(async () => {
                 await setConditionalPosition(
                     anvilUrl,
@@ -116,7 +123,7 @@ export default {
                     BigInt(HOOK_FALLBACK_POSITION_IDS.currencyNo),
                     NEW_POSITION_AMOUNT_WEI,
                 );
-            });
+            }, { drainMs: 5000 });
         },
         // Step 3: post-mutation assert. Wallet sDAI = 1000 + min(YES
         // 200, NO 200) = 1200. 30s timeout = 2× the auto-refresh
