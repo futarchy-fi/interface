@@ -2313,6 +2313,131 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 47-scenario-43-market-page-candles-504-gateway-timeout
+  (Phase 7 chaos library — 8-ROW MATRIX PARITY
+  MILESTONE)** (this iteration, on the interface
+  side) — closes the LAST cell of the expanded
+  8-row chaos matrix, achieving full **32/32
+  parity** across both pages × 8 failure-mode
+  rows × 2 endpoints. Mirror of #41 applied to
+  the market page's distinct candles-consumer
+  surface (chart panel + per-pool spot prices +
+  trading-panel preview). Distinct from #25
+  (502+JSON → `.catch`), #39 (429+Retry-After+JSON),
+  #42 (registry-504+HTML on the same page), and
+  #41 (same failure mode, /companies contract).
+
+  * **The scenario** —
+    `43-market-page-candles-504-gateway-timeout`
+    on /markets/<MARKET_PROBE_ADDRESS>. Registry
+    happy + CANDLES responds 504 + `Content-Type:
+    text/html` + nginx-style HTML body (no JSON,
+    no Retry-After). Same page-shell assertions
+    as prior market-page chaos slices (Trading
+    Pair + wallet shorthand) — proves a candles-
+    side gateway-timeout doesn't cascade to a
+    hung/crashed page-shell.
+
+  * **Bug-shapes captured** (NEW vs #25, #39,
+    #41, and #42):
+    - Chart panel CRASHES on `JSON.parse(html)`
+      throwing SyntaxError (downstream uncaught
+      rejection → React error boundary in chart
+      panel → "Chart unavailable" placeholder OR
+      collateral collapse to whole-page error)
+    - Chart panel HANGS in loading forever
+      (504+HTML doesn't trigger loading=false
+      because the parse error throws before the
+      loading-cleanup code runs — distinct from
+      #25's `.catch` path which DOES run cleanup,
+      and #39's `.then`-with-error-envelope path
+      which exposes a structured error to the
+      cleanup handler)
+    - Chart-fetch IMMEDIATELY retries with no
+      backoff — WORSE than #39 because there's
+      no Retry-After to respect, AND worse than
+      /companies because chart-data refetches on
+      every interaction (hover, zoom, time-
+      window-change), multiplying the retry
+      storm
+    - Per-pool spot-price displays render the
+      raw HTML body (formatter coerces `.text()`
+      fallback to string and renders the LB
+      error page literally in a price slot)
+    - Trading panel "preview price" CRASHES
+      because the candles-derived feed returns
+      parse-error and the price-difference
+      calculation hits NaN
+    - WHOLE PAGE crashes from missing chart-
+      panel error boundary (collateral damage to
+      trading + allowances + positions panels;
+      same shape as #25 but via 504+HTML parse-
+      error rather than 502+JSON status-error)
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (matrix-smoke pin floor
+      bumped from 15 to 16 on /markets/[address];
+      no other infra changes)
+    - Scenario #43 itself: passed in 3.9s on
+      first run
+    - Catalog regenerated: 43 scenarios (was 42)
+    - Matrix script: /companies stays at 16/16;
+      /markets/[address] now 16/16 — **TOTAL:
+      32/32 cells filled across both pages × 8
+      failure-mode rows × 2 endpoints**
+
+  * **Chaos coverage matrix on /markets/[address]
+    after this slice (16/16 COMPLETE — all 8
+    rows × 2 endpoints, FULL PARITY with
+    /companies at the expanded row count)**:
+    | failure mode        | registry | candles |
+    |---------------------|----------|---------|
+    | hard 502            | #24      | #25     |
+    | partial response    | #32      | #33     |
+    | empty 200           | #26      | #27     |
+    | malformed body      | #28      | #29     |
+    | per-row corrupt     | #34      | #35     |
+    | slow valid resp     | #30      | #31     |
+    | rate-limited 429    | #38      | #39     |
+    | gateway timeout 504 | #42      | #43 ★   |
+
+  * **Why the 32/32 milestone matters**: every
+    interface-side chaos failure-mode in the
+    expanded 8-row catalog is now GUARANTEED to
+    be probed on BOTH pages. The matrix grew
+    from 28 to 32 cells over 4 slices (#40 →
+    #41 → #42 → #43), and full parity was
+    re-attained at the new row count in the
+    same number of slices it took to open the
+    row. The drift-resistant tooling
+    (`scenarios:chaos-matrix` + smoke pin)
+    auto-derives the table and fails loudly if
+    any future change drops a cell — same
+    invariant strength as the 28/28 milestone
+    at slice 43.
+
+  * **What's next after the 8-row parity**:
+    matrix expansion options remain
+    multi-directional —
+      - **ROW-axis**: open a 9th failure-mode
+        row (304 Not Modified, chunked-encoding
+        stall, malformed Content-Type header,
+        oversized response body, TLS handshake
+        failure)
+      - **PAGE-axis**: bring chaos coverage to
+        a brand new page (/milestones,
+        /rpc-diagnostics, /proposal-create)
+      - **LAYER-axis**: chaos against the api
+        passthrough layer beneath the GraphQL
+        endpoints (api-side latency injection,
+        cache-stale responses, partial-rewrite
+        of api → indexer payloads)
+      - **INVARIANT-axis**: the interface side
+        only has 6 cross-layer DOM↔API
+        invariants in `dom-api-invariant.spec.
+        mjs` while the api side has 57 — large
+        gap to close with incremental probes
+
 - **slice 46-scenario-42-market-page-registry-504-gateway-timeout
   (Phase 7 chaos library — extends new row to
   /markets/[address])** (this iteration, on the
