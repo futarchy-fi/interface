@@ -2313,6 +2313,102 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 45-scenario-41-candles-504-gateway-timeout
+  (Phase 7 chaos library — completes new row on
+  /companies)** (this iteration, on the interface
+  side) — fills the 2nd cell of the new "gateway
+  timeout 504" matrix row. Companion to #40
+  (registry-504): same failure mode on the symmetric
+  endpoint. Where #40 leaves the carousel unable to
+  mount any cards (registry empty → no events to
+  render), #41 keeps registry healthy so the carousel
+  mounts — but the per-pool price-fetch hits the
+  gateway-timeout candles endpoint and falls through
+  to the "0.00 SDAI" fallback shape (same terminal
+  UX as #03 / #37 but distinct control flow).
+
+  * **The scenario** —
+    `41-candles-504-gateway-timeout` on /companies.
+    REGISTRY happy (carousel mounts our pool-bearing
+    proposal) + CANDLES responds 504 +
+    `Content-Type: text/html` + nginx-style HTML
+    504 page (no JSON, no Retry-After). Asserts the
+    event card renders AND the price degrades to
+    "0.00 SDAI".
+
+  * **Bug-shapes captured** (NEW vs #03 and #37):
+    - Per-pool fetcher CRASHES on `JSON.parse(html)`
+      throwing SyntaxError (body is HTML, .json()
+      throws BEFORE the consumer's status-check or
+      error-envelope-handler runs — distinct from
+      #03's `.catch` on structured error envelope)
+    - Per-pool fetcher renders the HTML body raw in
+      the price card (consumer falls back to
+      `.text()` and renders the LB error page
+      literally — leaks infra error to UX surface)
+    - Per-pool fetcher treats 504 as IF the request
+      succeeded with empty data (silent broken
+      state — no telemetry, no retry, no
+      user-visible signal)
+    - Per-pool fetcher IMMEDIATELY retries in tight
+      loop (no exponential backoff; WORSE than #37
+      because there's no Retry-After to respect —
+      thundering-herd with no contract to follow)
+    - Card hangs on LoadingSpinner forever (.then
+      fires but parse error throws before
+      loading=false setter runs)
+    - Bulk-prefetch races per-pool fallback under
+      partial 504 (one branch parses, the other
+      doesn't — race-conditional render outcome)
+
+  * **Distinct from #40 (same row, registry side)**:
+    - #40 takes the carousel-data-source out
+      (registry empty → no event cards mount →
+      page hits "No organizations found")
+    - #41 keeps the carousel data source healthy
+      (event cards mount) but takes the per-card
+      price-fetch out — exercises the SECOND-tier
+      data-fetch failure path with the same
+      504+HTML control flow
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (matrix-smoke pin floor
+      bumped from 15 to 16 on /companies; no
+      other infra changes)
+    - Scenario #41 itself: passed in 2.3s on
+      first run
+    - Catalog regenerated: 41 scenarios (was 40)
+    - Matrix script: /companies now 16/16 (8th
+      row complete on /companies);
+      /markets/[address] stays at 14/16
+
+  * **Chaos coverage matrix on /companies after
+    this slice (16/16 COMPLETE — all 8 rows × 2
+    endpoints, /companies fully covered for the
+    expanded 8-row failure-mode set)**:
+    | failure mode        | registry | candles |
+    |---------------------|----------|---------|
+    | hard 502            | #02      | #03     |
+    | partial response    | #22      | #04     |
+    | empty 200           | #05      | #21     |
+    | malformed body      | #07      | #08     |
+    | per-row corrupt     | #09      | #23     |
+    | slow valid resp     | #19      | #20     |
+    | rate-limited 429    | #36      | #37     |
+    | gateway timeout 504 | #40      | #41 ★   |
+
+  * **What's next**: matrix expansion proceeds to
+    /markets/[address] cells of the new row —
+    slice 46 fills market-page-registry-504
+    (mirror of #40 on market page); slice 47
+    fills market-page-candles-504 (mirror of #41).
+    After 47, the 8-row matrix reaches 32/32 cells
+    across both pages — full parity restored at
+    the new expanded row count. Beyond that:
+    open another failure-mode row, expand to a
+    new page, or pivot to cross-layer DOM↔API
+    invariant work.
+
 - **slice 44-scenario-40-registry-504-gateway-timeout
   (Phase 7 chaos library — NEW failure-mode row)**
   (this iteration, on the interface side) — opens

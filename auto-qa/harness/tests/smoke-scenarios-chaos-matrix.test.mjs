@@ -58,17 +58,16 @@ test('scenarios-chaos-matrix CLI — prints per-page chaos coverage matrix', () 
 
 test('scenarios-chaos-matrix CLI — both pages have most chaos cells filled', () => {
     // Pins current state of the harness. With 8 failure-mode rows
-    // × 2 endpoint columns = 16 cells per page. /companies has
-    // all 7 prior modes + gateway-timeout registry = 15/16;
-    // /markets/[address] has all 7 prior modes only = 14/16 (the
-    // gateway-timeout row is opening on /companies first; market
-    // page cells fill in subsequent slices). As new chaos
-    // scenarios fill cells, bump the floor numerator here. The
-    // test EXISTS so a regression that DROPS a cell (e.g.,
-    // deleting a scenario without renaming the file) surfaces
-    // immediately.
+    // × 2 endpoint columns = 16 cells per page. /companies now
+    // has all 8 modes complete (gateway-timeout row both cells
+    // filled) = 16/16; /markets/[address] has the 7 prior modes
+    // only = 14/16 (the gateway-timeout row's market-page cells
+    // fill in subsequent slices). As new chaos scenarios fill
+    // cells, bump the floor numerator here. The test EXISTS so a
+    // regression that DROPS a cell (e.g., deleting a scenario
+    // without renaming the file) surfaces immediately.
     const r = spawnSync('node', [SCRIPT], { encoding: 'utf8' });
     assert.equal(r.status, 0);
-    assert.match(r.stdout, /Page: \/companies — (1[5-9]|[2-9]\d)\/16 cells filled/);
+    assert.match(r.stdout, /Page: \/companies — (16|1[7-9]|[2-9]\d)\/16 cells filled/);
     assert.match(r.stdout, /Page: \/markets\/\[address\] — (1[4-9]|[2-9]\d)\/16 cells filled/);
 });
