@@ -2313,6 +2313,101 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 76-subgraph-pool-data-path (Phase 6
+  scenario library — open the subgraph-poolData
+  code path on the market page)** (this
+  iteration, on the interface side) — honest
+  investigation iteration. Started as an
+  attempt to catch PR #51 (Algebra V3 Liquidity
+  widget magnitude bug); pivoted to landing
+  reusable infrastructure after surfacing two
+  blockers that prevent a direct PR #51 catch.
+
+  * **What was investigated**: PR #51 fixed
+    `usePoolData.formatSubgraphPoolData` to
+    produce currency-denominated TVL instead
+    of raw uint128 magnitude. To exercise the
+    fix site, the market page must navigate
+    the subgraph-sourced poolData code path —
+    `useSubgraph=true` → `fetchBestPoolsForProposal`
+    → returns non-null → `formatSubgraphPoolData`
+    runs.
+
+  * **Blocker 1 (now fixed)**: shared
+    `makeMarketCandlesMockHandler` answers the
+    compound discovery query (`proposal +
+    whitelistedtokens + pools`) with only
+    `proposal + whitelistedtokens` —
+    `data.pools` undefined → `fetchBestPoolsForProposal`
+    returns null → falls through to the legacy
+    "(Total; ${currencySymbol})" path,
+    BYPASSING `formatSubgraphPoolData` entirely.
+    Inline `makeMarketCandlesMockHandlerForPR51`
+    in scenario 46 returns `pools` in that
+    response. Refactoring into the shared
+    handler with an opt-in flag is the obvious
+    follow-up.
+
+  * **Blocker 2 (deferred)**: even with
+    blocker 1 cleared, PR #51's post-fix output
+    is `adjustedLiquidity.toString()` which
+    produces "2000" for integer values. That
+    integer string flows through `normalizeTokenAmount`
+    (MarketPageShowcase.jsx:2386, called
+    unconditionally inside computeBreakdown
+    regardless of the widget's `normalize` prop)
+    → sees no '.' / 'e' → treats as wei →
+    DIVIDES BY 1e18 → renders 2e-15 ≈ 0. The
+    pre-fix output `toLocaleString('fullwide')`
+    can produce strings WITH '.' (for non-
+    integer floats), which normalizeTokenAmount
+    keeps as-is — leading to the "200,003,226.96M"
+    rendering on certain L/sqrtPrice values.
+    Catching the bug shape mechanically needs
+    BOTH a post-fix value the normalize layer
+    keeps non-zero AND a pre-fix value it
+    keeps wildly large. That's a delicate
+    tuning of mock liquidity + tick.
+
+  * **What this slice DOES catch**: regressions
+    where the subgraph code path stops being
+    reachable — Liquidity widget label flips
+    from plain "Liquidity" (subgraph path) to
+    "Liquidity (Total; sDAI)" (legacy path).
+    Marker assertion: `getByText('Liquidity',
+    { exact: true })`.
+
+  * **Mechanical verification** (slice 74/75
+    pattern): mutated the inline handler to
+    comment out `pools` from the compound-query
+    response → assertion FAILED with the
+    expected timeout. Restored → PASSES. The
+    marker has signal.
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `npm run scenarios:catalog` → 46
+      scenarios (was 45)
+    - Scenario 46 wall-clock: ~5s warm
+    - src/ tree clean post-validation
+
+  * **Honest framing**: PR #51 is not yet
+    mechanically caught. This iteration ships
+    the INFRASTRUCTURE EXTENSION (compound-
+    query response with `pools`) and a
+    LIGHTER invariant (subgraph path is
+    reachable). The PR #51-specific catch is
+    the natural slice-77 deliverable; this
+    slice unblocks it.
+
+  * **Anti-pattern avoided**: shipping a
+    scenario whose `bugShape` label claims to
+    guard PR #51 without actually doing so.
+    Scenarios 01-43 are riddled with this
+    (per slice 74's gap analysis); this slice
+    keeps the catalog honest by describing
+    what it actually catches.
+
 - **slice 75-pr64-prefixed-shape-sister
   (Phase 6 scenario library — pin BOTH branches
   of the PR #64 guard)** (this iteration, on the
