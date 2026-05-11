@@ -2313,6 +2313,101 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 94-eth-call-inspector (Phase 6 —
+  decoder for eth_call interception)** (this
+  iteration, on the interface side) — Pure
+  utility module: `fixtures/eth-call-inspector.mjs`
+  with a focused Algebra-pool `getTimepoints`
+  ABI + decoder + selector + smoke tests. 15
+  new smoke tests (62 total stub + 5 live).
+  Recent-PR coverage unchanged at 13/22 (59%) —
+  this is the last piece of infra before the
+  PR #54 scenario (slice 95+).
+
+  * **The PR #54 catch chain** (now N-1 of N
+    pieces):
+    1. ✅ Time advance: slice 90 primitives
+       (`advanceTime`, `setNextBlockTimestamp`).
+    2. ✅ Live-anvil validation: slice 91 tests.
+    3. ✅ Scenario integration: slice 93's
+       `requiresAnvil` flag + scenario 58.
+    4. ✅ **eth_call decoder: this slice.**
+    5. ⏳ Scenario 59 (next slice): mount a
+       hasEnded-shape proposal, intercept the
+       getTimepoints eth_call, assert
+       `args[0][1] > 0` (post-fix shape).
+    6. ⏳ Mechanical verification: revert the
+       PR #54 fix → second arg becomes 0 →
+       scenario fails.
+
+  * **What the inspector does**:
+    ```js
+    import { decodeGetTimepointsArgs }
+      from './fixtures/eth-call-inspector.mjs';
+
+    // In a Playwright route handler:
+    const body = JSON.parse(route.request().postData());
+    const call = parseEthCallParams(body);
+    if (call && sameAddress(call.to, yesPoolAddr)) {
+      const secondsAgos = decodeGetTimepointsArgs(call.data);
+      if (secondsAgos) {
+        // → e.g. [86400, 7200] for post-fix ended-proposal
+        capturedTwapCalls.push(secondsAgos);
+      }
+    }
+    ```
+    The assertion then checks
+    `capturedTwapCalls.some(([_, end]) => end > 0)` —
+    fails when every call has `end = 0` (pre-fix
+    shape).
+
+  * **Why viem over ethers**: viem is already a
+    harness dep (`package.json: "viem":
+    "^2.48.11"`); ethers would add ~250 KB for
+    one function. `decodeFunctionData` does
+    exactly what we need.
+
+  * **Selector pinning**: the smoke tests assert
+    the literal selector value
+    (`0x9d3a5241`, verified via
+    `cast sig "getTimepoints(uint32[])"`). A
+    viem regression in selector computation or
+    an accidental ABI signature change would
+    flip this test immediately.
+
+  * **Scope discipline**: ONLY decodes the
+    Algebra pool's `getTimepoints` call. Future
+    slices extending to other targets (e.g.,
+    `swap`, `mint`) add their own ABIs to the
+    module; we don't try to be a general
+    etherscan-style decoder.
+
+  * **Smoke tests** (`tests/smoke-eth-call-
+    inspector.test.mjs`):
+    - Selector pinning (1 test)
+    - parseEthCallParams happy + malformed (3)
+    - decodeGetTimepointsArgs round-trip
+      (pre-fix shape, post-fix shape) (2)
+    - decodeGetTimepointsArgs error paths
+      (3: bad selector, truncated, non-string)
+    - decodeEthCallData generic + unknown
+      selector (2)
+    - sameAddress: case-insens, mismatch,
+      non-address (3)
+    - End-to-end parse + decode (1)
+    15 total; 15/15 pass; 4233ms wall-clock.
+    The existing 47 fork-state smoke tests
+    still pass — additive change.
+
+  * **Catalog state**: 58 scenarios (unchanged),
+    15 mechanically verified (unchanged).
+    Smoke tests: 47 fork-state + 15 eth-call
+    + 5 live-anvil = 67 total. Recent-PR
+    coverage: 13/22 (59%). 8 KINDs unchanged;
+    9th (TIME-EVOLUTION) chain-side infra
+    complete, eth_call decoder ready for
+    integration in slice 95.
+
 - **slice 93-time-evolution-integration (Phase 6
   — first scenario exercising the slice 90
   primitives)** (this iteration, on the interface
