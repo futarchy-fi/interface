@@ -2313,6 +2313,87 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 32-scenario-29-market-page-candles-malformed
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (CANDLES, malformed-
+  body) cell, completing the malformed-body row
+  on the market-page chaos matrix. Mirror of
+  #08 (candles-malformed-body on /companies)
+  applied to the market page's 4-query-shape
+  candles contract. Distinct from #25 (candles
+  502 → `.catch`) and #27 (candles empty-200 →
+  `.then([])`) because `response.json()` throws
+  SyntaxError before any `.then` runs.
+
+  * **The scenario** — `29-market-page-candles-
+    malformed` on /markets/<MARKET_PROBE_ADDRESS>.
+    Same HTML 503 page body as #28. Registry
+    happy. Same page-shell assertions as the
+    prior market-page chaos scenarios.
+
+  * **Distinct from #28** (different endpoint,
+    same root failure mode):
+    - #28 registry-malformed: breaks proposal
+      metadata fetch (title, description)
+    - #29 candles-malformed: breaks chart panel
+      + price displays
+    Two different page surfaces hit the same
+    root failure mode via independent code
+    paths. A regression that fixes #28 might
+    still leave #29 broken — they're at
+    different abstraction layers.
+
+  * **Why chart-fetch is the most likely
+    surface to crash**: `src/utils/Subgraph
+    PoolFetcher.js` + `getSubgraphEndpoint
+    (chainId)` route both the bulk-prefetch and
+    per-pool fallback through the candles
+    endpoint. ALL of them call `.json()`. Any
+    caller using `await fetch + await .json()`
+    surfaces an unhandled rejection.
+
+  * **Bug-shapes captured** (NEW vs #25/#27):
+    - Market-page CRASHES on candles
+      malformed-body (SyntaxError thrown by
+      `response.json()` in chart-fetch chain
+      bypasses outer `.catch`)
+    - HTML body content LEAKS into chart panel
+      placeholder ("503 Service Unavailable"
+      rendered where the chart should be)
+    - Hung chart loading spinner from
+      SyntaxError outside `.then` chain not
+      triggering `loading=false`
+    - WHOLE PAGE crashes from missing chart-
+      panel error boundary — collateral damage
+      to trading + allowances + positions
+      panels (same shape as #25 but via
+      SyntaxError rather than 502)
+    - Per-pool spot-price renders
+      "[object Object]" or "undefined" because
+      the formatter received the SyntaxError's
+      `message` field instead of a price value
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #29 itself: passed in 12.1s on
+      first run
+    - Catalog regenerated: 29 scenarios (was 28)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  |   —      |   —     |
+    | empty 200         | #26      | #27     |
+    | malformed body    | #28      | #29 ★   |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   |   —      |   —     |
+    6 of 12 cells filled (top 3 rows complete:
+    hard-502 + empty-200 + malformed-body ×
+    both endpoints). Next: slow-response row
+    (mirror #19/#20).
+
 - **slice 31-scenario-28-market-page-registry-malformed
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (REGISTRY, malformed-
