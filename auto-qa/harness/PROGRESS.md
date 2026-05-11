@@ -2313,6 +2313,102 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-15-anvil-warmup
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — pre-warms anvil's bytecode +
+  ERC20 balanceOf slot cache for the contracts the
+  page reads. Reduces cold-start latency for those
+  specific addresses; doesn't fully fix the
+  cold-anvil mutation flake (the page reads MANY
+  contracts beyond what we warm — the proposal-
+  specific addresses, pool addresses, etc.).
+
+  * **What's warmed** (in `globalSetup`, BEFORE the
+    snapshot):
+    1. **Bytecode** for 8 contracts via
+       `eth_getCode` in parallel:
+       - GNO (real Gnosis token; `companyToken`
+         default in useContractConfig.js:315)
+       - 4 wrap contracts (YES_sDAI, NO_sDAI,
+         YES_GNO, NO_GNO — used by
+         `MERGE_CONFIG.{currency,company}Positions`)
+       - sDAI rate provider (read by `useSdaiRate`)
+       - Futarchy router + wrapper service
+    2. **balanceOf storage slots** for the 5 ERC20
+       addresses (the wrap contracts + GNO). The
+       non-ERC20 entries (rate provider, router,
+       wrapper) revert on balanceOf and are warmed
+       by bytecode only.
+
+    Runs in parallel via `Promise.allSettled` so
+    anvil pipelines the upstream fetches. Cold
+    measurement: 8/8 bytecodes + 5/5 balanceOf slots
+    in ~1.2s. Warm measurement: ~15ms (anvil already
+    has them cached).
+
+  * **Why warmup goes BEFORE the snapshot** —
+    anvil's bytecode + slot cache survives
+    evm_revert. Snapshotting AFTER warmup means
+    every per-scenario beforeEach revert restores
+    a state where those caches are already
+    populated, not just on the first scenario.
+
+  * **What this DOESN'T fix**: the cold-anvil
+    mutation flake from step 13. Cold runs still
+    show #15 + #17 occasionally timing out at the
+    mid-test mutation. Anvil's slot cache covers
+    only the SPECIFIC slots warmed; the page reads
+    many more (per-pool storage, per-user
+    allowance, per-position balance) that aren't
+    on the warm-list. Adding them would require
+    enumerating every contract the page touches —
+    expanding the warm-list is the remaining
+    incremental work.
+
+  * **Two new fixture primitives**:
+    - `getCode(rpcUrl, address)` — `eth_getCode`
+      wrapper, returns 0x-hex bytecode.
+    - `warmContractCache(rpcUrl, addresses)` —
+      parallel `eth_getCode` over an address list,
+      tolerant of single-address failures, returns
+      success count.
+    - `warmErc20Balances(rpcUrl, tokens, holder)` —
+      parallel `getErc20Balance` over a token list,
+      tolerant of failures, returns success count.
+
+  * **New constants**:
+    - `PAGE_CONTRACT_ADDRESSES` — list of 8
+      contracts the page reads.
+    - `PAGE_ERC20_ADDRESSES` — subset (5) that
+      implement balanceOf. Separate list keeps the
+      balanceOf warmup output clean (no spurious
+      "execution reverted" warnings for non-ERC20
+      addresses).
+
+  * **Bug-shapes captured** (NEW failure modes
+    pre-step-15 suite couldn't catch):
+    - A NEW contract added to `useContractConfig.js`
+      defaults (e.g., a refactor that introduces a
+      new collateral wrap target) without updating
+      `PAGE_CONTRACT_ADDRESSES` would cause the
+      cold-anvil flake to start affecting the
+      previously-passing scenarios. The warmup
+      summary log makes the omission obvious.
+    - A wrong address in either constant — the
+      `warmContractCache` warning + lower success
+      count both surface immediately.
+
+  * **Live re-validation**:
+    - Warm anvil: 18/18 scenarios pass live in 1.2
+      min (no regression vs. step 14)
+    - Cold anvil: 16/18 pass; same 2 failures as
+      step 14 (the warmup helps but the page's
+      per-scenario reads still exceed what we warm)
+    - 71/71 smoke tests pass (was 68; +3:
+      `getCode` happy path, `warmContractCache`
+      parallel + success count, `warmContractCache`
+      partial-failure tolerance)
+
 - **slice fork-bootstrap-step-14-proxy-cache
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — adds idempotent-method caching

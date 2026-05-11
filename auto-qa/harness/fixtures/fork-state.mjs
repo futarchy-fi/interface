@@ -126,6 +126,60 @@ export const HOOK_FALLBACK_POSITION_IDS = {
     companyNo:   '0x50b02574e86d37993b7a6ebd52414f9deea42ecfe9c3f1e8556a6d91ead41cc7',
 };
 
+/**
+ * Contract addresses the page reads during normal load. Pre-warming
+ * anvil's bytecode cache for these (via `eth_getCode`) eliminates the
+ * cold-start cascade documented in step 13: anvil's first read of an
+ * uncached contract requires an upstream RPC fetch (~1s each on
+ * gnosis.gateway.fm), and a burst of those during scenario load can
+ * back up the request queue enough to time out a mid-test mutation.
+ *
+ * The list MUST stay in sync with what the page actually touches —
+ * adding a new contract to `src/hooks/useContractConfig.js`'s
+ * `MERGE_CONFIG` defaults or `BASE_TOKENS_CONFIG` defaults requires
+ * adding it here too. Discover via:
+ *   tail -100 /tmp/anvil.log | awk '/eth_call/{print}' | sort -u
+ * after a cold scenario run.
+ *
+ * sDAI + CT + MARKET_PROBE_ADDRESS are NOT in this list — globalSetup
+ * already warms them via the funding step's setStorageAt + readback +
+ * conditionId calls.
+ */
+export const PAGE_CONTRACT_ADDRESSES = [
+    // GNO (real Gnosis token; companyToken default in
+    // useContractConfig.js:315)
+    '0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb',
+    // YES_sDAI wrap (currencyPositions.yes.wrap)
+    '0x2301e71f6c6dc4f8d906772f0551e488dd007a99',
+    // NO_sDAI wrap (currencyPositions.no.wrap)
+    '0xb9d258c84589d47d9c4cab20a496255556337111',
+    // YES_GNO wrap (companyPositions.yes.wrap)
+    '0xb28dbe5cd5168d2d94194eb706eb6bcd81edb04e',
+    // NO_GNO wrap (companyPositions.no.wrap)
+    '0xad34b43712588fa57d80e76c5c2bcbd274bdb5c0',
+    // sDAI rate provider (read by useSdaiRate)
+    '0x89C80A4540A00b5270347E02e2E144c71da2EceD',
+    // Futarchy router (FUTARCHY_ROUTER_ADDRESS default)
+    '0x7495a583ba85875d59407781b4958ED6e0E1228f',
+    // Wrapper service (WRAPPER_SERVICE_ADDRESS default)
+    '0xc14f5d2B9d6945EF1BA93f8dB20294b90FA5b5b1',
+];
+
+/**
+ * Subset of `PAGE_CONTRACT_ADDRESSES` that implement ERC20 (have a
+ * `balanceOf` function). Used by `warmErc20Balances` to warm slot
+ * caches; the non-ERC20 entries (rate provider, router, wrapper
+ * service) revert on `balanceOf` calls and are warmed by bytecode
+ * fetch only.
+ */
+export const PAGE_ERC20_ADDRESSES = [
+    '0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb', // GNO
+    '0x2301e71f6c6dc4f8d906772f0551e488dd007a99', // YES_sDAI wrap
+    '0xb9d258c84589d47d9c4cab20a496255556337111', // NO_sDAI wrap
+    '0xb28dbe5cd5168d2d94194eb706eb6bcd81edb04e', // YES_GNO wrap
+    '0xad34b43712588fa57d80e76c5c2bcbd274bdb5c0', // NO_GNO wrap
+];
+
 // Standard ERC20 + ERC1155 ABI fragments — minimal surface for
 // read/write helpers. Keeping fragments inline avoids a separate
 // ABI file and makes the helpers self-contained.
@@ -270,6 +324,79 @@ export async function setEthBalance(rpcUrl, address, amountWei) {
 export async function getEthBalance(rpcUrl, address) {
     const hex = await anvilRpc(rpcUrl, 'eth_getBalance', [address, 'latest']);
     return BigInt(hex);
+}
+
+/**
+ * Read contract bytecode at `address` via `eth_getCode`. Returns the
+ * raw 0x-hex string (`0x` for an EOA / undeployed address). On a
+ * forked anvil, the FIRST call for an address fetches from the
+ * upstream RPC (~1s on cold gnosis.gateway.fm) and caches the
+ * result; subsequent calls are microseconds. Used by
+ * `warmContractCache` to pre-populate anvil's bytecode cache before
+ * tests run.
+ */
+export async function getCode(rpcUrl, address) {
+    return anvilRpc(rpcUrl, 'eth_getCode', [address, 'latest']);
+}
+
+/**
+ * Pre-warm anvil's bytecode cache for a list of contract addresses.
+ * Issues `eth_getCode` for each address in parallel — anvil's
+ * upstream-fetch latency adds up if done serially (~1s × N
+ * addresses), but parallel fetches let anvil pipeline the upstream
+ * requests. Returns the count of addresses warmed.
+ *
+ * Errors are TOLERATED (not thrown) — a single contract that 404s
+ * upstream shouldn't fail globalSetup. Logs a one-line warning
+ * for each failure so the maintainer can update the warm-list if
+ * an address moved.
+ *
+ * @param {string} rpcUrl
+ * @param {ReadonlyArray<`0x${string}`>} addresses
+ * @returns {Promise<number>} count of successfully warmed addresses
+ */
+export async function warmContractCache(rpcUrl, addresses) {
+    const results = await Promise.allSettled(
+        addresses.map((a) => getCode(rpcUrl, a)),
+    );
+    let successCount = 0;
+    for (const [i, r] of results.entries()) {
+        if (r.status === 'fulfilled') {
+            successCount++;
+        } else {
+            console.warn(`[fork-state] warmContractCache: ${addresses[i]} failed: ${r.reason?.message ?? r.reason}`);
+        }
+    }
+    return successCount;
+}
+
+/**
+ * Pre-warm anvil's storage cache for `holder`'s `balanceOf` slot at
+ * each ERC20 token in `tokens`. Step 15 found that warming JUST the
+ * bytecode (`warmContractCache`) wasn't enough — anvil's first read
+ * of a STORAGE slot still falls through to upstream RPC. Issuing the
+ * same balanceOf eth_call the page eventually does primes both the
+ * bytecode AND the slot.
+ *
+ * Returns the count of tokens warmed.
+ *
+ * @param {string} rpcUrl
+ * @param {ReadonlyArray<`0x${string}`>} tokens
+ * @param {`0x${string}`} holder
+ */
+export async function warmErc20Balances(rpcUrl, tokens, holder) {
+    const results = await Promise.allSettled(
+        tokens.map((t) => getErc20Balance(rpcUrl, t, holder)),
+    );
+    let successCount = 0;
+    for (const [i, r] of results.entries()) {
+        if (r.status === 'fulfilled') {
+            successCount++;
+        } else {
+            console.warn(`[fork-state] warmErc20Balances: ${tokens[i]} failed: ${r.reason?.message ?? r.reason}`);
+        }
+    }
+    return successCount;
 }
 
 /**

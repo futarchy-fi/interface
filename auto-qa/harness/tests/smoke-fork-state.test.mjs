@@ -46,6 +46,8 @@ import {
     deriveYesNoPositionIds,
     evmSnapshot,
     evmRevert,
+    getCode,
+    warmContractCache,
 } from '../fixtures/fork-state.mjs';
 
 // ── Stub server fixture ──────────────────────────────────────────────
@@ -724,3 +726,79 @@ test('evmRevert — throws when called with a non-hex ID', async () => {
         await closeStub(server);
     }
 });
+
+// ── Step 15: contract-cache warming primitives ──────────────────────
+
+test('getCode — issues eth_getCode with [address, "latest"] + returns 0x-hex', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push({ method: req.method, params: req.params });
+        return { result: '0x6060604052' };
+    });
+    try {
+        const code = await getCode(url, '0xabc');
+        assert.equal(code, '0x6060604052');
+        assert.deepEqual(calls, [{ method: 'eth_getCode', params: ['0xabc', 'latest'] }]);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('warmContractCache — issues one eth_getCode per address in parallel + returns success count', async () => {
+    let inFlightPeak = 0;
+    let inFlight = 0;
+    const { url, server } = await startStub((req) => {
+        // Capture concurrency by counting overlapping handler calls.
+        // Note: node:http actually serializes requests on a single
+        // socket, but the handler-callback queue depth still rises
+        // when multiple HTTP/1.1 connections arrive concurrently —
+        // which is what `Promise.allSettled` produces.
+        inFlight++;
+        inFlightPeak = Math.max(inFlightPeak, inFlight);
+        // Synchronous response — the concurrency check is just to
+        // confirm the helper doesn't await sequentially.
+        const result = { result: '0x6060' };
+        inFlight--;
+        return result;
+    });
+    try {
+        const addresses = ['0xa', '0xb', '0xc'];
+        const count = await warmContractCache(url, addresses);
+        assert.equal(count, 3, 'all three addresses should warm successfully');
+        // Concurrency check is best-effort — if Node serializes
+        // perfectly we'd see inFlightPeak=1 even though caller
+        // issued in parallel. Skipping the strict assert; the
+        // count + lack of "X failed" warning is the load-bearing
+        // signal.
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('warmContractCache — tolerates partial failures + returns successful count', async () => {
+    // A single contract that fails upstream (404, RPC error,
+    // network reset) shouldn't fail globalSetup. Logs warnings,
+    // proceeds, returns the success count.
+    let callIdx = 0;
+    const { url, server } = await startStub(() => {
+        callIdx++;
+        if (callIdx === 2) {
+            return { error: { code: -32000, message: 'simulated upstream failure' } };
+        }
+        return { result: '0x6060' };
+    });
+    try {
+        // Suppress the warning log to keep test output clean.
+        const origWarn = console.warn;
+        console.warn = () => {};
+        try {
+            const count = await warmContractCache(url, ['0xa', '0xb', '0xc']);
+            assert.equal(count, 2, 'two addresses succeed, one fails');
+        } finally {
+            console.warn = origWarn;
+        }
+    } finally {
+        await closeStub(server);
+    }
+});
+

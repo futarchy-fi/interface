@@ -50,6 +50,10 @@ import {
     evmSnapshot,
     SNAPSHOT_ID_FILE,
     HOOK_FALLBACK_POSITION_IDS,
+    warmContractCache,
+    warmErc20Balances,
+    PAGE_CONTRACT_ADDRESSES,
+    PAGE_ERC20_ADDRESSES,
 } from './fork-state.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -195,6 +199,39 @@ export default async function globalSetup() {
     console.log(
         `[fork-state-setup] CT positions funded (hook-fallback IDs) — ` +
         `currencyYes/No + companyYes/No each set to ${POSITION_FUND_AMOUNT_WEI / 10n ** 18n}`
+    );
+
+    // Step 15: pre-warm anvil's bytecode cache for the contracts the
+    // page reads during normal load. Without this, anvil's first
+    // eth_call to each contract waits on an upstream Gnosis RPC fetch
+    // (~1s each); a burst of those during scenario load can back up
+    // the request queue enough to time out a mid-test mutation
+    // primitive (the cold-anvil flake documented in step 13).
+    // Warming runs in parallel via `Promise.allSettled` so anvil
+    // pipelines the upstream fetches.
+    //
+    // Runs BEFORE the snapshot so the cache state is part of what
+    // gets restored on revert (anvil's bytecode cache survives
+    // evm_revert; restoring to a snapshot taken AFTER warming keeps
+    // every per-scenario beforeEach starting from a warm cache).
+    const warmStart = Date.now();
+    const warmCodeCount = await warmContractCache(RPC_URL, PAGE_CONTRACT_ADDRESSES);
+    // Also warm the storage slots the page reads — `eth_getCode`
+    // populates bytecode but anvil still upstream-fetches each
+    // storage slot separately. Issuing the same balanceOf eth_call
+    // the page eventually does primes both. ERC20-only — the
+    // non-ERC20 entries (rate provider, router, wrapper service)
+    // revert on balanceOf calls and are warmed by bytecode only.
+    // The CT contract's slots are already warm from globalSetup's
+    // setConditionalPosition + getConditionalPosition pairs.
+    const warmBalanceCount = await warmErc20Balances(
+        RPC_URL,
+        PAGE_ERC20_ADDRESSES,
+        wallet.address,
+    );
+    console.log(
+        `[fork-state-setup] anvil cache warmed — ${warmCodeCount}/${PAGE_CONTRACT_ADDRESSES.length} bytecodes + ` +
+        `${warmBalanceCount}/${PAGE_ERC20_ADDRESSES.length} balanceOf slots in ${Date.now() - warmStart}ms`
     );
 
     // Step 7: snapshot the post-funding state so per-scenario hooks
