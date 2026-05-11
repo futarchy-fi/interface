@@ -2313,6 +2313,125 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 56-dom-api-invariant-filter-chain-stress
+  (Phase 5 invariant catalog — 15th DOM↔API
+  invariant)** (this iteration, on the interface
+  side) — stress test of the filter chain across
+  all 8 combinations of (archived, hidden,
+  resolved) flags. Where slices 4b, 4f, 4g, and
+  4h each probe ONE filter branch in isolation
+  (single flag per proposal), this slice mocks
+  proposals with MULTIPLE flags set to verify
+  the filter chain is stable under realistic
+  mixed inputs.
+
+  * **The new invariant** —
+    `slice 4l — filter-chain stress test: 10
+    mixed-flag proposals → "3" / "6"`. Mock all
+    8 truth-table corners of
+    (archived, hidden, resolved) flags:
+      | flags                  | count | classification     |
+      |------------------------|-------|--------------------|
+      | normal (no flags)      | 3     | all 3 active       |
+      | archived only          | 1     | NOT in nonArchived |
+      | hidden only            | 1     | nonArchived, not active|
+      | resolved only          | 1     | nonArchived, not active|
+      | archived + hidden      | 1     | NOT in nonArchived |
+      | archived + resolved    | 1     | NOT in nonArchived |
+      | hidden + resolved      | 1     | nonArchived, not active|
+      | archived+hidden+resolved|1     | NOT in nonArchived |
+
+      Total raw: 10 proposals
+      nonArchived = 10 − 4 archived = 6
+      active = 3 (only truly-normal)
+
+    DOM renders "3" in td[2] and "6" in td[3].
+
+  * **Why this is the right next step**: with
+    4b/4f/4g/4h each probing single-flag inputs,
+    a refactor that breaks the COMPOSITION of
+    filters (rather than any individual filter)
+    would slip through. This slice pins the
+    composition by testing the filter chain
+    end-to-end with multi-flag data.
+
+  * **Bug classes caught** (NEW vs 4b, 4f, 4g,
+    4h — none of those exercise multi-flag
+    inputs):
+    - Filter chain that DOUBLE-COUNTS exclusions
+      when a proposal triggers multiple flags
+      (e.g., subtracts from total once per flag)
+      → renders lower numbers than expected
+    - Filter chain that applies hidden/resolved
+      checks BEFORE archived and then re-applies
+      archived → could leak archived proposals
+      into active if the second check is dropped
+      during a refactor
+    - Filter that uses a single `.filter()` with
+      combined boolean logic and gets precedence
+      wrong (e.g., `!(archived && hidden)`
+      instead of `!archived && !hidden`)
+    - Filter that special-cases the "all three"
+      proposal and miscounts it (treats it
+      differently than archived-only)
+    - Regression where filters operate on the
+      WRONG intermediate set (e.g., active
+      filter operates on original proposals[]
+      instead of nonArchived[]) — would render
+      active=4 instead of 3 because the
+      archived-only proposal would leak into
+      active
+
+  * **Cross-coverage interaction**: this slice
+    + 4b + 4f + 4g + 4h form a coverage
+    LATTICE — single-flag tests pin individual
+    branches; this multi-flag stress test pins
+    the COMPOSITION. A regression that breaks
+    any single branch shows up in the
+    corresponding single-flag test; a regression
+    that breaks the composition shows up here.
+    Together they form a complete defense of
+    the filter chain.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 15 DOM↔API invariant tests pass:
+      26.1s (was 14 in 24.1s); new slice 4l
+      alone: 1.6s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (15 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress ★   | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **What's next**:
+    - Org description field flow (analogous to
+      slice 4 v1's `name` field but for org's
+      `description`)
+    - Image/logo path (cover image vs fallback
+      `/assets/fallback-company.png`)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers flow through formatters)
+    - Cross-card-vs-row consistency (same data
+      mocked, both the carousel CARD and the
+      table ROW render matching content)
+
 - **slice 55-dom-api-invariant-precision-drop-branch
   (Phase 5 invariant catalog — 14th DOM↔API
   invariant; completes the price-precision triplet)**

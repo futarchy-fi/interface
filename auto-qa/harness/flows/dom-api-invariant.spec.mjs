@@ -549,6 +549,119 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row.locator('td').nth(4)).toHaveText('Gnosis');
     });
 
+    test('slice 4l — filter-chain stress test: 10 mixed-flag proposals → "3" / "6" (multi-flag combinations stable)', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Stress test of the filter chain across all 8 combinations
+        // of (archived, hidden, resolved) flags. Where 4b, 4f, 4g,
+        // and 4h each probe ONE filter branch in isolation (single
+        // flag per proposal), this slice mocks proposals with
+        // MULTIPLE flags set to verify the filter chain is stable
+        // under realistic mixed inputs.
+        //
+        // 8 proposals in the truth-table corners:
+        //   1. normal (no flags)         × 3 → all 3 active
+        //   2. archived only             × 1 → excluded by nonArchived
+        //   3. hidden only               × 1 → in nonArchived, not in active
+        //   4. resolved only             × 1 → in nonArchived, not in active
+        //   5. archived + hidden         × 1 → excluded by nonArchived
+        //   6. archived + resolved       × 1 → excluded by nonArchived
+        //   7. hidden + resolved         × 1 → in nonArchived, not in active
+        //   8. archived + hidden + resolved × 1 → excluded by nonArchived
+        //
+        //   Total proposals raw: 3 + 1×5 = 8 distinct flag patterns
+        //   (3 normals + 5 unique combinations + 0 duplicates of any
+        //   combo). Actually: 3 + 1 + 1 + 1 + 1 + 1 + 1 + 1 = 10
+        //   wait let me recount:
+        //
+        // Let me redo the math precisely:
+        //   normal:                       3 copies → all 3 ACTIVE
+        //   archived only:                1 copy   → NOT in nonArchived
+        //   hidden only:                  1 copy   → in nonArchived,
+        //                                            NOT in active
+        //   resolved only:                1 copy   → in nonArchived,
+        //                                            NOT in active
+        //   archived + hidden:            1 copy   → NOT in nonArchived
+        //   archived + resolved:          1 copy   → NOT in nonArchived
+        //   hidden + resolved:            1 copy   → in nonArchived,
+        //                                            NOT in active
+        //   archived + hidden + resolved: 1 copy   → NOT in nonArchived
+        //
+        //   Total: 3 + 1 + 1 + 1 + 1 + 1 + 1 + 1 = 10 proposals
+        //
+        //   nonArchived = 10 - 4 (archived ones) = 6
+        //     → 3 normal + 1 hidden + 1 resolved + 1 hidden+resolved
+        //   active      = 3 (only the truly-normal ones)
+        //
+        // Expected DOM: td[2]='3', td[3]='6'.
+        //
+        // Bug classes caught (NEW vs 4b, 4f, 4g, 4h — none of those
+        // exercise multi-flag inputs):
+        //   - Filter chain that DOUBLE-COUNTS exclusions when a
+        //     proposal triggers multiple flags (e.g., subtracts from
+        //     total once per flag) → would render lower numbers
+        //   - Filter chain that applies hidden/resolved checks BEFORE
+        //     archived check and then re-applies archived → could
+        //     leak archived proposals into active if the second
+        //     check is dropped during a refactor
+        //   - Filter that uses a single `.filter()` with combined
+        //     boolean logic and gets the precedence wrong (e.g.,
+        //     `!(archived && hidden)` instead of `!archived && !hidden`)
+        //   - Filter that special-cases the "all three" proposal
+        //     and miscounts it (treats it differently than the
+        //     archived-only one)
+        //   - Regression where the filters operate on the WRONG
+        //     intermediate set (e.g., active filter operates on
+        //     the original proposals[] instead of nonArchived[]) —
+        //     would render active=4 (3 normals + 1 archived-only,
+        //     because the archived flag is missed)
+        //
+        // Why this is the right next step: with 4b/4f/4g/4h each
+        // probing single-flag inputs, a refactor that breaks the
+        // COMPOSITION of filters (rather than any individual filter)
+        // would slip through. This slice pins the composition by
+        // testing the filter chain end-to-end with multi-flag data.
+
+        const proposals = [];
+        // 3 normal active
+        for (let i = 0; i < 3; i++) proposals.push(fakeProposal(`n${i}`));
+        // 1 archived only
+        proposals.push(fakeProposal('A', { archived: true }));
+        // 1 hidden only
+        proposals.push(fakeProposal('H', { visibility: 'hidden' }));
+        // 1 resolved only
+        proposals.push(fakeProposal('R', { resolution_status: 'resolved' }));
+        // 1 archived + hidden
+        proposals.push(fakeProposal('AH', { archived: true, visibility: 'hidden' }));
+        // 1 archived + resolved
+        proposals.push(fakeProposal('AR', { archived: true, resolution_status: 'resolved' }));
+        // 1 hidden + resolved
+        proposals.push(fakeProposal('HR', { visibility: 'hidden', resolution_status: 'resolved' }));
+        // 1 all three
+        proposals.push(fakeProposal('AHR', { archived: true, visibility: 'hidden', resolution_status: 'resolved' }));
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({ proposals }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        // active = 3 (only the 3 normal proposals; 4 are archived,
+        // 3 are hidden-or-resolved among the non-archived)
+        // nonArchived = 6 (10 raw - 4 archived)
+        await expect(row.locator('td').nth(2)).toHaveText('3');
+        await expect(row.locator('td').nth(3)).toHaveText('6');
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 
