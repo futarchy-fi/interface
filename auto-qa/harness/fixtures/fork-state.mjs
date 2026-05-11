@@ -1006,6 +1006,108 @@ export async function evmRevert(rpcUrl, snapshotId) {
     return true;
 }
 
+// ── Time control (slice 90) ─────────────────────────────────────────
+//
+// Anvil supports three RPC methods for chain-time manipulation:
+//   - evm_setNextBlockTimestamp(uint64)    — pin the next mined
+//     block's timestamp to an EXACT value
+//   - evm_increaseTime(uint64)             — relative bump (deltas
+//     accumulate until next block is mined)
+//   - evm_mine                             — force a new block now
+//     (uses last-set timestamp if any, else `now + 1s`)
+//
+// Together these unlock TIME-EVOLUTION scenarios (PR #54 TWAP class,
+// resolution-deadline behavior, vote-weight decay). Without them,
+// any test that needs to simulate "wait 24h then assert" would
+// have to actually wait 24h — not feasible in CI.
+//
+// Lineage: ganache-original RPC methods, also supported by hardhat
+// and anvil. Wrong-fork clients (geth/erigon/reth) lack them — the
+// api-side `anvilTimeWarpCapabilityPresent` invariant guards this.
+
+/**
+ * Read the latest block's timestamp from anvil. Useful for setting
+ * a relative time target (e.g., "now + 1h") without relying on
+ * wall-clock time, which can drift between the test runner and
+ * the chain.
+ *
+ * @param {string} rpcUrl
+ * @returns {Promise<number>} unix timestamp (seconds, integer)
+ */
+export async function getBlockTimestamp(rpcUrl) {
+    const block = await anvilRpc(rpcUrl, 'eth_getBlockByNumber', ['latest', false]);
+    if (!block || typeof block.timestamp !== 'string') {
+        throw new Error(`[fork-state] eth_getBlockByNumber returned unexpected shape: ${JSON.stringify(block)}`);
+    }
+    return parseInt(block.timestamp, 16);
+}
+
+/**
+ * Pin the NEXT mined block's timestamp. The next call to
+ * `mineBlock` will produce a block at exactly this timestamp;
+ * subsequent blocks resume from there.
+ *
+ * Useful for putting the chain into a specific date range — e.g.,
+ * past a proposal's `twapEnd` to exercise the PR #54 ended-proposal
+ * branch.
+ *
+ * @param {string} rpcUrl
+ * @param {number} timestamp  unix seconds (integer); must be ≥ the
+ *                            CURRENT block's timestamp + 1, else
+ *                            anvil rejects
+ */
+export async function setNextBlockTimestamp(rpcUrl, timestamp) {
+    if (!Number.isInteger(timestamp) || timestamp <= 0) {
+        throw new Error(`[fork-state] setNextBlockTimestamp requires positive integer seconds, got: ${timestamp}`);
+    }
+    await anvilRpc(rpcUrl, 'evm_setNextBlockTimestamp', [toHex(BigInt(timestamp))]);
+}
+
+/**
+ * Mine a single block. If `setNextBlockTimestamp` was called first,
+ * the new block uses that exact timestamp; otherwise anvil picks
+ * `previous + 1` (or wall-clock if no `evm_setNextBlockTimestamp`
+ * was issued in this session).
+ *
+ * Returns the new block's timestamp so callers can verify the
+ * advance without a second RPC.
+ *
+ * @param {string} rpcUrl
+ * @returns {Promise<number>} the mined block's unix timestamp
+ */
+export async function mineBlock(rpcUrl) {
+    await anvilRpc(rpcUrl, 'evm_mine', []);
+    return getBlockTimestamp(rpcUrl);
+}
+
+/**
+ * Convenience: advance chain time by `seconds` relative to the
+ * latest block, then mine. Equivalent to:
+ *   const now = await getBlockTimestamp(rpcUrl);
+ *   await setNextBlockTimestamp(rpcUrl, now + seconds);
+ *   await mineBlock(rpcUrl);
+ *
+ * Returns the new block's timestamp.
+ *
+ * Note: anvil also exposes `evm_increaseTime` which bumps a delta
+ * without immediately mining. This helper always mines for
+ * predictability — the page's polling has SOMETHING to observe
+ * after the call returns.
+ *
+ * @param {string} rpcUrl
+ * @param {number} seconds  positive integer (a future negative-seek
+ *                          could be a separate helper)
+ * @returns {Promise<number>}
+ */
+export async function advanceTime(rpcUrl, seconds) {
+    if (!Number.isInteger(seconds) || seconds < 0) {
+        throw new Error(`[fork-state] advanceTime requires non-negative integer seconds, got: ${seconds}`);
+    }
+    const now = await getBlockTimestamp(rpcUrl);
+    await setNextBlockTimestamp(rpcUrl, now + seconds);
+    return mineBlock(rpcUrl);
+}
+
 /**
  * Cross-process channel for the active snapshot ID. globalSetup
  * (`fork-state-setup.mjs`) writes here once after funding; the

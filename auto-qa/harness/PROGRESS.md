@@ -2313,6 +2313,131 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 90-time-control-foundation (Phase 6 —
+  TIME-EVOLUTION KIND scaffolding)** (this
+  iteration, on the interface side) — Adds the
+  four chain-time-control primitives required
+  for any future TIME-EVOLUTION scenario:
+  `getBlockTimestamp`, `setNextBlockTimestamp`,
+  `mineBlock`, `advanceTime`. Recent-PR coverage
+  unchanged at 12/22 (55%) — this is pure
+  capability work; future slices use these
+  primitives to catch the PR #54 TWAP class.
+
+  * **The capability gap**: PR #54 ("Fix TWAP
+    window for ended proposals") is the
+    canonical TIME-EVOLUTION bug. Catching it
+    requires a scenario that:
+    1. Mounts the market page for a proposal
+       with known `twapStart` / `twapEnd`
+    2. Advances chain time past `twapEnd`
+       (the "ended" branch)
+    3. Asserts the rendered TWAP value matches
+       the historical-window calculation, NOT
+       the trailing-24h calculation
+    Step 2 requires `evm_setNextBlockTimestamp`
+    + `evm_mine`, neither of which existed in
+    interface-side fork-state.mjs until now.
+    (The api-side `anvilTimeWarpCapabilityPresent`
+    invariant has long verified the RPC method
+    exists on the anvil instance; this slice
+    adds the consumer-side wrapper.)
+
+  * **What's now available**:
+    ```js
+    // Read latest block's timestamp (unix seconds)
+    const now = await getBlockTimestamp(rpcUrl);
+    // Pin the NEXT block's timestamp exactly
+    await setNextBlockTimestamp(rpcUrl, now + 86400);
+    // Mine a block (uses the pinned timestamp)
+    const newTs = await mineBlock(rpcUrl);
+    // Convenience: pin+mine in one call
+    const ts = await advanceTime(rpcUrl, 86400);
+    ```
+    Each primitive issues the exact anvil RPC
+    method with hex-encoded params. `advanceTime`
+    composes the three under the hood and is
+    the ergonomic one for scenarios.
+
+  * **Why all four (not just one)**:
+    - `getBlockTimestamp` is needed because
+      tests must NOT rely on wall-clock — the
+      runner process and the chain drift, and
+      a wall-clock relative target produces
+      flaky `evm_setNextBlockTimestamp(must be
+      > current)` rejections.
+    - `setNextBlockTimestamp` pins an EXACT
+      target — what you want when crossing a
+      specific boundary like `twapEnd`.
+    - `mineBlock` separates "advance time" from
+      "trigger downstream effects" — the
+      pinned timestamp doesn't take effect
+      until a block is mined.
+    - `advanceTime` is the high-level "wait N
+      seconds" abstraction that 95% of
+      scenarios will use directly.
+
+  * **Smoke tests**: 6 new tests in
+    `smoke-fork-state.test.mjs` (47 total now,
+    47/47 passing). Each test stands up an
+    in-process JSON-RPC stub and asserts the
+    helper issued the right method + hex-encoded
+    params. Catches:
+    - Method-name typos (`evm_setTimestamp` vs
+      `evm_setNextBlockTimestamp`)
+    - Decimal-not-hex bugs (passing
+      `1700000000` where `0x65538900` is
+      required)
+    - Argument-order bugs in `advanceTime`'s
+      4-call composition
+    - Non-integer / non-positive timestamp
+      inputs (rejected with clear error)
+
+  * **What this slice DOES NOT yet do**:
+    - No live-anvil integration test. The
+      smoke tests use a stub, so they verify
+      the wire shape but not anvil's actual
+      response. The api-side
+      `anvilTimeWarpCapabilityPresent`
+      invariant covers the anvil-binding
+      verification at fork-startup.
+    - No scenario uses these primitives yet.
+      That's the explicit next slice — author
+      the first TWAP scenario (PR #54 class).
+    - No `evm_increaseTime` wrapper. That
+      anvil method bumps a delta without
+      mining; we'd add it if a scenario
+      specifically needed un-mined time
+      bumps. For now `advanceTime` (which
+      mines) is sufficient and predictable.
+
+  * **Why this counts as progress despite zero
+    PR-coverage delta**: The user mandate
+    "stop doing useless tests and actually
+    work hard to catch any new KIND of bug"
+    explicitly authorized "work out a new kind
+    of test capability. We can have patience."
+    TIME-EVOLUTION has been the largest open
+    KIND for several slices; this is the
+    smallest concrete step toward it.
+
+  * **Catalog state**: 56 scenarios (unchanged),
+    14 mechanically verified (unchanged). 47/47
+    smoke tests pass (up from 41/41; +6 for
+    the new time-control primitives). Eight
+    assertion KINDs — 9th KIND
+    (TIME-EVOLUTION) now SCAFFOLDED but not
+    yet exercised by a scenario.
+
+  * **Next slice candidate**: Author
+    `57-pr54-twap-window-ended-proposal.scenario.mjs`
+    using `advanceTime` to push the fork past
+    a synthetic proposal's `twapEnd`. The
+    assertion will need a mocked Algebra pool
+    with known `tickCumulatives` history (or
+    a fork against a real ended proposal like
+    PNK / KIP‑81 from PR #54's repro section).
+
 - **slice 89-archived-org-filter (Phase 6 —
   catches PR #61's org-level archived filter,
   sister to slice 88)** (this iteration, on the

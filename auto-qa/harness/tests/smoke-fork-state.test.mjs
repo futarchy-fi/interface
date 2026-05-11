@@ -48,6 +48,10 @@ import {
     evmRevert,
     getCode,
     warmContractCache,
+    getBlockTimestamp,
+    setNextBlockTimestamp,
+    mineBlock,
+    advanceTime,
 } from '../fixtures/fork-state.mjs';
 
 // ── Stub server fixture ──────────────────────────────────────────────
@@ -883,5 +887,127 @@ test('warmContractCache — tolerates partial failures + returns successful coun
     } finally {
         await closeStub(server);
     }
+});
+
+// ── Time control (slice 90) ──────────────────────────────────────────
+//
+// Each helper issues a specific anvil RPC method with the right
+// param shape. The stub records every call so we can assert method
+// names + hex encoding (the easy regressions to ship: wrong method
+// name, decimal-not-hex timestamp, bigint-as-string mishandling).
+
+test('getBlockTimestamp — issues eth_getBlockByNumber("latest", false), parses hex timestamp', async () => {
+    const seen = [];
+    const HEX_TS = '0x65538900';
+    const DEC_TS = parseInt(HEX_TS, 16);
+    const { url, server } = await startStub((rpc) => {
+        seen.push(rpc);
+        return { result: { number: '0x1', timestamp: HEX_TS } };
+    });
+    try {
+        const ts = await getBlockTimestamp(url);
+        assert.equal(seen[0].method, 'eth_getBlockByNumber');
+        assert.deepEqual(seen[0].params, ['latest', false]);
+        assert.equal(ts, DEC_TS);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('setNextBlockTimestamp — issues evm_setNextBlockTimestamp with hex-encoded uint64', async () => {
+    const seen = [];
+    const TARGET_TS = 1_800_000_000;
+    const { url, server } = await startStub((rpc) => {
+        seen.push(rpc);
+        return { result: null };
+    });
+    try {
+        await setNextBlockTimestamp(url, TARGET_TS);
+        assert.equal(seen[0].method, 'evm_setNextBlockTimestamp');
+        assert.deepEqual(seen[0].params, [`0x${TARGET_TS.toString(16)}`]);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('setNextBlockTimestamp — rejects non-integer or non-positive seconds', async () => {
+    await assert.rejects(
+        () => setNextBlockTimestamp('http://localhost:1', 0),
+        /positive integer/,
+    );
+    await assert.rejects(
+        () => setNextBlockTimestamp('http://localhost:1', -5),
+        /positive integer/,
+    );
+    await assert.rejects(
+        () => setNextBlockTimestamp('http://localhost:1', 1.5),
+        /positive integer/,
+    );
+});
+
+test('mineBlock — issues evm_mine then reads back via getBlockTimestamp', async () => {
+    const seen = [];
+    const { url, server } = await startStub((rpc) => {
+        seen.push(rpc);
+        if (rpc.method === 'evm_mine') return { result: '0x0' };
+        if (rpc.method === 'eth_getBlockByNumber') {
+            return { result: { number: '0x2', timestamp: '0x65538a00' } };
+        }
+        return { error: { message: `unexpected method ${rpc.method}` } };
+    });
+    try {
+        const ts = await mineBlock(url);
+        assert.equal(seen.length, 2, 'one mine + one read');
+        assert.equal(seen[0].method, 'evm_mine');
+        assert.deepEqual(seen[0].params, []);
+        assert.equal(seen[1].method, 'eth_getBlockByNumber');
+        // 0x65538a00 = 1_700_000_256
+        assert.equal(ts, 0x65538a00);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('advanceTime — sequence: getBlockTimestamp → setNextBlockTimestamp(now+seconds) → mineBlock', async () => {
+    const seen = [];
+    const NOW = 1_700_000_000;       // 0x65538900
+    const DELTA = 3600;
+    const TARGET = NOW + DELTA;      // 1_700_003_600 = 0x65539710
+
+    const { url, server } = await startStub((rpc) => {
+        seen.push(rpc);
+        if (rpc.method === 'eth_getBlockByNumber') {
+            // First call (in advanceTime) returns NOW; second (in mineBlock-after-mine) returns TARGET.
+            const ts = seen.filter((c) => c.method === 'eth_getBlockByNumber').length === 1
+                ? NOW : TARGET;
+            return { result: { number: '0x1', timestamp: `0x${ts.toString(16)}` } };
+        }
+        if (rpc.method === 'evm_setNextBlockTimestamp') return { result: null };
+        if (rpc.method === 'evm_mine') return { result: '0x0' };
+        return { error: { message: `unexpected method ${rpc.method}` } };
+    });
+    try {
+        const newTs = await advanceTime(url, DELTA);
+        assert.equal(seen.length, 4, 'getBlock + setNextBlock + mine + getBlock');
+        assert.equal(seen[0].method, 'eth_getBlockByNumber');
+        assert.equal(seen[1].method, 'evm_setNextBlockTimestamp');
+        assert.deepEqual(seen[1].params, [`0x${TARGET.toString(16)}`]);
+        assert.equal(seen[2].method, 'evm_mine');
+        assert.equal(seen[3].method, 'eth_getBlockByNumber');
+        assert.equal(newTs, TARGET);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('advanceTime — rejects non-integer or negative seconds', async () => {
+    await assert.rejects(
+        () => advanceTime('http://localhost:1', -1),
+        /non-negative integer/,
+    );
+    await assert.rejects(
+        () => advanceTime('http://localhost:1', 1.5),
+        /non-negative integer/,
+    );
 });
 
