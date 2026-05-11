@@ -101,6 +101,16 @@ export default defineConfig({
     // pre-funds 10 accounts with 10k ETH each for impersonation
     // workflows. Fork URL defaults to a public Gnosis RPC and can
     // be overridden via FORK_URL.
+    //
+    // **Step 19 diagnostic**: set `HARNESS_ANVIL_LOG=1` to drop
+    // `--silent` and redirect anvil's verbose RPC log (each
+    // method + params + timing) to `/tmp/anvil-harness.log`. Used
+    // to correlate test-side timeouts (e.g., "setStorageAt aborted
+    // at 60s") with what anvil was actually doing during the dead
+    // period. The redirect goes through `sh -c` because Playwright
+    // doesn't accept a redirect operator in the bare command.
+    // OFF by default to keep the warm path unchanged + avoid disk
+    // churn on every CI run.
     webServer: process.env.HARNESS_NO_WEBSERVER ? undefined : [
         {
             command: 'npm --prefix ../../ run dev',
@@ -135,7 +145,9 @@ export default defineConfig({
             },
         },
         ...(process.env.HARNESS_NO_ANVIL ? [] : [{
-            command: `anvil --fork-url ${process.env.FORK_URL || 'https://rpc.gnosis.gateway.fm'} --port 8546 --chain-id 100 --accounts 10 --balance 10000 --silent`,
+            command: process.env.HARNESS_ANVIL_LOG
+                ? `sh -c "anvil --fork-url ${process.env.FORK_URL || 'https://rpc.gnosis.gateway.fm'} --port 8546 --chain-id 100 --accounts 10 --balance 10000 > /tmp/anvil-harness.log 2>&1"`
+                : `anvil --fork-url ${process.env.FORK_URL || 'https://rpc.gnosis.gateway.fm'} --port 8546 --chain-id 100 --accounts 10 --balance 10000 --silent`,
             url: 'http://localhost:8546',
             reuseExistingServer: !process.env.CI,
             timeout: 60_000,

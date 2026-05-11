@@ -2313,6 +2313,127 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-19-anvil-log-capture
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — drops `--silent` from anvil's
+  webServer command (gated on `HARNESS_ANVIL_LOG=1`)
+  and redirects its RPC log to
+  `/tmp/anvil-harness.log`. Diagnostic-first: steps
+  17 + 18 hit the same setStorageAt 60s timeout but
+  couldn't see what anvil was doing during the
+  dead period. **Surprising finding**: anvil
+  RECEIVED the setStorageAt and stayed responsive
+  to subsequent requests — the issue isn't that
+  anvil hung, it's that the response never reached
+  our `fetch` within 60s.
+
+  * **The change** —
+    `playwright.config.mjs` now picks the anvil
+    command based on `HARNESS_ANVIL_LOG`:
+    - default: `--silent` (zero-overhead, prior
+      behaviour)
+    - `HARNESS_ANVIL_LOG=1`:
+      `sh -c "anvil ... > /tmp/anvil-harness.log
+      2>&1"` (verbose RPC log captured)
+    Wrapping in `sh -c` because Playwright's
+    webServer doesn't accept shell redirection
+    operators in the bare command. Off by default
+    so warm/CI runs don't churn disk.
+
+  * **What we ran** — `HARNESS_ANVIL_LOG=1
+    npm run ui:full -- ... --grep "1[57]-market"`
+    on cold anvil (#15 + #17 only). Both still
+    fail with `setStorageAt aborted after 60s` —
+    same exact pattern as steps 17/18.
+
+  * **What the anvil log showed** — 295 lines
+    capturing one method per line (default INFO
+    log gives method names but no params/timing —
+    bumping to RUST_LOG=trace would give more in
+    a follow-up). Key sequence around the failure:
+    ```
+    line 110: evm_snapshot       (globalSetup)
+    line 111: evm_revert         (#15 beforeEach)
+    line 112: evm_snapshot       (#15 beforeEach)
+    lines 113-145: page polling  (eth_call x N,
+                                  eth_blockNumber)
+    line 146: anvil_setStorageAt (#15 mutation —
+                                  THIS is what
+                                  test waits 60s
+                                  for)
+    lines 147-237: page polling  (90+ more events!
+                                  eth_call burst,
+                                  then 22x
+                                  eth_blockNumber,
+                                  then more
+                                  eth_call etc.)
+    line 238: anvil_setStorageAt (#17 mutation —
+                                  same timeout
+                                  pattern)
+    ```
+
+  * **The big inference** — anvil printed 90+
+    requests AFTER receiving the setStorageAt that
+    our test was waiting for. Anvil's worker
+    threads were processing those just fine. So
+    anvil is NOT stuck on the setStorageAt
+    request. Either:
+    - The setStorageAt response was sent by anvil
+      but lost between the socket and our `fetch`
+      (network / kernel / Node / abort-controller
+      interaction)
+    - The setStorageAt response was never sent
+      because something in anvil's response path
+      is silently dropping it under load (anvil
+      bug or config issue)
+    Either way, the queue-saturation hypothesis
+    from steps 17 + 18 is now demonstrably wrong:
+    anvil's queue WAS draining; the response just
+    didn't come back.
+
+  * **Why this is good progress even though the
+    flake persists** — we can stop trying to
+    drain anvil's queue (steps 17/18 were
+    well-intentioned but wrong fix) and focus on
+    the actual issue: response lifecycle. Step 20
+    candidates:
+    - Read-back probe right after the
+      setStorageAt timeout: if `getErc20Balance`
+      returns the post-mutation value, anvil DID
+      write — proving the response was lost in
+      transit. That's a clean diagnostic.
+    - Bump anvilRpc to use a longer timeout
+      (120s) and see if the response eventually
+      arrives — shorter test for "lost vs slow".
+    - Try `connection: close` header on the
+      anvilRpc fetch to bypass keepalive
+      coalescing.
+    - Bump anvil to RUST_LOG=trace to get
+      response-side log (when anvil sends, not
+      just receives).
+
+  * **What this DOES give us going forward**:
+    - `HARNESS_ANVIL_LOG=1` is now a one-flag
+      toggle for any future anvil-side
+      investigation. Drop the flag, get
+      zero-overhead production runs back.
+    - The "anvil's queue is fine, the response
+      just doesn't come back" finding redirects
+      the investigation. Steps 17 + 18's drain
+      knobs aren't useful for THIS flake but stay
+      in the toolkit for future "atomic mutation
+      vs page race" needs.
+
+  * **Live re-validation**:
+    - Smoke tests: 76/76 (no test changes — only
+      the playwright.config.mjs gating)
+    - Cold scenarios (#15 + #17): 0/2 (both fail
+      same pattern; the diagnostic was the goal,
+      not a fix)
+    - Warm path: unchanged (`HARNESS_ANVIL_LOG`
+      defaults off → identical command to
+      pre-step-19)
+
 - **slice fork-bootstrap-step-18-drain-wait
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — extends `withPaused(fn)` with
