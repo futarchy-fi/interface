@@ -2313,6 +2313,144 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 61-dom-api-invariant-href-attribute
+  (Phase 5 invariant catalog — 20th DOM↔API
+  invariant; opens HREF attribute dimension)**
+  (this iteration, on the interface side) —
+  opens a NEW attribute-class dimension: `href`
+  on navigation links. Where the prior 4
+  attribute-level invariants (4m/4n/4o/4p) all
+  probe `<img src="...">`, this slice probes
+  `<a href="...">` — a different attribute with
+  different bug-shape risks (navigation rather
+  than asset loading).
+
+  * **The new invariant** —
+    `slice 4q — href on event card link`. Mock
+    pool-bearing proposal (with
+    PROBE_PROPOSAL_ADDRESS). Find the event
+    card's `<a>` via
+    `getByRole('link').filter({hasText: title})`.
+    Two assertions:
+      - href matches `/proposalId=/` (production
+        URL form per feature flag)
+      - href matches the PROBE_PROPOSAL_ADDRESS
+        (proves proposal address flows through)
+
+  * **Empirical finding during this slice
+    (worth pinning)**:
+    `src/config/featureFlags.js:11` shows
+    `USE_QUERY_PARAM_URLS = true` in production
+    — so the actual URL form is
+    `/market?proposalId=<addr>` NOT
+    `/markets/<addr>`. My initial assertion
+    was wrong; the failing test pointed me at
+    the feature-flag default. Future href tests
+    must check this flag rather than assume the
+    path-segment form.
+
+  * **Why two assertions for sharper bug-class
+    isolation**:
+    - (a) href contains `proposalId=` — proves
+      the query-param URL form is engaged
+    - (b) href contains PROBE_PROPOSAL_ADDRESS
+      — proves the proposal's address flows
+      through from registry data to the
+      navigation URL
+    A regression that breaks (a) but not (b)
+    means the URL form changed but the address
+    still flows. A regression that breaks (b)
+    but not (a) means the form is OK but the
+    address is wrong/missing. The split makes
+    failure logs precise.
+
+  * **Bug classes caught** (NEW dimension —
+    href vs prior img.src attribute tests):
+    - Regression that breaks the marketUrl
+      template (e.g., dropping `/` prefix)
+    - Regression that uses the wrong field
+      (`${event.id}` vs `${event.eventId}`)
+    - Regression that drops the proposalId
+      parameter entirely
+    - Regression that flips USE_QUERY_PARAM_URLS
+      to false — would render `/markets/<addr>`
+      instead; the `proposalId=` substring
+      would no longer appear
+    - Regression that hardcodes a static query
+      value (all cards link to same proposalId)
+      — caught by assertion (b) which pins the
+      specific PROBE_PROPOSAL_ADDRESS
+
+  * **Why this matters**: the event card is
+    the user's primary entry point to a market
+    page from the /companies listing. A
+    regression that breaks the href would route
+    every user click to a 404 or wrong page —
+    visible product bug affecting the entire
+    navigation flow. The card-anchor's href
+    is the only "deep link" out of the
+    /companies page, so it's structurally
+    critical.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 20 DOM↔API invariant tests pass:
+      36.0s (was 19 in 30.6s); new slice 4q
+      alone: 5.4s on first run (longer than
+      the typical ~1.5s because the carousel
+      pipeline requires more async data flow
+      to mount the link)
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (20 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4m logo fallback     | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4n cover-image       | coverImage='/test-probe-cover.png' → img.src       |
+    | slice 4o logo-only         | logo='/test-probe-logo.png' → img.src              |
+    | slice 4p img precedence    | both set → coverImage wins; logo NOT in src        |
+    | slice 4q href on card ★    | event card anchor → /market?proposalId=<addr>      |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: 13 invariants
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: **5 invariants**
+      (was 4; image-cascade lattice +
+      href on event card)
+    Within attribute-level: 4 for `img.src`
+    (image cascade) + 1 for `a.href` (event
+    card link). Two sub-dimensions of
+    attribute-level testing now active.
+
+  * **What's next**:
+    - href tests for the OrgRow's nav (currently
+      uses onClick, not href — may need a
+      different probe pattern via click + url
+      check)
+    - aria-label on active/total cells (a11y
+      dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers in the carousel card)
+    - Card title rendering precision (e.g.,
+      `displayNameEvent` vs `displayNameQuestion`
+      precedence)
+
 - **slice 60-dom-api-invariant-image-cascade-precedence
   (Phase 5 invariant catalog — 19th DOM↔API
   invariant; image-cascade PRECEDENCE test)**

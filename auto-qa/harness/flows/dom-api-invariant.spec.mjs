@@ -50,6 +50,7 @@ import {
     PROBE_ORG_NAME,
     PROBE_POOL_YES,
     PROBE_POOL_NO,
+    PROBE_PROPOSAL_ADDRESS,
     makeGraphqlMockHandler,
     makeCandlesMockHandler,
     fakeProposal,
@@ -1015,6 +1016,120 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         // coverImage is the sole rendered asset; sharpens the
         // probe against multi-image refactors).
         await expect(img).not.toHaveAttribute('src', /test-probe-logo/);
+    });
+
+    test('slice 4q — href on event card link: proposal address flows through to /market?proposalId= URL', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Opens the href-attribute dimension. Where the image
+        // triplet (4m/4n/4o/4p) probes `<img src="...">`, this
+        // slice probes `<a href="...">` — a different attribute
+        // class with different bug-shape risks (navigation rather
+        // than asset loading).
+        //
+        // Per `src/components/futarchyFi/companyList/cards/
+        // highlightCards/EventHighlightCard.jsx:307-310,314`:
+        //   const marketUrl = USE_QUERY_PARAM_URLS
+        //     ? `/market?proposalId=${eventId}`
+        //     : `/markets/${eventId}`;
+        //   ...
+        //   <a href={marketUrl} ...>
+        //
+        // The current production default (per
+        // `src/config/featureFlags.js:11`): USE_QUERY_PARAM_URLS
+        // = true, so the carousel-card link points at
+        // `/market?proposalId=${eventId}` (NOT `/markets/`).
+        // The eventId comes from `event.eventId` (which the
+        // carousel's transformOrgToCard derives from the
+        // proposal's address). With our pool-bearing proposal
+        // fixture using PROBE_PROPOSAL_ADDRESS
+        // ('0xbbbb...bbbb'), the href should contain
+        // `proposalId=0xbbbb...bbbb`.
+        //
+        // Note: this slice deliberately pins the
+        // USE_QUERY_PARAM_URLS=true behavior because that's the
+        // current production state. A future iteration can add
+        // a companion test that flips the flag (or stubs the
+        // import) to also pin the `/markets/${eventId}` form,
+        // closing the precedence-coverage analogy with the
+        // image triplet's 4p slice.
+        //
+        // Why this matters: the event card is the user's primary
+        // entry point to a market page from the /companies
+        // listing. A regression that breaks the href would route
+        // every user click to a 404 or wrong page — visible
+        // product bug affecting the entire navigation flow.
+        //
+        // Bug classes caught (NEW dimension — href vs prior
+        // img.src attribute-level tests):
+        //   - Regression that breaks the marketUrl template
+        //     (e.g., dropping the `/` prefix → relative-URL
+        //     navigation goes to `./market?...` which depends
+        //     on the current path — likely 404)
+        //   - Regression that uses the wrong field for the URL
+        //     query value (e.g., `${event.id}` instead of
+        //     `${event.eventId}` — they may differ subtly)
+        //   - Regression that drops the proposalId parameter
+        //     entirely (e.g., `/market` only) — every card
+        //     would route to the same generic page
+        //   - Regression that flips USE_QUERY_PARAM_URLS to
+        //     false — would render `/markets/<addr>` instead;
+        //     this test catches the flip because
+        //     `proposalId=` wouldn't appear in the path form
+        //   - Regression that hardcodes a static query value
+        //     (e.g., all cards link to the same proposalId)
+        //     — caught by the SECOND assertion below which
+        //     pins the specific PROBE_PROPOSAL_ADDRESS
+        //
+        // Two assertions for sharper bug-class isolation:
+        //   (a) href contains `proposalId=` (proves the
+        //       query-param URL form is engaged)
+        //   (b) href contains the PROBE_PROPOSAL_ADDRESS
+        //       (proves the proposal's address flows through
+        //       from registry data to the navigation URL)
+
+        const richProposal = fakePoolBearingProposal({});
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Wait for the event card to mount (proves the carousel
+        // pipeline got far enough to render the link).
+        await expect(
+            page.getByText('HARNESS-PROBE-EVENT-001').first(),
+        ).toBeVisible({ timeout: 30_000 });
+
+        // The card's anchor wraps the entire card content. Find
+        // it by getRole('link') filtered to one that contains
+        // the probe event title. Multiple <a> elements may exist
+        // on the page (nav, footer, etc.), so the filter is
+        // critical for picking the right one.
+        const eventLink = page.getByRole('link').filter({
+            hasText: 'HARNESS-PROBE-EVENT-001',
+        }).first();
+        await expect(eventLink).toBeVisible({ timeout: 15_000 });
+        // (a) Assert href uses the query-param URL form (per
+        //     production feature flag default).
+        await expect(eventLink).toHaveAttribute('href', /proposalId=/);
+        // (b) Assert the PROBE_PROPOSAL_ADDRESS flows through.
+        //     `PROBE_PROPOSAL_ADDRESS` is already lowercase in
+        //     the fixture so no casing normalization is needed;
+        //     this would only fail if the carousel renamed the
+        //     field or applied a transform that drops the
+        //     low-bit hex characters.
+        await expect(eventLink).toHaveAttribute(
+            'href',
+            new RegExp(PROBE_PROPOSAL_ADDRESS, 'i'),
+        );
     });
 
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
