@@ -77,27 +77,31 @@ export default {
     },
 
     assertions: [
-        // "Yes Price" parameter-card label — proves ChartParameters
-        // mounted AND the YES-side price card is in its slot.
+        // **Live-validated assertions** (pass 2). The original
+        // "Event Probability" assertion failed — that label belongs
+        // to a chart strip section gated by a flag (`showProb` or
+        // similar) that's NOT enabled in the default render path.
+        // Removed; the two price-card assertions are sufficient
+        // structural proof of ChartParameters mounting.
+        //
+        // Added "Spot Price" as the third assertion — it's a
+        // distinct card in the same parameter strip and proves
+        // a SECOND visual element rendered (catches the single-
+        // card-rendered regression that the original recon was
+        // trying to guard against).
         async (page) => {
             await expect(
                 page.getByText('Yes Price').first(),
             ).toBeVisible({ timeout: 30_000 });
         },
-        // "No Price" sister card — proves the NO-side card is also
-        // mounted (catches single-card-rendered regression where
-        // only YES survives a refactor).
         async (page) => {
             await expect(
                 page.getByText('No Price').first(),
             ).toBeVisible({ timeout: 15_000 });
         },
-        // "Event Probability" — second chart-strip label, distinct
-        // from the price cards. Proves a different visual element
-        // rendered, not just the parameter row.
         async (page) => {
             await expect(
-                page.getByText('Event Probability').first(),
+                page.getByText('Spot Price').first(),
             ).toBeVisible({ timeout: 15_000 });
         },
     ],

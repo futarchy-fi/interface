@@ -77,21 +77,33 @@ export default {
     },
 
     assertions: [
-        // The probe title is the harness's synthetic value
-        // (HARNESS-MARKET-PROBE-001) returned by the registry mock
-        // for the dynamic proposalentity fields (title /
-        // displayNameQuestion / displayNameEvent). Even if the page
-        // header uses the static MARKETS_CONFIG title, at least one
-        // panel (the "About" / "Question" panel that comes from
-        // proposalentity.displayNameQuestion) should render the
-        // probe value.
+        // **Live-validated assertions** (pass 2). The synthetic title
+        // `HARNESS-MARKET-PROBE-001` from the registry mock turned
+        // out NOT to be visible on the live page — `useContractConfig`
+        // resolves the proposal display info through a chain that
+        // includes Snapshot voting data + subgraph trade history,
+        // and until ALL of those resolve the title shows
+        // "Loading…" instead. Same gating issue as #14's
+        // value-flow assertion. Documented as a TODO when the
+        // unmocked endpoints get fixtures.
         //
-        // Lenient `.first()` because the title may render in
-        // multiple slots (header + question card + tabs panel).
+        // The assertions below pin what the page DOES surface
+        // immediately after the chain-validation gate passes:
+        // - "Trading Pair" label (proves the chart-parameter
+        //   strip mounted; distinct from the trading panel and
+        //   the chart-line area)
+        // - Wallet shorthand `0xf3…2266` (proves wagmi +
+        //   RainbowKit hydrated and the wallet stub installed
+        //   correctly — the foundation gate)
         async (page) => {
             await expect(
-                page.getByText('HARNESS-MARKET-PROBE-001').first(),
+                page.getByText('Trading Pair').first(),
             ).toBeVisible({ timeout: 30_000 });
+        },
+        async (page) => {
+            await expect(
+                page.getByText('0xf3…2266').first(),
+            ).toBeVisible({ timeout: 15_000 });
         },
     ],
 

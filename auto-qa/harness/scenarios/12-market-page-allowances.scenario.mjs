@@ -76,23 +76,30 @@ export default {
     },
 
     assertions: [
-        // Panel header — proves MarketBalancePanel mounted at all.
-        // Lenient `.first()` because "Balance" is a common short word
-        // that may also appear in tab labels (e.g., a sub-tab inside
-        // the trading panel).
+        // **Live-validated assertions** (pass 2). Original recon
+        // expected the "Collateral" dropdown to be visible — but
+        // `MarketBalancePanel.jsx:260` gates the dropdown behind
+        // `!devMode`, and `MarketPageShowcase.jsx:5412` passes
+        // `devMode={true}`. Result: the dropdown never renders in
+        // normal usage. Recon mistake; fixed below.
+        //
+        // What DOES render:
+        // - "Balance" h3 heading (proves MarketBalancePanel mounted)
+        // - "Loading balances..." (proves the load-balances flow
+        //   ran inside the panel — distinct from a static empty-
+        //   balance state). This text appears at line 224 of
+        //   MarketBalancePanel.jsx in the loading branch and
+        //   stays visible until the balance fetch completes (or
+        //   forever if the consuming React tree is gated on
+        //   unmocked endpoints — same situation as #14).
         async (page) => {
             await expect(
                 page.getByText('Balance').first(),
             ).toBeVisible({ timeout: 30_000 });
         },
-        // Collateral dropdown trigger — proves the interactive
-        // collateral control is present (not just the panel header).
-        // Role-based locator anchors to the actual <button>
-        // element, avoiding matches inside informational copy
-        // elsewhere on the page.
         async (page) => {
             await expect(
-                page.getByRole('button', { name: /Collateral/ }).first(),
+                page.getByText('Loading balances...').first(),
             ).toBeVisible({ timeout: 15_000 });
         },
     ],

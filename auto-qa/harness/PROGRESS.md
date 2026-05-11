@@ -2313,6 +2313,109 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice live-validation-pass-2 (Phase 7 fork-bootstrap)**
+  (this iteration, on the interface side) — fixed
+  the 3 assertion mismatches surfaced by pass 1.
+  **All 14 scenarios now pass live end-to-end**.
+
+  * **Diagnoses from Playwright snapshots**:
+
+    1. **#10 happy** — synthetic title
+       `HARNESS-MARKET-PROBE-001` not visible on the
+       live page. The proposal title is gated through
+       `useContractConfig` → registry GraphQL (mocked)
+       + Snapshot voting + subgraph trade history;
+       until ALL resolve, the header shows "Loading…".
+       Same value-flow gap as #14. **Fix**: assert
+       `Trading Pair` label (chart-parameter strip
+       — distinct from trading panel and chart area)
+       + wallet shorthand `0xf3…2266` (proves
+       wagmi+RainbowKit hydrated AND the wallet stub
+       installed).
+
+    2. **#12 allowances** — `Collateral` dropdown
+       NEVER renders in normal usage.
+       `MarketBalancePanel.jsx:260` gates it behind
+       `!devMode`; `MarketPageShowcase.jsx:5412`
+       passes `devMode={true}`. Recon mistake; the
+       dropdown is dev-only. **Fix**: replace
+       Collateral assertion with
+       `Loading balances...` (proves the load-
+       balances flow ran inside the panel; distinct
+       from a static empty-balance state).
+
+    3. **#13 charts** — `Event Probability` label
+       belongs to a chart strip section gated by a
+       flag (`showProb` or similar) that's NOT
+       enabled in the default render path. **Fix**:
+       replace with `Spot Price` (distinct
+       parameter-strip card; proves a SECOND visual
+       element rendered alongside Yes Price + No Price
+       — catches the single-card-rendered regression).
+
+  * **Live-validation results (final)**:
+    ```
+    Running 14 tests using 1 worker
+    ✓ 01-stale-price-shape          (3.2s)
+    ✓ 02-registry-down              (2.8s)
+    ✓ 03-candles-down               (1.2s)
+    ✓ 04-candles-partial            (1.3s)
+    ✓ 05-registry-empty-orgs        (1.1s)
+    ✓ 06-both-endpoints-down        (1.1s)
+    ✓ 07-registry-malformed-body    (1.1s)
+    ✓ 08-candles-malformed-body     (1.2s)
+    ✓ 09-registry-corrupt-org       (1.2s)
+    ✓ 10-market-page-happy          (3.3s)
+    ✓ 11-market-page-trading        (2.8s)
+    ✓ 12-market-page-allowances     (2.8s)
+    ✓ 13-market-page-charts         (2.8s)
+    ✓ 14-market-page-positions      (2.7s)
+    14 passed (~31s total)
+    ```
+    All 14 scenarios pass live with the harness
+    running:
+    - Next.js dev server (hot since previous slice)
+    - Anvil fork at port 8546 (Gnosis @ latest)
+    - globalSetup pre-funds 10000 ETH + 1000 sDAI +
+      100 YES + 100 NO
+
+  * **Why this is a major milestone**: it's the FIRST
+    time the harness has been validated end-to-end
+    against a live page. Every prior slice was
+    smoke-tested against in-process stubs; this is
+    real Playwright + real Next.js + real anvil fork
+    + real wallet stub + real GraphQL mocks. The
+    smoke tests caught lots of bugs in the fixture
+    layer (dispatch logic, helper signatures); the
+    live run caught bugs the smoke tests STRUCTURALLY
+    couldn't (Supabase env, address case, gating
+    flags, value-flow waits).
+
+  * **Lesson reinforced**: live-validate every
+    scenario at least once before piling more on
+    top. Smoke tests cover MECHANICS; live runs
+    cover BEHAVIOR.
+
+  * **Smoke totals**: 51/51 pass (unchanged — only
+    scenario assertions changed, not fixtures).
+    SCENARIOS.md regenerated.
+
+  * **Multi-iteration plan progress**:
+    - ✓ Steps 1, 2, 2.5-2.9 (fork bootstrap)
+    - ✓ Step 4 (positions scenario)
+    - ✓ Live-validation pass 1 (env + case fixes)
+    - ✓ Live-validation pass 2 (this slice — all 14
+      scenarios pass live)
+    - ⏳ Step 5: subgraph-trades + snapshot + spot-
+      price mocks. Unblocks:
+      - #14's full value-flow assertion
+        (`100.0000` text)
+      - #10's synthetic-title assertion
+      - #12's actual balance display
+    - ⏳ Step 6: CI workflow Foundry install step
+      (bring CI in line with this iteration's
+      live-pass capability)
+
 - **slice live-validation-pass-1 (Phase 7 fork-bootstrap)**
   (this iteration, on the interface side) — **first
   end-to-end live Playwright run** of the market-page
