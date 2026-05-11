@@ -2313,6 +2313,88 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 27-scenario-24-market-page-registry-down
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — OPENS the chaos matrix on a
+  NEW page: /markets/[address]. Mirror of #02
+  (registry 502 on /companies) but applied to the
+  market page's distinct data-dependency graph.
+  Tests that the static MARKETS_CONFIG entry is
+  sufficient to mount the page-shell even when
+  the registry-side enrichment is dead — registry
+  is ENRICHMENT, not the foundation.
+
+  * **The scenario** — `24-market-page-registry-
+    down` on /markets/<MARKET_PROBE_ADDRESS>.
+    Registry GraphQL returns 502 + candles
+    happy path. Two assertions: "Trading Pair"
+    label visible (chart-parameter strip
+    mounted) + wallet shorthand visible (wagmi
+    hydrated regardless of registry state).
+
+  * **Distinct from #02** (same failure mode,
+    different page) because /companies and the
+    market page have completely different
+    degradation contracts:
+    - /companies: registry IS the foundation —
+      no orgs → no carousel → empty state
+    - /markets/[address]: registry is
+      ENRICHMENT — page-shell mounts from static
+      MARKETS_CONFIG, registry just fills in
+      title/description/etc
+
+  * **Bug-shapes captured** (NEW vs #02):
+    - Market-page CRASHES on registry 502 (no
+      defensive `.catch` in
+      `registryAdapter.fetchProposalMetadataFromRegistry`
+      caller chain, error bubbles to React
+      error boundary)
+    - Page-shell HANGS in loading state forever
+      (loading flag never clears on registry
+      `.catch` branch in `useContractConfig`
+      or its callers)
+    - "Bad Gateway: ..." raw error leaked to a
+      panel header / modal (error rendering
+      bypasses UX-grade error wrapper)
+    - "Market Not Found" gate FALSE-POSITIVE —
+      registry-down triggers the wrong code path
+      that should fire only on missing-from-
+      MARKETS_CONFIG (would mask the real
+      "this market isn't configured" signal)
+    - WrongNetworkModal incorrectly fires —
+      chain validation should NOT depend on
+      registry availability; a regression that
+      gates chain check on registry success
+      would surface the modal on every
+      registry blip
+
+  * **What this opens up** — the market page's
+    chaos matrix is now started. The previous
+    market-page scenarios (#10-#18) covered the
+    happy path + UI-region foundations + first
+    mutation scenarios; #24 is the FIRST chaos
+    cell. Mirror the /companies matrix for
+    /markets/[address]:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24 ★    |   —     |
+    | partial response  |   —      |   —     |
+    | empty 200         |   —      |   —     |
+    | malformed body    |   —      |   —     |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   |   —      |   —     |
+    1 of 12 cells filled. The candles side will
+    use `makeMarketCandlesMockHandler` instead
+    of `makeCandlesMockHandler` because the
+    market page emits 4 distinct candles query
+    shapes (vs the carousel's 1).
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #24 itself: passed in 11.5s on
+      first run
+    - Catalog regenerated: 24 scenarios (was 23)
+
 - **slice 26-scenario-23-candles-corrupt-pool
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the LAST cell of the
