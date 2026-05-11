@@ -2313,6 +2313,79 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 24-scenario-21-candles-empty
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (CANDLES, empty-200)
+  cell of the chaos coverage matrix.
+  Symmetric to #05 (REGISTRY, empty-200) but on
+  the candles side. Distinct code path from #03
+  (HARD 502 → fetch throws → .catch fires) and
+  #04 (PARTIAL → some prices missing) — this
+  scenario keeps candles UP and HEALTHY but the
+  pools array is empty (`{ data: { pools: [] } }`),
+  driving the `.then(empty)` branch instead.
+
+  * **The scenario** — `21-candles-empty` on
+    `/companies`. Registry happy (pool-bearing
+    proposal so carousel mounts); candles
+    responds 200 with empty pools on every
+    query. Two assertions: carousel mounts
+    (probe event visible), price card degrades
+    to "0.00 SDAI" fallback (same terminal UX
+    as #03 but distinct control flow).
+
+  * **Why this exercises a DIFFERENT code path
+    than #03** (despite same terminal UX):
+    - #03 hard-down: `fetch(...)` throws →
+      `.catch` branch → `setError + prices=null`
+      → fallback render
+    - #21 empty-200: `fetch(...)` resolves →
+      `.then(emptyArr)` branch → emptyArr finds
+      no pool → `prices=null` → fallback render
+    Both reach the SAME render state via
+    different code. A regression that only
+    handled `.catch` correctly (e.g., a
+    refactor that moved `loading=false` into
+    `.catch` only) would silently break #21
+    while #03 still passes.
+
+  * **Bug-shapes captured** (NEW vs #03):
+    - `.then(empty)` silently HANGS on a
+      forever-LoadingSpinner — the hook only
+      clears `loading=false` on the `.catch`
+      branch, not on successful-with-empty
+    - Price-card formatter assumes `pools[0]`
+      exists and CRASHES on the empty array
+    - Card shows DIFFERENT fallback text than
+      #03 — same dead-data shape, divergent UX
+      surface; user can't tell whether to retry
+      or whether candles is genuinely empty
+    - Card silently shows STALE cached price
+      (a previous fetch populated cache and the
+      empty-success doesn't invalidate it) —
+      wrong number rendered with high confidence
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #21 itself: passed in 10.5s on
+      first run (much faster than #19/#20
+      because no slow-response wait)
+    - Catalog regenerated: 21 scenarios (was 20)
+
+  * **Chaos coverage matrix on /companies after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #02      | #03     |
+    | partial response  |   —      | #04     |
+    | empty 200         | #05      | #21 ★   |
+    | malformed body    | #07      | #08     |
+    | per-row corrupt   | #09      |   —     |
+    | slow valid resp   | #19      | #20     |
+    10 of 12 cells filled. Remaining gaps are
+    (registry, partial) and (candles, per-row
+    corrupt) — both natural next adds.
+
 - **slice 23-scenario-20-candles-slow
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — adds the symmetric slow-but-
