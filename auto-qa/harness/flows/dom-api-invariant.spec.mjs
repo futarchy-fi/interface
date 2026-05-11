@@ -662,6 +662,101 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row.locator('td').nth(3)).toHaveText('6');
     });
 
+    test('slice 4m — logo fallback image src (no org metadata → "/assets/fallback-company.png")', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // FIRST attribute-level invariant in the catalog. All prior
+        // slices (4 v1, 4b, 4d, 4f, 4g, 4h, 4i, 4c v1/v2/v3a/v3b,
+        // 4e, 4j, 4k, 4l) assert on the DOM's TEXT content. This
+        // slice asserts on a DOM ATTRIBUTE (`<img src=...>`) — a
+        // distinct rendering surface that catches a different class
+        // of bug.
+        //
+        // Per `src/hooks/useAggregatorCompanies.js:95`:
+        //   image: meta.coverImage || meta.logo
+        //          || '/assets/fallback-company.png',
+        //
+        // Per `src/components/futarchyFi/companyList/table/OrgRow.jsx:29`:
+        //   src={image || '/assets/fallback-company.png'}
+        //
+        // The fallback is DOUBLY-guarded: useAggregatorCompanies
+        // ensures `image` is always set to the fallback path when
+        // no metadata supplies a coverImage or logo, and OrgRow has
+        // its own `|| '/assets/fallback-company.png'` belt-and-
+        // suspenders fallback. This test confirms the OUTER end of
+        // the chain (the actual `<img>` rendered to the DOM)
+        // resolves to the fallback path when nothing else is
+        // mocked.
+        //
+        // Note on Next.js Image: the rendered `<img>` may carry a
+        // src wrapped by the Next.js Image Optimization endpoint
+        // (e.g., `/_next/image?url=%2Fassets%2Ffallback-company.png&w=64&q=75`).
+        // Using a regex substring match on `fallback-company`
+        // tolerates either form (raw path or wrapped URL) so the
+        // test isn't brittle to whether the optimization endpoint
+        // is hit.
+        //
+        // Bug classes caught (NEW vs text-level invariants):
+        //   - Regression in useAggregatorCompanies that drops the
+        //     `|| '/assets/fallback-company.png'` from the chain
+        //     (image becomes undefined when metadata is missing)
+        //     — OrgRow's belt-and-suspenders catches it, but the
+        //     intermediate path is broken; this test wouldn't
+        //     catch it alone but the combined coverage tightens
+        //     intermediate contracts.
+        //   - Regression in OrgRow that drops the `|| '...'`
+        //     fallback (relies entirely on the hook's fallback)
+        //     — when the hook breaks first, OrgRow renders an
+        //     empty src; this slice catches BOTH layers because
+        //     the assertion fires on the OrgRow output.
+        //   - Regression that changes the fallback filename
+        //     (e.g., to `default-company.png`) — would silently
+        //     succeed if both layers were updated, but a refactor
+        //     that updates only one would surface here.
+        //   - Regression that points the fallback at an external
+        //     URL (e.g., `https://placeholder.com/...`) — would
+        //     leak cross-origin loads on every fallback render;
+        //     the substring match on `fallback-company` would
+        //     fail because the URL doesn't contain that token.
+        //   - Regression that drops Next.js Image wrapping
+        //     entirely and switches to a plain `<img>` — could
+        //     pass this test (the src would still contain
+        //     `fallback-company`) but lose image optimization
+        //     in production. Future iteration can tighten by
+        //     also asserting on the `srcset` attribute.
+        //
+        // Why this matters: the logo column is one of the most
+        // visible elements on the /companies page. A regression
+        // that breaks the fallback would show broken-image icons
+        // for every org without metadata — visible product bug
+        // affecting any org that hasn't set a logo.
+
+        // Bare-minimum mock — no orgMetadata.
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({}));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        // Locate the org's row, then its logo image (in td[0]).
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        // The img element inside td[0]. Substring match tolerates
+        // Next.js Image's optimization wrapper (e.g., src might be
+        // `/_next/image?url=...fallback-company.png`).
+        await expect(row.locator('img').first()).toHaveAttribute(
+            'src',
+            /fallback-company/,
+        );
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 

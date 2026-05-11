@@ -2313,6 +2313,146 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 57-dom-api-invariant-logo-fallback-src
+  (Phase 5 invariant catalog — 16th DOM↔API
+  invariant; FIRST attribute-level assertion)**
+  (this iteration, on the interface side) —
+  opens a NEW dimension of DOM↔API testing:
+  attribute-level (vs the prior 15 invariants
+  which all assert on DOM text content). Probes
+  the doubly-guarded logo fallback chain.
+
+  * **The new invariant** —
+    `slice 4m — logo fallback image src`.
+    Bare-minimum mock (no orgMetadata) →
+    useAggregatorCompanies' image-resolution
+    cascade falls through to the fallback path
+    → OrgRow renders the fallback. Assert
+    `row.locator('img').first()` has `src`
+    matching `/fallback-company/` regex
+    substring (tolerates Next.js Image
+    optimization-endpoint wrapping).
+
+  * **Code references pinned**:
+    - `src/hooks/useAggregatorCompanies.js:95`:
+      `image: meta.coverImage || meta.logo
+              || '/assets/fallback-company.png'`
+      3-tier fallback in the hook layer.
+    - `src/components/futarchyFi/companyList/
+      table/OrgRow.jsx:29`:
+      `src={image || '/assets/fallback-company.png'}`
+      Belt-and-suspenders fallback in the
+      component layer. The DOUBLY-guarded
+      chain provides redundancy but also
+      hides single-layer bugs from end-to-end
+      tests — the test still passes if either
+      layer breaks, masking the regression.
+
+  * **Why this matters**: the logo column is one
+    of the most visible elements on the
+    /companies page. A regression that breaks
+    the fallback would show broken-image icons
+    for every org without metadata — visible
+    product bug affecting any org that hasn't
+    set a logo. With the doubly-guarded chain,
+    a single layer breaking is invisible; this
+    test catches the case where BOTH layers
+    break (or where the fallback file is
+    renamed/relocated).
+
+  * **Bug classes caught** (NEW dimension —
+    attribute-level vs text-level):
+    - Regression that drops the fallback path
+      from BOTH layers — img src becomes
+      undefined or empty string
+    - Regression that renames the fallback file
+      (e.g., to `default-company.png`) — would
+      silently succeed if both layers were
+      updated, but a refactor that updates only
+      one would still leak via OrgRow's hardcoded
+      path
+    - Regression that points the fallback at an
+      external URL — substring `fallback-company`
+      would fail, leak cross-origin loads
+    - Regression that drops Next.js Image
+      wrapping entirely — could still pass this
+      test but lose image optimization in
+      production
+
+  * **Why this matters structurally**: opens
+    the attribute-level testing dimension. Many
+    futarchy app surfaces depend on attributes
+    rather than text content — `href` for
+    navigation links, `aria-label` for
+    accessibility, `data-*` for testing hooks,
+    `src` for images, `value` for form inputs.
+    Each is a distinct bug-class that
+    text-level tests can't catch. This slice
+    establishes the pattern; future iterations
+    can extend with `toHaveAttribute`,
+    `toHaveValue`, `toHaveJSProperty` etc.
+
+  * **Next.js Image gotcha pinned**: the
+    rendered `<img>` may carry a `src` wrapped
+    by Next.js's `/_next/image?url=...&w=64&q=75`
+    optimization endpoint. Using a regex
+    substring on `fallback-company` tolerates
+    either form (raw path or wrapped URL) so
+    the test isn't brittle to whether
+    optimization is engaged.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 16 DOM↔API invariant tests pass:
+      26.4s (was 15 in 26.1s); new slice 4m
+      alone: 1.6s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (16 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4m logo fallback ★   | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions now active in the
+    catalog**:
+    - Text-level field-flow (slice 4 v1, 4b, 4d,
+      4f, 4g, 4h, 4i, 4c v1, 4c v2, 4c v3b, 4j,
+      4k, 4l)
+    - Network-level request body (slice 4c v3a,
+      4e)
+    - Attribute-level rendering ★ (slice 4m — NEW)
+    Future invariants can mix these (e.g., a
+    test that asserts both text content AND
+    `data-testid` attribute) to ratchet up
+    coverage strength further.
+
+  * **What's next**:
+    - href attribute on the org row's nav link
+      (clicking → /markets/{address} routing)
+    - aria-label on the active/total cells
+      (a11y dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers)
+    - Cross-card-vs-row consistency
+    - Carousel card title rendering from
+      proposal.displayNameEvent
+
 - **slice 56-dom-api-invariant-filter-chain-stress
   (Phase 5 invariant catalog — 15th DOM↔API
   invariant)** (this iteration, on the interface
