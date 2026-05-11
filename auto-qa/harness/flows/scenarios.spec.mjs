@@ -149,6 +149,28 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
             // via `assertNoPageErrors: true` (handled below the
             // assertion loop). Existing scenarios are unaffected —
             // they don't set the flag, the array fills silently.
+            // Step 82: network-request monitor. Captures every
+            // outbound request the page makes (including those
+            // satisfied by context.route mocks; those still fire
+            // 'request' before the route handler resolves them).
+            // Scenarios use this to assert:
+            //   - REQUIRED URLs were called (positive shape)
+            //   - DEPRECATED URLs were NOT called (negative shape;
+            //     guards against regressions to old endpoints)
+            //   - call count stays within budget (no retry storms)
+            // Distinct from page-error monitor: catches SILENT
+            // network regressions where the wrong URL succeeds OR
+            // the page floods a healthy endpoint without errors.
+            const networkRequests = [];
+            page.on('request', (req) => {
+                networkRequests.push({
+                    url:        req.url(),
+                    method:     req.method(),
+                    resourceType: req.resourceType(),
+                    timestamp:  Date.now(),
+                });
+            });
+
             const pageErrors = [];
             page.on('pageerror', (err) => {
                 pageErrors.push({
@@ -221,6 +243,23 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
                 // this directly OR rely on the `assertNoPageErrors`
                 // flag-driven check below.
                 pageErrors,
+                // Step 82: live network-request log. Assertions can
+                // filter / count / assert presence-and-absence of
+                // outbound calls. Filters use the helper below or
+                // raw array.
+                networkRequests,
+                // Helper: callsTo(pattern) returns the subset of
+                // captured requests whose URL matches `pattern`
+                // (string substring OR RegExp). For positive
+                // assertions ("X must be called") and negative
+                // ("Y must NOT be called") both, scenarios use
+                // this with `expect.poll` since the request may
+                // fire asynchronously after navigation.
+                callsTo: (pattern) => networkRequests.filter((r) =>
+                    pattern instanceof RegExp
+                        ? pattern.test(r.url)
+                        : r.url.includes(pattern),
+                ),
             };
 
             // Run assertions in order

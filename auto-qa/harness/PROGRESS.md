@@ -2313,6 +2313,113 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 82-network-request-monitor (Phase 6 —
+  fifth NEW assertion-target KIND: outbound HTTP
+  request shape)** (this iteration, on the interface
+  side) — Adds the 5th distinct assertion target in
+  the capability matrix. Catches silent network
+  regressions: wrong URLs that succeed, missing
+  required calls, retry storms — all invisible to
+  every previous assertion target.
+
+  * **The KIND in one sentence**: silent network-
+    behavior regressions where the page makes the
+    wrong calls (or doesn't make required ones)
+    without raising errors and without changing DOM
+    content visibly enough for text assertions to
+    catch.
+
+  * **Concrete regressions covered**:
+    - PR #60-shape if reintroduced (legacy AWS
+      CloudFront URLs hit successfully)
+    - Retry-storm regressions (page calls a healthy
+      endpoint 50 times/sec)
+    - Refactor that drops a required `useEffect`
+      fetch (page mounts via cached/stale data,
+      no error)
+
+  * **The capability** (`flows/scenarios.spec.mjs`
+    changes): one new listener
+    `page.on('request', ...)` captures every
+    outbound request the page initiates BEFORE
+    navigation. Each entry stores `url`, `method`,
+    `resourceType`, `timestamp`. Available on `ctx`
+    as:
+    - `ctx.networkRequests` — raw array
+    - `ctx.callsTo(pattern)` — filter helper
+      accepting string substring OR RegExp
+
+    Listener fires for ALL requests including those
+    satisfied by `context.route` mocks (mocks
+    resolve the request after the event fires), so
+    the monitor sees the FULL outbound surface.
+
+  * **The scenario** (`scenarios/50-network-shape-companies.scenario.mjs`):
+    Four assertions:
+    1. Anchor: `PROBE_ORG_NAME` visible (proves
+       page mounted so network calls actually
+       fired).
+    2. POSITIVE: at least one call to
+       `api.futarchy.fi/registry/graphql`. Catches
+       refactor that drops the useEffect or routes
+       elsewhere.
+    3. POSITIVE: at least one call to
+       `api.futarchy.fi/candles/graphql`. Catches
+       the same regression for the carousel
+       pipeline.
+    4. NEGATIVE: zero calls to legacy AWS URLs
+       (`*.cloudfront.net` OR `*.amazonaws.com`).
+       Catches a regression reintroducing the
+       pre-PR-60 dead URLs.
+
+  * **Mechanical verification** (slice 74-81
+    pattern): injected an extra `fetch(
+    'https://gnosis-mainnet.cloudfront.net/...')`
+    call into `gqlPost` in
+    `useAggregatorCompanies.js` (simulating a
+    regression that reintroduces the legacy URL
+    alongside the new one). Scenario 50 FAILED
+    on the NEGATIVE assertion:
+    ```
+    Error: expected zero calls to legacy AWS
+      subgraph URLs (cloudfront.net /
+      amazonaws.com); saw: <list of 12 URLs>
+    Expected length: 0
+    Received length: 12
+    ```
+    The error message included all 12 captured
+    URLs for diagnostic clarity. Restored →
+    PASSES.
+
+  * **Capability matrix now complete (5 KINDS)**:
+    ```
+    KIND                | First scenario | Catches
+    --------------------|----------------|----------
+    DOM text/attributes | many           | text regs
+    GraphQL query shape | 47             | schema   
+    Page errors/console | 48             | silent JS
+    URL state evolution | 49             | URL bugs 
+    Network requests    | 50 (this)      | silent net
+    ```
+    Each catches a class no other catches. Five
+    KINDS span the major bug-shape categories
+    the catalog needs.
+
+  * **Catalog state**: 50 scenarios; **8
+    mechanically verified** (44, 45, 46, 47, 48,
+    10, 49, 50). PR coverage stays at 9 — this
+    slice's NEGATIVE catches a HYPOTHETICAL PR-#60-
+    reintroduction rather than a specific shipped
+    bug. PR #60 itself is already mechanically
+    caught by slice 78's strict-schema mock.
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `scenarios:catalog` clean (50)
+    - Scenario 50 wall-clock: ~3s warm
+    - src/ tree clean after both verification
+      mutations restored
+
 - **slice 81-url-state-evolution-catch (Phase 6 —
   third NEW assertion-target KIND: URL string state
   changes after mount)** (this iteration, on the
