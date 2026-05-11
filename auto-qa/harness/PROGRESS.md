@@ -2313,6 +2313,101 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 50-dom-api-invariant-archived-filter-math
+  (Phase 5 invariant catalog — 9th DOM↔API
+  invariant)** (this iteration, on the interface
+  side) — extends slice 4b's coverage of the
+  active/total formatter to the ARCHIVED filter
+  branch. Where 4b proves the HIDDEN filter
+  works (`active = nonArchived.filter !hidden`),
+  this slice proves the ARCHIVED filter works
+  one level up (`nonArchived = filter !archived`).
+
+  * **The new invariant** —
+    `slice 4f — archived filter applied in
+    proposal counts`. Mock 5 active + 2 hidden
+    + 3 archived = 10 raw proposals. Expected
+    after filtering:
+      - nonArchived = 10 − 3 archived = 7
+      - active = 7 − 2 hidden = 5
+    DOM should render "5" in td[2] (active)
+    and "7" in td[3] (total).
+
+  * **Code reference pinned** (per
+    `src/hooks/useAggregatorCompanies.js:83`):
+    ```
+    const nonArchived = proposalsForOrg.filter(
+        p => parseMetadata(p.metadata).archived !== true
+    );
+    ```
+    Strict equality `!== true` means undefined,
+    null, false, "false", and absent fields all
+    pass the filter. Only `archived === true`
+    (boolean true) excludes a proposal.
+
+  * **Bug classes caught** (distinct from 4b
+    which only tests the hidden filter):
+    - Regression that DROPS the archived filter
+      — renders "5" / "10" (3 archived rows
+      leak into the visible total)
+    - Regression that treats `archived: false`
+      as truthy (uses `m.archived` directly
+      instead of `m.archived === true`) — flips
+      the count direction
+    - Regression that mis-types the field as
+      "isArchived" or "deleted" instead of
+      "archived" — silent miss because the
+      lookup returns undefined and the strict
+      `!== true` check passes everything
+    - Regression that applies the archived
+      filter in the ACTIVE subset only (not in
+      the nonArchived superset) — would render
+      "5" / "10" because the total leaks
+      archived rows
+    - Regression where `parseMetadata` doesn't
+      parse the JSON string (e.g., a refactor
+      that switches to lazy parsing) — `.archived`
+      lookup returns undefined on the unparsed
+      string, filter passes everything
+
+  * **Why this matters**: archive is the "soft
+    delete" mechanism for proposals (per the
+    hook's docstring at line 7). A regression
+    that breaks the archived filter would
+    resurface deleted proposals in the org's
+    total count — a visible product bug that
+    affects trust in the dashboard's accuracy.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 9 DOM↔API invariant tests pass: 19.2s
+      (was 8 in 16.5s); new slice 4f alone:
+      1.6s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (9 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total cells| nonzero counts (8/11) — hidden filter only         |
+    | slice 4d zero counts       | empty array → both cells render "0"               |
+    | slice 4f archived filter ★ | 5/2/3 split → "5" / "7" — archived filter active   |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (toFixed precision)     |
+
+  * **What's next**: invariant-axis growth
+    continues — `resolved: true` filter (active
+    excludes resolved; nonArchived includes
+    them), price-formatter precision branch
+    (YES>=1 + NO<1 → "1.4200 SDAI"), proposal
+    description field rendering, ChainBadge
+    DEFAULT branch (no metadata.chain → "Gnosis"
+    via chainId=100 default in transformOrgToCard).
+
 - **slice 49-dom-api-invariant-both-pool-legs-queried
   (Phase 5 invariant catalog — 8th DOM↔API
   invariant)** (this iteration, on the interface

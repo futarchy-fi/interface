@@ -221,6 +221,81 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row.locator('td').nth(3)).toHaveText('0');
     });
 
+    test('slice 4f — archived filter applied in proposal counts (5 active + 2 hidden + 3 archived → "5" / "7")', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Extends slice 4b's coverage of the active/total formatter to
+        // the ARCHIVED filter — a separate filter branch in
+        // `useAggregatorCompanies::transformOrgToCard`.
+        //
+        // Per src/hooks/useAggregatorCompanies.js (line 83):
+        //   const nonArchived = proposalsForOrg.filter(
+        //       p => parseMetadata(p.metadata).archived !== true
+        //   );
+        //
+        // So a proposal whose metadata has `archived: true` is EXCLUDED
+        // from `nonArchived` (and therefore from `active`, since
+        // `active` is a subset of `nonArchived`).
+        //
+        // Test inputs:
+        //   - 5 proposals with NO special metadata → all 5 are active
+        //   - 2 proposals with `visibility: 'hidden'` → counted in
+        //     nonArchived but NOT in active
+        //   - 3 proposals with `archived: true` → excluded from
+        //     nonArchived entirely (and therefore also from active)
+        //   Total raw: 10 proposals
+        //   Expected: active=5, nonArchived=7
+        //
+        // Bug classes caught (distinct from slice 4b which only tests
+        // the hidden filter):
+        //   - Regression that drops the archived filter — would render
+        //     "5" / "10" instead of "5" / "7" (3 archived rows leak
+        //     into the visible total)
+        //   - Regression that treats `archived: false` as truthy (uses
+        //     `m.archived` directly instead of `m.archived === true`)
+        //     — flips the count direction
+        //   - Regression that mis-types the field as "isArchived" or
+        //     "deleted" instead of "archived" — silent miss
+        //   - Regression that applies the archived filter in the
+        //     active subset only (not in the nonArchived superset) —
+        //     would render "5" / "10" because the total leaks
+        //     archived rows
+        //   - Regression where `parseMetadata` doesn't parse the
+        //     JSON string and `.archived` lookup returns undefined —
+        //     filter passes everything, totals leak
+        //
+        // Why this matters: archive is the "soft delete" mechanism
+        // for proposals (per the hook's docstring). A regression that
+        // breaks the archived filter would resurface deleted
+        // proposals in the org's total count — visible product bug
+        // affecting trust in the dashboard's accuracy.
+
+        const proposals = [];
+        for (let i = 0; i < 5; i++) proposals.push(fakeProposal(`a${i}`));
+        for (let i = 0; i < 2; i++) proposals.push(fakeProposal(`h${i}`, { visibility: 'hidden' }));
+        for (let i = 0; i < 3; i++) proposals.push(fakeProposal(`x${i}`, { archived: true }));
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({ proposals }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        // Same column layout as slice 4b:
+        //   td[0]=logo, td[1]=name+badges, td[2]=active, td[3]=total, td[4]=chain
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        await expect(row.locator('td').nth(2)).toHaveText('5');
+        await expect(row.locator('td').nth(3)).toHaveText('7');
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 
