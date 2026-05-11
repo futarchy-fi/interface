@@ -1132,6 +1132,97 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         );
     });
 
+    test('slice 4s — eventTitle FALLBACK branch: displayNameEvent absent → displayNameQuestion rendered', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Opens the title-cascade triplet, parallel in structure
+        // to the image cascade (4m/4n/4o/4p). Per
+        // `src/hooks/useAggregatorProposals.js:145`:
+        //   eventTitle: proposal.displayNameEvent
+        //               || proposal.displayNameQuestion
+        //               || 'Unknown Proposal'
+        //
+        // The 3-tier title cascade has branches:
+        //   - displayNameEvent set    → uses event (future 4r)
+        //   - displayNameEvent absent, displayNameQuestion set
+        //                              → uses question (4s) ★
+        //   - both absent              → 'Unknown Proposal' (future 4t)
+        //
+        // This slice exercises the FALLBACK branch. The fixture
+        // default sets BOTH fields to the same value, so to
+        // isolate the fallback we have to override
+        // displayNameEvent to a falsy value while keeping
+        // displayNameQuestion distinctive.
+        //
+        // Why this branch first (vs the preferred-branch test 4r):
+        // the preferred branch is trivially covered by every
+        // existing carousel-card test (slice 4c v3a, 4c v3b, 4e,
+        // 4j, 4k, 4p) because they all use the fixture default
+        // and assert HARNESS-PROBE-EVENT-001 appears. The
+        // FALLBACK branch is uncovered terrain — if a regression
+        // dropped `|| proposal.displayNameQuestion` from the
+        // cascade, the existing tests would still pass (because
+        // displayNameEvent is set in the default fixture); only
+        // a test that explicitly nulls displayNameEvent catches
+        // it.
+        //
+        // Bug classes caught (NEW — first title-cascade test):
+        //   - Regression that DROPS the displayNameQuestion
+        //     branch from the cascade — would render 'Unknown
+        //     Proposal' fallback even when displayNameQuestion
+        //     is set
+        //   - Regression that uses the wrong field name (e.g.,
+        //     `questionText` or `displayName` instead of
+        //     `displayNameQuestion`) — typo-class bug; field
+        //     would read as undefined, fall through to fallback
+        //   - Regression that SHORT-CIRCUITS the cascade at
+        //     displayNameEvent (e.g., uses
+        //     `proposal.displayNameEvent ?? 'Unknown'` instead
+        //     of the full OR-chain) — would render 'Unknown'
+        //     when displayNameEvent is null/undefined even
+        //     though displayNameQuestion is present
+        //   - Regression that GraphQL query selection drops
+        //     `displayNameQuestion` — `proposal.displayNameQuestion`
+        //     undefined → falls through
+        //
+        // The probe token `HARNESS-PROBE-QUESTION-FALLBACK` is
+        // distinctive enough to never appear in the
+        // displayNameEvent value or the 'Unknown Proposal'
+        // fallback string. A failure log here directly
+        // identifies that the fallback branch is broken.
+
+        // Override fakePoolBearingProposal's title fields to
+        // isolate the fallback branch: nullify
+        // displayNameEvent, set displayNameQuestion to a
+        // distinctive token.
+        const richProposal = {
+            ...fakePoolBearingProposal({}),
+            displayNameEvent:    null,
+            displayNameQuestion: 'HARNESS-PROBE-QUESTION-FALLBACK',
+        };
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Assert the question text appears (NOT the event text,
+        // which is null in this fixture). If the fallback branch
+        // is broken, the carousel would render 'Unknown Proposal'
+        // or the event-text default — neither contains the
+        // distinctive 'HARNESS-PROBE-QUESTION-FALLBACK' token.
+        await expect(
+            page.getByText('HARNESS-PROBE-QUESTION-FALLBACK').first(),
+        ).toBeVisible({ timeout: 30_000 });
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 

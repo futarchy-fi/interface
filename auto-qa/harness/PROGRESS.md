@@ -2313,6 +2313,157 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 62-dom-api-invariant-title-fallback-branch
+  (Phase 5 invariant catalog — 21st DOM↔API
+  invariant; opens title-cascade triplet)**
+  (this iteration, on the interface side) —
+  opens a NEW 3-tier cascade discovered in
+  `useAggregatorProposals.js:145`:
+    eventTitle: proposal.displayNameEvent
+                || proposal.displayNameQuestion
+                || 'Unknown Proposal'
+
+  Structurally parallel to the image cascade
+  (4m/4n/4o/4p). The triplet's branches:
+    - displayNameEvent set    → uses event
+      (future slice 4r)
+    - displayNameEvent absent, displayNameQuestion
+      set → uses question (4s) ★
+    - both absent              → 'Unknown Proposal'
+      (future slice 4t)
+  Future: precedence test (both set, event
+  wins) parallel to 4p.
+
+  * **The new invariant** —
+    `slice 4s — eventTitle FALLBACK branch:
+    displayNameEvent absent → displayNameQuestion
+    rendered`. Override fakePoolBearingProposal's
+    title fields: nullify `displayNameEvent`,
+    set `displayNameQuestion` to a distinctive
+    `HARNESS-PROBE-QUESTION-FALLBACK` token.
+    Assert the question text appears in the
+    carousel card.
+
+  * **Why this branch first (vs the
+    preferred-branch test 4r)**: the
+    preferred-branch is trivially covered by
+    every existing carousel-card test (4c v3a,
+    4c v3b, 4e, 4j, 4k, 4p) because they all
+    use the fixture default and assert
+    HARNESS-PROBE-EVENT-001 appears. The
+    FALLBACK branch is uncovered terrain — if
+    a regression dropped
+    `|| proposal.displayNameQuestion` from the
+    cascade, all existing tests would still
+    pass (because displayNameEvent is set in
+    the default fixture); only a test that
+    explicitly nulls displayNameEvent catches
+    it.
+
+  * **Bug classes caught** (NEW — first
+    title-cascade test):
+    - Regression that DROPS the
+      displayNameQuestion branch — would render
+      'Unknown Proposal' fallback even when
+      displayNameQuestion is set
+    - Regression that uses the wrong field name
+      (e.g., `questionText` or `displayName`
+      instead of `displayNameQuestion`) —
+      typo-class bug
+    - Regression that SHORT-CIRCUITS the cascade
+      at displayNameEvent (e.g., uses `??`
+      instead of full OR-chain) — would render
+      'Unknown' when displayNameEvent is
+      null/undefined even though
+      displayNameQuestion is present
+    - Regression that GraphQL query selection
+      drops `displayNameQuestion` — field reads
+      as undefined → falls through
+
+  * **Probe token clarity**: the token
+    `HARNESS-PROBE-QUESTION-FALLBACK` is
+    distinctive — cannot appear in the
+    `displayNameEvent` value or the
+    `'Unknown Proposal'` fallback string. A
+    failure log here directly identifies that
+    the fallback branch is broken.
+
+  * **Implementation note**: this is the FIRST
+    slice to use the inline-override pattern
+    (`{ ...fakePoolBearingProposal({}),
+    displayNameEvent: null, ... }`) rather
+    than modifying the fixture function. The
+    pattern lets one-off field overrides stay
+    in the test where they're easiest to read,
+    keeping the shared fixture small. Future
+    slices (4r, 4t, 4u) can use the same
+    pattern.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 21 DOM↔API invariant tests pass:
+      39.6s (was 20 in 36.0s); new slice 4s
+      alone: 5.5s on first run (carousel
+      pipeline is heavier than table-row
+      tests; consistent with 4c v3a/b's
+      ~1.5–5s range)
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (21 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4m logo fallback     | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4n cover-image       | coverImage='/test-probe-cover.png' → img.src       |
+    | slice 4o logo-only         | logo='/test-probe-logo.png' → img.src              |
+    | slice 4p img precedence    | both set → coverImage wins; logo NOT in src        |
+    | slice 4q href on card      | event card anchor → /market?proposalId=<addr>      |
+    | slice 4s title fallback ★  | displayNameEvent=null + question='X' → "X" appears |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: **14 invariants**
+      (was 13; new title-fallback test joins
+      the org-name and counts/badges family)
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: 5 invariants
+
+  * **Open triplets (partially probed)**:
+    - Title cascade: 4s alone so far; future
+      slices 4r (preferred), 4t (final
+      fallback), 4u (precedence) complete it
+    - Filter triplet: 4b/4f/4g/4h + 4l — complete
+    - Chain triplet: 4c v1/v2/4i — complete
+    - Precision triplet: 4c v3b/4j/4k — complete
+    - Image triplet: 4m/4n/4o/4p — complete
+
+  * **What's next**:
+    - Title cascade — final fallback
+      (both fields absent → 'Unknown Proposal')
+    - Title cascade — precedence
+      (both set, displayNameEvent wins)
+    - aria-label on active/total cells (a11y
+      dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers)
+    - 'Unknown Proposal' as INVERSE invariant
+      (test that the fallback DOES appear when
+      both fields are null)
+
 - **slice 61-dom-api-invariant-href-attribute
   (Phase 5 invariant catalog — 20th DOM↔API
   invariant; opens HREF attribute dimension)**
