@@ -2313,6 +2313,110 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 43-scenario-39-market-page-candles-rate-limited
+  (Phase 7 chaos library — MATRIX PARITY MILESTONE)**
+  (this iteration, on the interface side) — closes
+  the LAST cell on the market-page chaos matrix to
+  14/14, achieving full 28/28 parity with /companies
+  across BOTH pages × 7 failure-mode rows × 2 endpoints.
+  Mirror of #37 applied to the market page's distinct
+  candles-consumer surface (chart panel + per-pool
+  spot prices + trading-panel preview). Distinct from
+  #25 (5xx → `.catch` on same page), #38 (registry-
+  side 429 on same page), and #37 (same failure mode,
+  different page contract because /companies has
+  candles feeding the carousel price card while the
+  market page has candles feeding chart + per-pool
+  + trading-panel preview).
+
+  * **The scenario** — `39-market-page-candles-
+    rate-limited` on /markets/<MARKET_PROBE_
+    ADDRESS>. Registry happy (proposal metadata
+    populates) + candles returns 429 +
+    Retry-After: 1 + JSON-shape error body. Same
+    page-shell assertions as prior market-page
+    chaos slices (Trading Pair + wallet shorthand)
+    — proves a candles-side rate-limit doesn't
+    cascade to a hung/crashed page-shell.
+
+  * **Bug-shapes captured** (NEW vs #25, #37, and
+    #38):
+    - Chart panel CRASHES on 429 from candles
+      (treats `response.json()` as valid candles
+      data — downstream consumer crashes on
+      `.find(p => p.id === ...)` of the error
+      envelope where it expected a pools array)
+    - Chart panel HANGS in loading forever (429
+      doesn't trigger `loading=false` because the
+      consumer's `.catch` handles 5xx not 4xx)
+    - Chart-fetch IMMEDIATELY RETRIES with no
+      Retry-After respect — WORSE than on
+      /companies because chart-data refetches on
+      every interaction (hover, zoom, time-window-
+      change), multiplying the retry storm
+    - Per-pool spot-price displays render raw
+      "rate limited" message (formatter coerces
+      error envelope fields to string)
+    - Trading panel "preview price" CRASHES because
+      the candles-derived feed returns the error
+      envelope and the price-difference calc hits
+      NaN
+    - WHOLE PAGE crashes from missing chart-panel
+      error boundary — collateral damage to
+      trading + allowances + positions panels
+      (same shape as #25 but via 429 rather than
+      502)
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no test infra changes)
+    - Scenario #39 itself: passed in 12.2s on
+      first run
+    - Catalog regenerated: 39 scenarios (was 38)
+    - Matrix script: /markets/[address] now 14/14
+      (rate-limited row complete on the market page);
+      /companies stays at 14/14 — **TOTAL: 28/28
+      cells filled across both pages**
+
+  * **Chaos coverage matrix on /markets/[address]
+    after this slice (14/14 COMPLETE — 7 rows × 2
+    endpoints, FULL PARITY with /companies)**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  | #32      | #33     |
+    | empty 200         | #26      | #27     |
+    | malformed body    | #28      | #29     |
+    | per-row corrupt   | #34      | #35     |
+    | slow valid resp   | #30      | #31     |
+    | rate-limited 429  | #38      | #39 ★   |
+
+  * **Why the parity milestone matters**: every
+    interface-side chaos failure-mode that catches
+    a real production bug-class on /companies is now
+    GUARANTEED to be probed on the market page too
+    (and vice-versa). A future regression that fixes
+    a bug on one page but introduces a different
+    failure-shape on the other page can no longer
+    slip through — every cell in both 7×2 grids has
+    a scenario watching it. The 28-cell matrix is
+    drift-resistant because `scenarios:chaos-matrix`
+    auto-derives the table from filename
+    classifications; the smoke-test pin
+    (`(1[3-9]|[2-9]\d)/14` floor on both pages)
+    fails loudly if a future change drops a cell.
+
+  * **What's next after parity**: matrix expansion
+    from here is either ROW-axis (new failure modes
+    like 504 Gateway Timeout, 304 Not Modified,
+    chunked-encoding stall, malformed Content-Type),
+    PAGE-axis (open chaos coverage on a new page —
+    /milestones, /rpc-diagnostics), or LAYER-axis
+    (chaos against indexer-direct GraphQL beneath
+    the api passthrough). Each direction
+    independently grows the harness's bug-class
+    coverage; the existing 28-cell base is the
+    floor.
+
 - **slice 42-scenario-38-market-page-registry-rate-limited
   (Phase 7 chaos library)** (this iteration, on
   the interface side) — extends the rate-limited
