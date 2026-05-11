@@ -2313,6 +2313,34 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 41-doc-side (Phase 0 doc-side sister-link)**
+  (this iteration, both sides) — addresses Phase 0
+  CHECKLIST item 41 ("Sister-link verified: fresh
+  checkout of both repos") on the doc side. The original
+  item bundles doc + docker checks; this slice ships the
+  doc-side half on autopilot.
+
+  * Mirrored `tests/smoke-architecture-sync.test.mjs`
+    on both sides. Each resolves the SISTER repo's
+    `ARCHITECTURE.md` at the sibling-clone path
+    (`../{other-repo}/auto-qa/harness/ARCHITECTURE.md`),
+    skips cleanly with `t.skip()` if the sister isn't
+    present, and asserts byte-identical content otherwise.
+
+  * **Skip is deliberate**: CI runners + one-repo
+    clones won't see the sister, and a hard fail there
+    would just be noise. The cross-repo workflow-level
+    drift check is a future slice (could pull the sister
+    via raw.githubusercontent).
+
+  * Validation: both sister repos present on dev machine;
+    both tests pass (1/1 each in isolation). Baseline
+    `diff -q` exits silently (byte-identical).
+
+  * CHECKLIST item 41 gets a sub-bullet recording the
+    doc-side coverage; docker-side half remains
+    unchecked (daemon-required).
+
 - **slice 4d-smoke-ci-interface (CI integration)**
   (this iteration, on the interface side) — sister to
   api's slice 3e shipped earlier. The interface harness
