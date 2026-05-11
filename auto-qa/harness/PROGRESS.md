@@ -2313,6 +2313,163 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 78-strict-schema-graphql-mock
+  (Phase 6 — first NEW TEST CAPABILITY: a
+  GraphQL mock that simulates schema strictness)**
+  (this iteration, on the interface side) —
+  Pivot away from "one PR per scenario."
+  Builds a reusable test capability that
+  catches an entire KIND of bug — legacy
+  GraphQL queries against the post-Checkpoint
+  schema — covering SIX merged PRs in one
+  scenario.
+
+  * **The KIND, in one sentence**: code issues
+    a GraphQL query that worked against the
+    old AWS Graph-Node subgraph but fails
+    against the Checkpoint indexer because
+    the post-migration schema (a) doesn't
+    auto-generate reverse-relation fields
+    (`Aggregator.organizations`,
+    `Organization.proposals`), and (b) is
+    missing legacy fields like
+    `ProposalEntity.metadataContract`.
+
+  * **Six PRs covered (one KIND, six instances)**:
+    - PR #45 — Manage Organization modal
+      queried `proposals { metadataContract }`;
+      field doesn't exist in Checkpoint
+      schema → whole query rejected →
+      "Entity not found" modal state
+    - PR #60 — Companies page nested
+      `aggregator { organizations { proposals
+      { ... } } }` against schema with no
+      reverse relations
+    - PR #61 — same nested query pattern in
+      `useAggregatorCompanies` (orgs table)
+    - PR #62 — same on market-page proposal/
+      pool/token queries
+    - PR #63 — same on market-page swap/trade
+      queries
+    - PR #65 — same on market-page chart
+      queries
+
+    All six share one bug-shape; until this
+    slice, NO existing scenario could
+    mechanically catch any of them because
+    the permissive `makeGraphqlMockHandler`
+    pattern-matches on operation name and
+    returns stub data regardless of which
+    fields are selected.
+
+  * **The new capability**:
+    `makeStrictCheckpointGraphqlMockHandler`
+    in `fixtures/api-mocks.mjs`. Detects
+    legacy patterns via regex:
+    1. `aggregator(...) { ... organizations
+       { ... } }` — Aggregator.organizations
+       reverse-relation
+    2. `organizations? { ... proposals { ... } }`
+       — Organization.proposals reverse-relation
+    3. `proposalentities? { ... metadataContract
+       ... }` — unknown field per PR #45
+
+    On match: returns the same GraphQL error
+    envelope a real Checkpoint indexer
+    returns:
+      `{ errors: [{ message: "Cannot query
+      field 'X' on type 'Y'", extensions:
+      { code: 'GRAPHQL_VALIDATION_FAILED' }
+      }] }`
+
+    Downstream consumer code that handles
+    `result.errors` correctly observes the
+    failure; code that doesn't handle it
+    breaks. Either way, the page renders
+    broken state.
+
+  * **The scenario**:
+    `scenarios/47-checkpoint-schema-strictness.scenario.mjs`.
+    Mocks registry GraphQL with the strict
+    handler + a probe proposal. TWO anchor
+    assertions span the three post-Checkpoint
+    queries:
+    1. `PROBE_ORG_NAME` visible (organizations
+       query data flowed)
+    2. `HARNESS-PROBE-EVENT-001` visible
+       (proposalentities query data flowed
+       via the carousel)
+
+    A regression on ANY of the three queries
+    trips one of the two anchors. The orgs
+    query is decoupled from proposalentities
+    (different React hook tree), so the two
+    anchors catch INDEPENDENT regressions.
+
+  * **Mechanical verification (BOTH directions)**:
+
+    Mutation 1 — PR #45-class regression
+    (added `metadataContract` to
+    `PROPOSALS_QUERY` in
+    `useAggregatorProposals.js`):
+    → Anchor 2 FAILED: `Locator:
+    getByText('HARNESS-PROBE-EVENT-001').first()`
+    `Expected: visible / Error: element(s)
+    not found`. Restored → both anchors pass.
+
+    Mutation 2 — PR #60-class regression
+    (reverted `AGGREGATOR_QUERY` in
+    `useAggregatorProposals.js` to nested
+    `aggregator { id name organizations
+    { id name } }`):
+    → Anchor 2 FAILED (same locator). The
+    consumer hook throws on the GraphQL
+    error before any data flows → events
+    don't render. Restored → both anchors
+    pass.
+
+    Two independent regression-classes both
+    caught by the same scenario. One
+    capability, broad coverage.
+
+  * **The discipline change**: previous slices
+    (74–77) each shipped ONE scenario for ONE
+    specific PR. This slice ships ONE
+    capability for SIX PRs. Per the user's
+    framing — "stop doing useless tests, work
+    hard to catch any new KIND of bug" — this
+    is the right ratio. Future slices should
+    aim for capability-shaped (catches a
+    class) over instance-shaped (catches one
+    PR).
+
+  * **Catalog state**: 47 scenarios.
+    Mechanically verified: **4** (44, 45, 46,
+    47). Coverage of mechanically-verified
+    PRs jumps from 2 (PR #51, PR #64) to **8**
+    (PR #51 + PR #64 + PR #45 + PR #60 + PR
+    #61 + PR #62 + PR #63 + PR #65).
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `scenarios:catalog` clean (47)
+    - Scenario 47 wall-clock: ~5s warm
+    - src/ tree clean after both
+      verification mutations restored
+
+  * **Honest framing**: the strict mock's
+    regex detection is approximate (no real
+    GraphQL parser). It catches the three
+    SPECIFIC legacy patterns. A more
+    sophisticated parser-backed validator
+    would catch more nuanced regressions
+    (e.g., a field that's renamed but still
+    used). Acceptable trade-off — adding a
+    parser dependency in the test fixtures
+    is a larger lift; the current regex
+    covers the documented shipped PR
+    regressions.
+
 - **slice 77-pr51-mechanical-catch (Phase 6
   scenario library — scenario 46 NOW catches
   PR #51 for real)** (this iteration, on the

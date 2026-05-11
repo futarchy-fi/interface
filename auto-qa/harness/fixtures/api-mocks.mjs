@@ -150,6 +150,123 @@ export function makeGraphqlMockHandler({
 }
 
 /**
+ * STRICT-SCHEMA variant of `makeGraphqlMockHandler` that simulates
+ * the Checkpoint indexer's schema enforcement.
+ *
+ * The default `makeGraphqlMockHandler` is permissive: it pattern-
+ * matches on the top-level operation name and returns a stub
+ * regardless of what fields the query asks for. A regression that
+ * reintroduces the pre-Checkpoint nested query shape (PR #60, #61,
+ * #62, #63, #65) or an unknown field (PR #45) would pass through
+ * the permissive handler and only fail at the consumer in
+ * unpredictable ways. That makes those bug-shape regressions
+ * UN-CATCHABLE by scenarios using the permissive handler.
+ *
+ * This strict variant DETECTS legacy query shapes and returns a
+ * proper GraphQL error envelope — matching what the real Checkpoint
+ * indexer returns when the query references reverse-relations or
+ * unknown fields. Consumers that handle errors correctly observe
+ * "query failed" and the page renders broken state, which existing
+ * DOM assertions catch.
+ *
+ * **What it rejects (one bug-kind, six PRs)**:
+ *
+ *   1. Reverse-relation `Aggregator.organizations` (PR #60). The
+ *      legacy query shape was:
+ *        aggregator(id: $id) {
+ *          id
+ *          organizations { ... }   ← rejected
+ *        }
+ *      Post-PR-60 issues THREE flat queries instead. The strict
+ *      handler returns "Cannot query field 'organizations' on
+ *      type 'Aggregator'" for any query nesting `organizations`
+ *      inside `aggregator`.
+ *
+ *   2. Reverse-relation `Organization.proposals` (PR #60, #61).
+ *      Same pattern, different parent. Returns "Cannot query field
+ *      'proposals' on type 'Organization'".
+ *
+ *   3. Unknown field `ProposalEntity.metadataContract` (PR #45).
+ *      The legacy `OrganizationManagerModal.jsx` queried
+ *        proposals { id metadataContract }
+ *      against the new schema where the field doesn't exist.
+ *      Returns "Cannot query field 'metadataContract' on type
+ *      'ProposalEntity'".
+ *
+ * **What it accepts**: any query that doesn't trip the above. The
+ * three post-Checkpoint queries (aggregator-leaf, organizations-
+ * where-aggregator, proposalentities-where-organization_in) all
+ * pass through to the underlying permissive handler.
+ *
+ * **How the consumer reacts**: code that issues a strict-mock-
+ * rejected query gets `result.errors[0]` populated and
+ * `result.data` undefined. `useAggregatorProposals.gqlPost` throws
+ * on `result.errors`; the consumer's `useEffect` catches and calls
+ * `setError(...)` and renders the empty state. So a scenario that
+ * asserts "PROBE_ORG_NAME visible" or "HARNESS-PROBE-EVENT-001
+ * visible" fails — exactly the behavior we want.
+ *
+ * **Opt-in**: existing scenarios continue to use
+ * `makeGraphqlMockHandler` and aren't affected. Scenarios that
+ * want strict-schema verification use this handler instead.
+ *
+ * Regex caveats: detection is approximate (no real GraphQL parser).
+ * It catches the SPECIFIC legacy shapes the PRs fixed; a future
+ * iteration could extend to more sophisticated AST-level checks.
+ * False positives are unlikely given the controlled query surface
+ * the futarchy frontend issues.
+ */
+export function makeStrictCheckpointGraphqlMockHandler(opts = {}) {
+    const permissive = makeGraphqlMockHandler(opts);
+
+    const violations = [
+        {
+            // aggregator(...) { ... organizations { ... } }
+            //   PR #60: legacy nested aggregator query
+            pattern: /aggregator\s*\([^)]*\)\s*\{[^}]*\borganizations\b\s*\{/,
+            error: "Cannot query field 'organizations' on type 'Aggregator'",
+        },
+        {
+            // organization(s)? { ... proposals { ... } } (Checkpoint has
+            //   no reverse-relation Organization.proposals)
+            pattern: /organizations?\s*[\({][^}]*?\}?[\s\S]*?\bproposals\s*\{/,
+            error: "Cannot query field 'proposals' on type 'Organization'",
+        },
+        {
+            // proposalentities? { ... metadataContract ... }
+            //   PR #45: field doesn't exist on Checkpoint ProposalEntity
+            pattern: /proposalentities?\s*[\({][^}]*?\}?[\s\S]*?\bmetadataContract\b/,
+            error: "Cannot query field 'metadataContract' on type 'ProposalEntity'",
+        },
+    ];
+
+    return async (route) => {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const query = body.query || '';
+        opts.onCall?.(query);
+
+        for (const { pattern, error } of violations) {
+            if (pattern.test(query)) {
+                return route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        errors: [{
+                            message: error,
+                            extensions: { code: 'GRAPHQL_VALIDATION_FAILED' },
+                        }],
+                    }),
+                });
+            }
+        }
+
+        // Query is valid Checkpoint shape — delegate to permissive
+        // handler for the actual data response.
+        return permissive(route);
+    };
+}
+
+/**
  * Stub `proposalentity` row in the `useAggregatorCompanies.PROPOSALS_QUERY`
  * shape (id + metadata + organization{id}). The metadata field
  * is JSON-stringified so the consumer's `parseMetadata` round-trips

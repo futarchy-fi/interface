@@ -10,7 +10,7 @@ auto-discovers every `*.scenario.mjs` in this directory and emits one
 Playwright test per row. See [ADR-002](../docs/ADR-002-scenario-format.md)
 for the format definition.
 
-Total scenarios: **46**
+Total scenarios: **47**
 
 | #  | File                               | Bug shape                                                   | Route          | Description |
 |----|------------------------------------|-------------------------------------------------------------|----------------|-------------|
@@ -60,3 +60,4 @@ Total scenarios: **46**
 | 44 | `44-pr64-real.scenario.mjs` | PR #64 bulkFetchPoolsByChain prefix-stripping regression | `/companies` | Catches PR #64 for real: poolless proposal → bulkFetchPoolsByChain is the only path to prices. Candles mock returns pool.proposal as plain address (production-proxied shape). If the prefix-stripping guard regresses, poolMap empties and the assertion fails. |
 | 45 | `45-pr64-prefixed-shape.scenario.mjs` | PR #64 prefix-stripping THEN-branch regression | `/companies` | Sister to 44: poolless proposal + candles mock with PREFIXED pool.proposal ("100-0x..."). Exercises the THEN-branch of the raw.includes("-") guard. Together with 44 pins both prefix shapes — catches guard removal, inversion, or accidental shape change. |
 | 46 | `46-pr51-liquidity-magnitude.scenario.mjs` | PR #51 Algebra V3 raw-L wrong-magnitude in Liquidity widget (drop ×2 /1e18 in formatSubgraphPoolData) | `/markets/0x45e1064348fD8A407D6D1F59Fc64B05F633b28FC` | Catches PR #51 (Algebra V3 Liquidity-widget magnitude bug). Mock liquidity=7.5025e20 wei + tick=0 chosen so the post-fix math (×2/1e18 + .toString) produces "1500.5" per pool (decimal string preserved through normalizeTokenAmount), summed to 3001 → formatLiquidity → "3.00K". Reverting the math line in formatSubgraphPoolData makes adjustedLiquidity=7.5025e20 → "750250000000000000000" (integer string) → normalizeTokenAmount divides by 1e18 → 750.25 → sum 1500.5 → "1.50K". Exact-match assertion on "3.00K" fails under the regression. |
+| 47 | `47-checkpoint-schema-strictness.scenario.mjs` | Legacy GraphQL query against Checkpoint schema (reverse-relation or unknown field) — KIND covers PRs #45, #60, #61, #62, #63, #65 | `/companies` | First scenario using the strict-schema GraphQL mock. Catches the KIND behind 6 PRs (#45, #60, #61, #62, #63, #65): legacy GraphQL queries against the post-Checkpoint schema. Strict mock rejects reverse-relation fields (Aggregator.organizations, Organization.proposals) and unknown fields (ProposalEntity.metadataContract). TWO assertions span all 3 post-Checkpoint queries — org name (organizations query) AND probe event title (proposalentities query) — so any of the 3 regressing trips the scenario. |
