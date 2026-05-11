@@ -33,6 +33,12 @@ export default defineConfig({
     // parallel-within-file would leak state across tests. Flip to true
     // after Phase 6 if scenarios prove independent.
 
+    // Phase 7 fork-bootstrap step 2: globalSetup verifies anvil
+    // reachability + chain id + synthetic-wallet pre-funding before
+    // any scenario runs. Skips cleanly when HARNESS_NO_ANVIL is set
+    // or anvil isn't reachable. See fixtures/fork-state-setup.mjs.
+    globalSetup: './fixtures/fork-state-setup.mjs',
+
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: process.env.CI ? 1 : undefined,
