@@ -26,13 +26,17 @@ import {
 } from '../fixtures/api-mocks.mjs';
 
 test('market-page fixture — constants exported with expected shape', () => {
-    // Probe address must be lowercase 0x-prefixed (the page's adapter
-    // normalizes URL addresses to lowercase before the GraphQL call).
-    assert.match(MARKET_PROBE_ADDRESS, /^0x[a-f0-9]{40}$/);
+    // Probe address is 0x-prefixed but mixed-case (must match
+    // src/config/markets.js's MARKETS_CONFIG keys exactly because
+    // Next.js dynamic routes are case-sensitive).
+    assert.match(MARKET_PROBE_ADDRESS, /^0x[a-fA-F0-9]{40}$/);
     // Must match a real entry in interface src/config/markets.js so
     // the /markets/[address] page bypasses its "Market Not Found"
     // gate. The first key in MARKETS_CONFIG is GIP-145.
-    assert.equal(MARKET_PROBE_ADDRESS, '0x45e1064348fd8a407d6d1f59fc64b05f633b28fc');
+    // Case-sensitive — Next.js dynamic routes don't lowercase before
+    // matching, so the probe address MUST match the exact case in
+    // src/config/markets.js's MARKETS_CONFIG keys.
+    assert.equal(MARKET_PROBE_ADDRESS, '0x45e1064348fD8A407D6D1F59Fc64B05F633b28FC');
 
     // Synthetic strings must be distinctive — vanishingly unlikely
     // to collide with any real on-chain or indexed value.
@@ -112,7 +116,10 @@ test('makeMarketCandlesMockHandler — discovery query returns proposal + tokens
     assert.ok(fulfilled, 'handler must call route.fulfill');
     assert.equal(fulfilled.status, 200);
     const body = JSON.parse(fulfilled.body);
-    assert.equal(body.data.proposal.id, MARKET_PROBE_ADDRESS);
+    // Handler internally lowercases the proposal id (matches the
+    // adapter's pre-query normalization), so the returned id is the
+    // lowercased form.
+    assert.equal(body.data.proposal.id, MARKET_PROBE_ADDRESS.toLowerCase());
     assert.equal(body.data.proposal.currencyToken, MARKET_PROBE_CURRENCY_TKN);
     assert.equal(body.data.proposal.companyToken, MARKET_PROBE_COMPANY_TKN);
     assert.equal(body.data.whitelistedtokens.length, 3, 'sDAI + YES + NO');
@@ -154,7 +161,7 @@ test('makeMarketCandlesMockHandler — singular pool query returns pool detail',
     const body = JSON.parse(fulfilled.body);
     assert.equal(body.data.pool.length, 1);
     assert.equal(body.data.pool[0].id, MARKET_PROBE_NO_POOL);
-    assert.equal(body.data.pool[0].proposal, MARKET_PROBE_ADDRESS);
+    assert.equal(body.data.pool[0].proposal, MARKET_PROBE_ADDRESS.toLowerCase());
 });
 
 test('makeGraphqlMockHandler — accepts a market-shaped proposal row', async () => {

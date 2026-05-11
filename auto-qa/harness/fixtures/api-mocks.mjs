@@ -42,7 +42,11 @@ export const PROBE_PROPOSAL_ADDRESS = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 // via the handlers below. The page-shell metadata (title, image) comes
 // from the static MARKETS_CONFIG lookup, so scenarios that assert on
 // dynamic content target the harness probe values, not the GIP-145 strings.
-export const MARKET_PROBE_ADDRESS       = '0x45e1064348fd8a407d6d1f59fc64b05f633b28fc';
+// **Case-sensitive**: must match the exact case in
+// `src/config/markets.js`'s `MARKETS_CONFIG` keys, because
+// Next.js dynamic routes (`pages/markets/[address].js`) are
+// case-sensitive — a case mismatch returns 404 in dev.
+export const MARKET_PROBE_ADDRESS       = '0x45e1064348fD8A407D6D1F59Fc64B05F633b28FC';
 export const MARKET_PROBE_TITLE         = 'HARNESS-MARKET-PROBE-001';
 export const MARKET_PROBE_DESCRIPTION   = 'Synthetic market proposal (harness)';
 export const MARKET_PROBE_CURRENCY_TKN  = '0xcccccccccccccccccccccccccccccccccccccc01';

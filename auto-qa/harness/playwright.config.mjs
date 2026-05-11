@@ -116,6 +116,22 @@ export default defineConfig({
                     process.env.HARNESS_ANVIL_URL ||
                     'http://localhost:8546',
                 NEXT_PUBLIC_API_URL: process.env.HARNESS_API_URL || 'http://localhost:3031',
+                // Dummy Supabase credentials. Some pages (e.g.,
+                // pages/markets/[address].js) call createClient at
+                // module top-level and throw `supabaseKey is required`
+                // when the key is empty — that's a HARD ERROR before
+                // any React renders, so even mocking the network
+                // layer doesn't help. The harness routes Supabase
+                // requests through Playwright's `context.route()`
+                // when a scenario needs to assert on the data, so
+                // a dummy key here is enough to satisfy the
+                // module-init guard.
+                NEXT_PUBLIC_SUPABASE_URL:
+                    process.env.HARNESS_SUPABASE_URL ||
+                    'https://harness-supabase.invalid',
+                NEXT_PUBLIC_SUPABASE_ANON_KEY:
+                    process.env.HARNESS_SUPABASE_ANON_KEY ||
+                    'harness-dummy-anon-key',
             },
         },
         ...(process.env.HARNESS_NO_ANVIL ? [] : [{
