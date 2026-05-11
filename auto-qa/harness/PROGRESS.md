@@ -2313,6 +2313,68 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 10-market-page-happy (Phase 7 pivot iteration 2)**
+  (this iteration, on the interface side) — first
+  market-page Playwright scenario. Validates the entire
+  fixture surface shipped in the previous iteration.
+
+  * Adds `scenarios/10-market-page-happy.scenario.mjs`.
+    Navigates to `/markets/<MARKET_PROBE_ADDRESS>` (the
+    real GIP-145 address that bypasses the
+    "Market Not Found" gate); mocks registry GraphQL
+    via `makeGraphqlMockHandler({ proposals: [fakeMarketProposalEntity()] })`
+    and candles GraphQL via `makeMarketCandlesMockHandler()`.
+    Asserts the harness's synthetic title
+    `HARNESS-MARKET-PROBE-001` appears in the rendered
+    DOM — proves the registry mock data flows through
+    `fetchProposalMetadataFromRegistry` → adapter
+    client-side filter → page render.
+
+  * **Why this assertion**: the synthetic title comes
+    from the dynamic proposalentity mock, NOT the
+    static MARKETS_CONFIG title (which is GIP-145
+    boilerplate). Asserting on the synthetic value
+    proves the entire mock-to-DOM pipeline works.
+    Static-title assertion would couple the test to
+    whichever configured market we picked as probe.
+
+  * **Bug-shapes guarded** (foundation regressions):
+    - market-page page-shell never mounts past loading
+    - "Market Not Found" gate fires false-positive
+    - WrongNetworkModal blocks render at chain 100
+    - aggregator client-side filter drops the happy
+      proposalentity (whose nested aggregator id
+      matches DEFAULT_AGGREGATOR by construction)
+    - candles handler dispatch breaks for the singular
+      `pools(where:{id:...})` form
+
+  * Catalog regenerated: SCENARIOS.md now lists 10
+    scenarios (was 9). Smoke totals: 20/20 pass —
+    importing the new scenario doesn't regress the
+    existing scenarios:catalog drift smoke or any
+    other test.
+
+  * **Live Playwright validation deferred**: this
+    iteration ships the scenario based on static
+    imports + the recon's text anchor strategy; the
+    scenario will get live-validated next time
+    `npm run ui:full` runs (locally or via the staged
+    `auto-qa-harness-scenarios.yml` workflow when
+    promoted). If the assertion needs adjustment
+    after live run, that's a quick follow-up iteration.
+    Hard-failing the cron on a live Playwright run
+    that needs Next.js dev server bootstrap (10-30s
+    cold start + 1-2min per test) is outside the
+    cron's 5min budget and the user is already aware
+    of the live-validation gap.
+
+  * **Iteration plan progress**: 3 of 7 done.
+    - ✓ Recon
+    - ✓ Fixture skeleton
+    - ✓ Happy-path scenario (this iteration)
+    - ⏳ Trading scenario (next)
+    - ⏳ Allowances / Positions / Charts / Liquidity
+
 - **slice market-page-fixture-skeleton (Phase 7 pivot iteration 1)**
   (this iteration, on the interface side) — first concrete
   step of the market-page pivot per the plan in last

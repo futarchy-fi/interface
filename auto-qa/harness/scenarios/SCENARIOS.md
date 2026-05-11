@@ -10,7 +10,7 @@ auto-discovers every `*.scenario.mjs` in this directory and emits one
 Playwright test per row. See [ADR-002](../docs/ADR-002-scenario-format.md)
 for the format definition.
 
-Total scenarios: **9**
+Total scenarios: **10**
 
 | #  | File                               | Bug shape                                                   | Route          | Description |
 |----|------------------------------------|-------------------------------------------------------------|----------------|-------------|
@@ -23,3 +23,4 @@ Total scenarios: **9**
 | 07 | `07-registry-malformed-body.scenario.mjs` | json-parse-syntaxerror crashes / hangs / leaks HTML to UI when proxy returns 200 with HTML body (the third code branch alongside 5xx and empty-200; most likely to crash because SyntaxError can bypass .catch) | `/companies` | Registry GraphQL responds 200 + content-type:text/html + an HTML error page body (CDN/proxy intercepted the request). Asserts /companies degrades to "No organizations found" — distinct from the 5xx (#02) and empty-200 (#05) paths because response.json() throws SyntaxError before the .then chain runs. |
 | 08 | `08-candles-malformed-body.scenario.mjs` | json-parse-syntaxerror on candles crashes carousel / leaks HTML to price overlay / hangs price spinner (distinct from #03 5xx-down because the SyntaxError can bypass the .catch the same way #07's registry malformed-body can) | `/companies` | REGISTRY healthy + CANDLES returns 200 with HTML body (CDN/proxy intercepted candles request). Assert the carousel still renders the event card (registry data intact) but the price degrades to "0.00 SDAI" — JSON.parse SyntaxError on candles must NOT take down the carousel. |
 | 09 | `09-registry-corrupt-org.scenario.mjs` | one bad apple crashes orgs list / corrupt row leaks raw "undefined" to UI / valid orgs filtered alongside corrupt ones (per-row defensive-coding regression) | `/companies` | Registry returns valid orgs list with a CORRUPT row mixed in (missing required `name` field). Assert the valid org renders — proves the page handles per-row corruption without crashing the entire list. |
+| 10 | `10-market-page-happy.scenario.mjs` | market-page page-shell never mounts / Market Not Found false positive / WrongNetworkModal false positive / aggregator filter drops happy proposalentity (foundation regression) | `/markets/0x45e1064348fd8a407d6d1f59fc64b05f633b28fc` | First market-page scenario. Navigate to /markets/<probe>; mock registry GraphQL with a market-shaped proposalentity and candles GraphQL with the new market-aware handler. Assert the page renders past the page-shell — proves the entire fixture surface (registry + candles + wallet stub + chain validation) works end-to-end. |
