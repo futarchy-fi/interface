@@ -2313,6 +2313,100 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 69-dom-api-invariant-alt-fallback-pair
+  (Phase 5 invariant catalog — 28th DOM↔API
+  invariant; alt + visible-text consistency
+  pair)** (this iteration, on the interface
+  side) — pairs with slice 4x (alt flows from
+  org.name when set) and slice 4v ('Unknown
+  Organization' text fallback in visible cell).
+  Together the three slices prove the
+  org.name → title → {visible text, alt
+  attribute} pipeline is consistent at both
+  populated and fallback ends.
+
+  * **Coverage matrix** for the alt/visible-text
+    pair:
+    | org.name        | visible text          | alt attribute             |
+    |-----------------|-----------------------|---------------------------|
+    | 'PROBE-ORG-ALT' | 'PROBE-ORG-ALT' (4x*) | 'PROBE-ORG-ALT' (4x)      |
+    | null            | 'Unknown Organization'| 'Unknown Organization'(4y)|
+    |                 |                  (4v) |                       ★   |
+
+  * **The new invariant** —
+    `slice 4y — img alt uses "Unknown
+    Organization" fallback when org.name=null`.
+    Mock `orgName: null`. Assert
+    `row.locator('img').first()` has
+    `alt='Unknown Organization'` (exact match,
+    same string as the visible text).
+
+  * **Why the pair is tighter than either
+    alone**: 4x pins (name → alt) at the
+    populated end; 4y pins (null → 'Unknown
+    Organization' → alt) at the fallback end.
+    A regression that affects ONLY one end
+    lights up the matching test, providing
+    precise diagnosis.
+
+  * **Bug classes caught** (NEW vs 4x and 4v):
+    - Regression that adds an OrgRow-level
+      fallback for alt (`alt={title || 'Logo'}`)
+      that differs from the title-cascade
+      fallback ('Unknown Organization') — 4x
+      wouldn't catch (title is non-null
+      there); 4y catches because the alt
+      assertion `'Unknown Organization'` would
+      fail with `'Logo'`
+    - Regression that hardcodes alt to a
+      static string in the fallback branch —
+      alt='Image' or empty while visible text
+      shows 'Unknown Organization'; a11y
+      divergence from visible UX
+    - Regression in useAggregatorCompanies
+      that produces a NULL title (drops the
+      `|| 'Unknown Organization'` fallback) —
+      alt becomes empty string `""` or
+      undefined; this slice fails because
+      exact match against 'Unknown
+      Organization' wouldn't apply
+
+  * **Pattern (worth pinning)**: pairing
+    populated-end + fallback-end tests at the
+    SAME attribute or text dimension creates
+    a coverage LATTICE that catches regressions
+    affecting only one end. The same pattern
+    can extend to other (title-cascade
+    × attribute) intersections — e.g., a
+    future slice could test alt + 'Unknown
+    Proposal' at the proposal level (parallel
+    to 4t but for an attribute on the carousel
+    card if applicable).
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 28 DOM↔API invariant tests pass:
+      57.5s (was 27 in 56.8s; new slice 4y
+      alone: 1.6s on first run)
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: 19 invariants
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: **7 invariants**
+      (was 6; alt-fallback test joins the
+      alt-attribute sub-dimension — now 2 tests
+      for alt alongside 4 for src + 1 for href)
+
+  * **What's next**:
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers in carousel card)
+    - href on table row (currently uses
+      onClick; would require click + url check)
+    - State-transition test (orgs `[PROBE]` →
+      `[]` via re-mock)
+    - Pivot to api-side (currently 23 invariants
+      there vs 28 here)
+
 - **slice 68-dom-api-invariant-logo-alt-attribute
   (Phase 5 invariant catalog — 27th DOM↔API
   invariant; opens A11Y/`alt` attribute

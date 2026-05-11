@@ -1747,6 +1747,94 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         );
     });
 
+    test('slice 4y — img alt uses "Unknown Organization" fallback when org.name=null (alt + text coverage pair)', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Pairs with slice 4x (alt flows from org.name when set)
+        // and slice 4v ('Unknown Organization' text fallback in
+        // visible cell). Together the three slices prove the
+        // org.name → title → {visible text, alt attribute}
+        // pipeline is consistent at both the populated and
+        // fallback ends:
+        //
+        //   | org.name        | visible text          | alt attribute        |
+        //   |-----------------|-----------------------|----------------------|
+        //   | 'PROBE-ORG-ALT' | 'PROBE-ORG-ALT' (4x*) | 'PROBE-ORG-ALT' (4x) |
+        //   | null            | 'Unknown Organization'| 'Unknown ...' (4y) ★ |
+        //   |                 |                  (4v) |                      |
+        //
+        // (* 4x asserts the alt is the same string as the
+        // visible text; the visible-text assertion in 4x is a
+        // pre-flight that proves the row mounted, not the
+        // primary assertion.)
+        //
+        // Why this pair matters: if a regression hardcodes
+        // `alt="Logo"` in OrgRow regardless of the title prop,
+        // 4x would catch it (alt no longer matches
+        // 'HARNESS-PROBE-ORG-ALT') but this slice catches a
+        // DIFFERENT regression class: alt that flows from the
+        // populated title path but NOT the fallback title
+        // path. For example, a refactor that splits OrgRow's
+        // alt into `<Image alt={title || 'Logo'} />` would
+        // make alt='Logo' when title='Unknown Organization' is
+        // the fallback — 4x wouldn't fail (because in 4x, the
+        // title is non-null so title || 'Logo' = title), but
+        // this slice would catch the divergence.
+        //
+        // Bug classes caught (NEW vs 4x and 4v):
+        //   - Regression that adds an OrgRow-level fallback for
+        //     alt (`alt={title || 'Logo'}`) that differs from
+        //     the title-cascade fallback ('Unknown Organization')
+        //   - Regression that hardcodes alt to a static string
+        //     in the fallback branch — alt='Image' or empty
+        //     while visible text shows 'Unknown Organization';
+        //     a11y divergence from visible UX
+        //   - Regression in useAggregatorCompanies that
+        //     produces a NULL title (drops the
+        //     `|| 'Unknown Organization'` fallback) — alt
+        //     becomes the empty string `""` or undefined; this
+        //     slice would fail because the exact match against
+        //     'Unknown Organization' wouldn't apply
+        //
+        // Why the pair is tighter than either test alone: 4x
+        // pins (name → alt) at the populated end; 4y pins
+        // (null → 'Unknown Organization' → alt) at the
+        // fallback end. A regression that affects ONLY one
+        // end light up the matching test, providing precise
+        // diagnosis.
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            orgName: null,
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Pre-flight: row mounts with the 'Unknown Organization'
+        // fallback (proves the title cascade resolved as
+        // expected).
+        await expect(
+            page.getByText('Unknown Organization').first(),
+        ).toBeVisible({ timeout: 30_000 });
+
+        const row = page.getByRole('row').filter({ hasText: 'Unknown Organization' });
+        await expect(row).toHaveCount(1);
+        // The CRITICAL assertion: alt is the fallback string,
+        // matching the visible text exactly. Proves alt and
+        // visible text are derived from the SAME title-
+        // cascade path (both `useAggregatorCompanies`-side).
+        await expect(row.locator('img').first()).toHaveAttribute(
+            'alt',
+            'Unknown Organization',
+        );
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 
