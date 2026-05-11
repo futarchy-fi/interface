@@ -2313,6 +2313,103 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 88-archived-proposal-filter (Phase 6 —
+  catches PR #46 via DOM absence assertion)**
+  (this iteration, on the interface side) — Catches
+  PR #46 (filter archived proposals from companies
+  and proposals lists). First scenario that asserts
+  on DOM ABSENCE — "this title must NOT appear" —
+  as the catch signal. Recent-PR coverage: 10/22 →
+  11/22 (50%).
+
+  * **The KIND**: client-side list filter
+    regression. Two probe proposals injected
+    (one active, one with `archived: true` in
+    metadata); the test asserts the archived
+    title is absent from the DOM. If PR #46's
+    filter is reverted, both render in the
+    Active Milestones carousel and the absence
+    assertion catches it.
+
+  * **The fixture extension**: `fakePoolBearingProposal`
+    now accepts an optional `metadataExtra`
+    object that's spread into the proposal's
+    JSON metadata. The two probes get distinct
+    `proposalAddress`es (otherwise React dedupes
+    them on the eventId key downstream) and
+    distinct `idSuffix`es.
+
+  * **The scenario**
+    (`scenarios/55-pr46-filter-archived-
+    proposals.scenario.mjs`):
+    - Route: `/companies`
+    - Registry mock returns `[ACTIVE_PROBE,
+      ARCHIVED_PROBE]`.
+    - Assertion 1: `ACTIVE_TITLE` IS visible
+      (sanity — mock + carousel pipeline works).
+    - Assertion 2: `ARCHIVED_TITLE` has count 0
+      (the catch signal — fails when the filter
+      is reverted).
+
+  * **Mechanical verification — caught a HMR
+    gotcha**:
+    1. Removed `proposalMeta.archived === true`
+       filter from `useAggregatorProposals.js:432`
+       → first regression test PASSED (false
+       negative). Root cause: Next.js dev server
+       was reusing a cached module that still
+       had the filter; HMR didn't pick up the
+       edit.
+    2. Killed dev server + cleared `.next/cache`
+       + reran → regression test FAILED with
+       `Received: 2 elements` for ARCHIVED_TITLE
+       locator. Mechanical catch confirmed.
+    3. Restored filter + reran → PASSED (18s).
+
+    Operational lesson logged: changes to the
+    src under `next dev`'s reuseExistingServer
+    flow need a server kill to guarantee a fresh
+    module graph. Future regression-verification
+    runs should `lsof -i :3000 -t | xargs kill`
+    before the assertion-flips-direction run.
+
+  * **What this scenario DOESN'T catch yet**:
+    - `useAggregatorCompanies.transformOrgToCard`
+      also has an archived filter that affects
+      the active-count badge on org cards. A
+      future iteration could extend the assertion
+      to check the org card's proposal count
+      (currently the assertion only catches the
+      Active Milestones carousel branch).
+    - PR #46 also adds the filter to
+      `ResolvedEventsDataTransformer.jsx`; that
+      path isn't exercised by this scenario
+      because the probe doesn't have
+      `resolution_status: 'resolved'`.
+
+  * **Catalog state**: 55 scenarios, **13
+    mechanically verified** (44, 45, 46, 47, 48,
+    10, 49, 50, 51, 52, 53, 54, 55). Recent-PR
+    coverage: **11/22 = 50%**. Eight assertion
+    KINDs unchanged; this slice uses the
+    existing DOM-text KIND with the inverted
+    `toHaveCount(0)` assertion form — a new
+    SHAPE within the existing KIND.
+
+  * **Live re-validation**:
+    - Scenario 55 wall-clock: ~13s cold, ~5s
+      warm. Slower than typical because of the
+      `waitForTimeout(2000)` settle before the
+      absence assertion (necessary — without it
+      the test would false-pass while the
+      carousel was still mounting).
+    - src/ tree clean after verification cycle
+      (archived filter restored).
+    - Scenario 47 still passes (didn't break
+      the existing fixture consumers with the
+      `metadataExtra` addition — defaults to
+      empty object).
+
 - **slice 87-prod-mode-first-real-catch (Phase 6 —
   scenario 54 is the first scenario that ACTUALLY
   needs slice 85's prod-mode infra to catch a real

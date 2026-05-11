@@ -407,6 +407,7 @@ export function fakePoolBearingProposal(opts = {}) {
         poolNo          = PROBE_POOL_NO,
         title           = 'HARNESS-PROBE-EVENT-001',
         chain           = 100,
+        metadataExtra   = {},
     } = opts;
     return {
         id:                  `0xprop${String(idSuffix).padStart(40, '0').slice(-40)}`,
@@ -419,6 +420,7 @@ export function fakePoolBearingProposal(opts = {}) {
                 yes: { address: poolYes },
                 no:  { address: poolNo  },
             },
+            ...metadataExtra,
         }),
         metadataURI:    null,
         proposalAddress,
