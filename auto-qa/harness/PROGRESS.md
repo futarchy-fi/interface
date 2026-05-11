@@ -2313,6 +2313,87 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice market-page-fixture-skeleton (Phase 7 pivot iteration 1)**
+  (this iteration, on the interface side) — first concrete
+  step of the market-page pivot per the plan in last
+  iteration's recon. Extends `fixtures/api-mocks.mjs` with
+  the constants and handlers the next several scenarios
+  will share. No scenario shipped yet — the happy-path
+  scenario lands in iteration 2.
+
+  * **New constants** (7):
+    - `MARKET_PROBE_ADDRESS` = `0x45e1064348fd8a407d6d1f59fc64b05f633b28fc`
+      (real configured GIP-145, bypasses the
+      `MARKETS_CONFIG` "Market Not Found" gate; everything
+      dynamic on top is mocked)
+    - `MARKET_PROBE_TITLE`, `MARKET_PROBE_DESCRIPTION`
+      (synthetic distinctive strings for assertions)
+    - `MARKET_PROBE_CURRENCY_TKN`, `MARKET_PROBE_COMPANY_TKN`,
+      `MARKET_PROBE_YES_POOL`, `MARKET_PROBE_NO_POOL`
+      (synthetic 0x... addresses)
+
+  * **`fakeMarketProposalEntity()` helper**: returns a
+    proposalentity row in the shape that
+    `src/adapters/registryAdapter.js`'s
+    `fetchProposalMetadataFromRegistry` expects. Distinct
+    from the /companies-side `fakeProposal` /
+    `fakePoolBearingProposal` because the market-page
+    query uses different fields (filtered by
+    `proposalAddress`, has `title` / `displayName*`,
+    nested `organization.aggregator.id` for client-side
+    filtering). Default aggregator id matches
+    `PROBE_AGG_ID` so the row passes the consumer's
+    client-side filter; metadata embeds
+    `conditional_pools.{yes,no}.address` referencing the
+    new pool probe addresses.
+
+  * **`makeMarketCandlesMockHandler()` factory**:
+    dispatches on the FOUR distinct candles GraphQL
+    queries the market page emits via `useYesNoPoolData`
+    / `usePoolData`:
+    1. discovery query (`proposal + whitelistedtokens`)
+    2. per-pool detail (`pools(where:{id:...})` —
+       singular id form, distinct from the
+       `pools(where:{id_in:[...]})` shape the carousel
+       fetcher uses)
+    3. latest-candle query (`candles(where:{pool:...},
+       orderBy:time, orderDirection:desc, first:1)`)
+    4. token-list refresh (`whitelistedtokens(where:
+       {proposal:...})`)
+    Defaults render an internally consistent happy path
+    (1e21 liquidity, balanced 0.5/0.5 prices, three
+    tokens with sDAI/YES/NO roles); per-key opts let
+    scenarios degrade specific surfaces.
+
+  * **The existing `makeGraphqlMockHandler`** still
+    works for the registry side — passing
+    `proposals: [fakeMarketProposalEntity()]` returns
+    the right shape under
+    `data.proposalentities`.
+
+  * **`tests/smoke-market-page-fixture.test.mjs`** —
+    8 new tests asserting the new exports' shape:
+    constants conform to expected formats, helpers
+    return the documented shape, the handler dispatches
+    on each of the 4 query patterns and overrides take
+    effect. All pass without a browser. Stub
+    Playwright route object lets the test exercise the
+    real handler logic without needing an actual
+    Playwright runtime.
+
+  * Total interface harness smoke tests: 20/20 (was 12).
+
+  * **Iteration plan progress**: 1 of 7 done.
+    - ✓ Recon (previous iteration)
+    - ✓ Fixture skeleton (this iteration)
+    - ⏳ Happy-path scenario `10-market-page-happy.scenario.mjs`
+      (next iteration)
+    - ⏳ Trading scenario
+    - ⏳ Allowances scenario
+    - ⏳ Positions scenario
+    - ⏳ Charts scenario
+    - ⏳ Liquidity scenario
+
 - **slice market-page-recon (Phase 7 pivot)**
   (this iteration, on the interface side) — strategic
   pivot. User capped /companies coverage at 9 scenarios

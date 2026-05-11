@@ -32,6 +32,24 @@ export const PROBE_POOL_YES = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01';
 export const PROBE_POOL_NO  = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa02';
 export const PROBE_PROPOSAL_ADDRESS = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
+// ── Market-page probe values (Phase 7 pivot) ──
+//
+// Distinct from the /companies probes above because the /markets/[address]
+// page has a "Market Not Found" gate that only renders if the URL address
+// is in `MARKETS_CONFIG`. So MARKET_PROBE_ADDRESS uses a REAL configured
+// address (GIP-145, the first key in MARKETS_CONFIG); everything dynamic
+// on TOP of that — proposalentity rows, pool data, candles — gets mocked
+// via the handlers below. The page-shell metadata (title, image) comes
+// from the static MARKETS_CONFIG lookup, so scenarios that assert on
+// dynamic content target the harness probe values, not the GIP-145 strings.
+export const MARKET_PROBE_ADDRESS       = '0x45e1064348fd8a407d6d1f59fc64b05f633b28fc';
+export const MARKET_PROBE_TITLE         = 'HARNESS-MARKET-PROBE-001';
+export const MARKET_PROBE_DESCRIPTION   = 'Synthetic market proposal (harness)';
+export const MARKET_PROBE_CURRENCY_TKN  = '0xcccccccccccccccccccccccccccccccccccccc01';
+export const MARKET_PROBE_COMPANY_TKN   = '0xcccccccccccccccccccccccccccccccccccccc02';
+export const MARKET_PROBE_YES_POOL      = '0xdddddddddddddddddddddddddddddddddddddd01';
+export const MARKET_PROBE_NO_POOL       = '0xdddddddddddddddddddddddddddddddddddddd02';
+
 // ── Registry GraphQL ──
 
 /**
@@ -145,6 +163,60 @@ export function fakePoolBearingProposal(opts = {}) {
     };
 }
 
+/**
+ * Stub `proposalentity` row in the market-page query shape used by
+ * `src/adapters/registryAdapter.js`'s
+ * `fetchProposalMetadataFromRegistry`. Distinct from the /companies
+ * shapes (`fakeProposal`, `fakePoolBearingProposal`):
+ *   - filtered by `proposalAddress` (not `id`), so the row's
+ *     `proposalAddress` field must match the URL segment
+ *   - includes `title`, `description`, `displayNameQuestion`,
+ *     `displayNameEvent`, `owner`
+ *   - nested `organization { id, name, aggregator { id } }` —
+ *     the consumer client-side-filters by aggregator id, so the
+ *     nested aggregator must equal `PROBE_AGG_ID` for the row to
+ *     pass the filter
+ *
+ * Pass `metadataExtra` to embed `conditional_pools.{yes,no}.address`,
+ * `chain`, `spotPrice`, etc. — the consumer's various
+ * `extract*FromMetadata` helpers parse this object.
+ */
+export function fakeMarketProposalEntity(opts = {}) {
+    const {
+        proposalAddress = MARKET_PROBE_ADDRESS,
+        title           = MARKET_PROBE_TITLE,
+        description     = MARKET_PROBE_DESCRIPTION,
+        owner           = '0x0000000000000000000000000000000000000000',
+        aggregatorId    = PROBE_AGG_ID,
+        organizationId  = PROBE_ORG_ID,
+        organizationName = PROBE_ORG_NAME,
+        metadataExtra   = {},
+    } = opts;
+
+    return {
+        id:                  `proposal-${proposalAddress.slice(2, 10)}`,
+        proposalAddress,
+        metadata: JSON.stringify({
+            chain: '100',
+            conditional_pools: {
+                yes: { address: MARKET_PROBE_YES_POOL },
+                no:  { address: MARKET_PROBE_NO_POOL  },
+            },
+            ...metadataExtra,
+        }),
+        title,
+        description,
+        displayNameEvent:    title,
+        displayNameQuestion: title,
+        owner,
+        organization: {
+            id:         organizationId,
+            name:       organizationName,
+            aggregator: { id: aggregatorId },
+        },
+    };
+}
+
 // ── Candles GraphQL ──
 
 /**
@@ -181,6 +253,110 @@ export function makeCandlesMockHandler({ prices = {}, onCall } = {}) {
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({ data: { pools } }),
+        });
+    };
+}
+
+/**
+ * Build a route handler for `CANDLES_GRAPHQL_URL` that knows the FOUR
+ * distinct query shapes the market page emits via `usePoolData` /
+ * `useYesNoPoolData`:
+ *
+ *   1. `{ proposal(id: "0x...") { id, currencyToken, companyToken } +
+ *        whitelistedtokens(where: { proposal: "0x..." }) { ... } }`
+ *      — initial discovery query that tells the hook which
+ *      currency/company tokens this proposal uses.
+ *
+ *   2. `{ pools: pools(where: { id: "0x..." }) { id, liquidity,
+ *        volumeToken0, volumeToken1, token0, token1, tick, proposal } }`
+ *      — per-pool detail query (singular `id`, NOT `id_in`).
+ *
+ *   3. `{ candles(where: { pool: "0x..." }, orderBy: time,
+ *        orderDirection: desc, first: 1) { close } }` — latest
+ *      candle for spot price.
+ *
+ *   4. `{ whitelistedtokens(where: { proposal: "0x..." }) { ... } }`
+ *      — token-list-only refresh.
+ *
+ * The /companies-side `makeCandlesMockHandler` only handles a 5th
+ * shape (`pools(where: { id_in: [...] })`); the two are non-overlapping
+ * so a market-page scenario uses THIS handler instead.
+ *
+ * Defaults render a complete + internally consistent happy path —
+ * pools have plausible liquidity/volume, candles return spot=0.5,
+ * tokens have YES+NO+sDAI roles. Per-key overrides via opts let
+ * scenarios degrade specific surfaces.
+ */
+export function makeMarketCandlesMockHandler(opts = {}) {
+    const {
+        proposalAddress = MARKET_PROBE_ADDRESS,
+        currencyToken   = MARKET_PROBE_CURRENCY_TKN,
+        companyToken    = MARKET_PROBE_COMPANY_TKN,
+        yesPool         = MARKET_PROBE_YES_POOL,
+        noPool          = MARKET_PROBE_NO_POOL,
+        yesPrice        = 0.5,
+        noPrice         = 0.5,
+        onCall,
+    } = opts;
+
+    const proposalLower = proposalAddress.toLowerCase();
+    const tokens = [
+        { address: currencyToken, symbol: 'sDAI', decimals: 18, role: 'CURRENCY' },
+        { address: yesPool,       symbol: 'YES',  decimals: 18, role: 'YES'      },
+        { address: noPool,        symbol: 'NO',   decimals: 18, role: 'NO'       },
+    ];
+
+    const fakePool = (id, role) => ({
+        id,
+        liquidity:    '1000000000000000000000',
+        volumeToken0: '1000000000000000000',
+        volumeToken1: '1000000000000000000',
+        token0:       currencyToken,
+        token1:       role === 'YES' ? yesPool : noPool,
+        tick:         '0',
+        proposal:     proposalLower,
+    });
+
+    return async (route) => {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const q = body.query || '';
+        onCall?.(q);
+
+        let data;
+        if (q.includes('proposal(id:') && q.includes('whitelistedtokens')) {
+            // Discovery query (#1): proposal + tokens in one request.
+            data = {
+                proposal: { id: proposalLower, currencyToken, companyToken },
+                whitelistedtokens: tokens,
+            };
+        } else if (q.includes('candles(where:')) {
+            // Latest-candle query (#3) — extract the pool id and
+            // return that pool's price as the close.
+            const poolMatch = q.match(/pool:\s*"(0x[a-fA-F0-9]{40})"/);
+            const poolId = poolMatch ? poolMatch[1].toLowerCase() : null;
+            const close = poolId === yesPool ? yesPrice
+                        : poolId === noPool  ? noPrice
+                        : null;
+            data = { candles: close == null ? [] : [{ close: String(close) }] };
+        } else if (q.includes('pools(where:') && q.includes('id:') && !q.includes('id_in:')) {
+            // Per-pool detail query (#2) — singular id form.
+            const idMatch = q.match(/id:\s*"(0x[a-fA-F0-9]{40})"/);
+            const poolId = idMatch ? idMatch[1].toLowerCase() : null;
+            const pool = poolId === yesPool ? fakePool(yesPool, 'YES')
+                       : poolId === noPool  ? fakePool(noPool,  'NO')
+                       : null;
+            data = { pool: pool ? [pool] : [] };
+        } else if (q.includes('whitelistedtokens')) {
+            // Token-list refresh (#4).
+            data = { whitelistedtokens: tokens };
+        } else {
+            data = {};
+        }
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ data }),
         });
     };
 }
