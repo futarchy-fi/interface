@@ -2313,6 +2313,66 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 12-market-page-allowances (Phase 7 pivot iteration 4)**
+  (this iteration, on the interface side) — second
+  market-page feature-area scenario. Allowances is the
+  user's second-listed area; this scenario locks in the
+  rendering contract for `MarketBalancePanel` and the
+  Collateral dropdown that opens `CollateralModal`.
+
+  * **Why "allowances" maps to MarketBalancePanel**:
+    on the live page, the user's path to approving /
+    wrapping / splitting collateral runs through
+    `MarketBalancePanel` → "Collateral" dropdown →
+    "Split Collateral" / "Merge Collateral" item →
+    `CollateralModal` (which fires the on-chain
+    ERC20 approve + setApprovalForAll calls). The
+    panel's "Balance" header + "Collateral" dropdown
+    button are static React-rendered constants —
+    asserting both proves the surface mounted and
+    is interactive.
+
+  * Adds `scenarios/12-market-page-allowances.scenario.mjs`.
+    Identical mocks to #10/#11 — registry GraphQL with
+    the synthetic proposalentity, candles GraphQL with
+    the market-aware handler. No new fixture surface.
+    Two assertions:
+    - "Balance" header visible (panel mounted)
+    - "Collateral" dropdown button visible via
+      `getByRole('button', { name: /Collateral/ })`
+      (interactive control present)
+
+  * **Bug-shapes guarded** (foundation regressions for
+    the allowances feature):
+    - MarketBalancePanel never mounts when address null
+      at first render
+    - "Balance" header dropped by panel-layout refactor
+    - "Collateral" dropdown trigger collapses to
+      separate buttons (silently removes the dropdown
+      affordance)
+    - sister panel takes the allowance slot (assert
+      proves identity)
+
+  * **What this scenario deliberately does NOT cover**:
+    Split/Merge dropdown items (only render after
+    user clicks Collateral), specific allowance values
+    (would need on-chain mocking — separate fixture
+    surface). Both belong to follow-up scenarios.
+
+  * Catalog regenerated: SCENARIOS.md now lists 12
+    scenarios. Smoke totals: 20/20 pass. Live
+    Playwright validation deferred (Next.js cold
+    start outside cron budget).
+
+  * **Iteration plan progress**: 5 of 7 done.
+    - ✓ Recon
+    - ✓ Fixture skeleton
+    - ✓ Happy-path scenario
+    - ✓ Trading scenario
+    - ✓ Allowances scenario (this iteration)
+    - ⏳ Positions scenario (next)
+    - ⏳ Charts / Liquidity
+
 - **slice 11-market-page-trading (Phase 7 pivot iteration 3)**
   (this iteration, on the interface side) — first
   market-page feature-area scenario. Trading is the

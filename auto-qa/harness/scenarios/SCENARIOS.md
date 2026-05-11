@@ -10,7 +10,7 @@ auto-discovers every `*.scenario.mjs` in this directory and emits one
 Playwright test per row. See [ADR-002](../docs/ADR-002-scenario-format.md)
 for the format definition.
 
-Total scenarios: **11**
+Total scenarios: **12**
 
 | #  | File                               | Bug shape                                                   | Route          | Description |
 |----|------------------------------------|-------------------------------------------------------------|----------------|-------------|
@@ -25,3 +25,4 @@ Total scenarios: **11**
 | 09 | `09-registry-corrupt-org.scenario.mjs` | one bad apple crashes orgs list / corrupt row leaks raw "undefined" to UI / valid orgs filtered alongside corrupt ones (per-row defensive-coding regression) | `/companies` | Registry returns valid orgs list with a CORRUPT row mixed in (missing required `name` field). Assert the valid org renders — proves the page handles per-row corruption without crashing the entire list. |
 | 10 | `10-market-page-happy.scenario.mjs` | market-page page-shell never mounts / Market Not Found false positive / WrongNetworkModal false positive / aggregator filter drops happy proposalentity (foundation regression) | `/markets/0x45e1064348fd8a407d6d1f59fc64b05f633b28fc` | First market-page scenario. Navigate to /markets/<probe>; mock registry GraphQL with a market-shaped proposalentity and candles GraphQL with the new market-aware handler. Assert the page renders past the page-shell — proves the entire fixture surface (registry + candles + wallet stub + chain validation) works end-to-end. |
 | 11 | `11-market-page-trading.scenario.mjs` | trading panel never mounts / outcome tab collapsed / action buttons missing or swapped / Connect Wallet renders SOLO instead of the panel (foundation regression for the trading feature area) | `/markets/0x45e1064348fd8a407d6d1f59fc64b05f633b28fc` | Asserts the trading panel (ShowcaseSwapComponent) mounted with both outcome tabs ("If Yes" / "If No") and both action buttons ("Buy" / "Sell") visible. Same mocks as #10; the assertion reaches a structural slice of the page no scenario has covered yet. |
+| 12 | `12-market-page-allowances.scenario.mjs` | MarketBalancePanel never mounts / Balance header dropped / Collateral dropdown missing / sister panel takes the allowance slot (foundation regression for the allowances feature area) | `/markets/0x45e1064348fd8a407d6d1f59fc64b05f633b28fc` | Asserts the allowances/collateral surface (MarketBalancePanel) mounted with the static "Balance" header + "Collateral" dropdown trigger visible. Same mocks as #11; the assertion reaches a different structural slice of the page (the panel that gates the on-chain approve/split/merge flow). |
