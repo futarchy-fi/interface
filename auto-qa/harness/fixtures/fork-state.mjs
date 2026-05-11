@@ -92,6 +92,29 @@ export const CT_BALANCE_SLOT = 1;
 // exercise.
 export const EMPTY_COLLECTION_ID = `0x${'00'.repeat(32)}`;
 
+/**
+ * Position IDs that `src/hooks/useContractConfig.js` returns as
+ * `MERGE_CONFIG.{currency,company}Positions.{yes,no}.positionId`
+ * in the GIP-145 fallback path. These literals are hard-coded in
+ * the hook (lines 400/408/418/426); the harness funds wallet
+ * positions at these IDs in globalSetup so the page sees non-zero
+ * balances. Step 12+ scenarios mutate these IDs directly to
+ * exercise position-side change-detection.
+ *
+ * DO NOT confuse these with `deriveYesNoPositionIds()` output —
+ * that derives IDs from the LIVE `proposal.conditionId()` call,
+ * which produces a DIFFERENT set of IDs (the hook hard-codes
+ * production GIP-145 values from a different collateral
+ * derivation; ours derives from MARKET_PROBE_ADDRESS on the
+ * fork).
+ */
+export const HOOK_FALLBACK_POSITION_IDS = {
+    currencyYes: '0x0da8ddb6e1511c1b897fa0fdabac151efbe8a6a1cee0d042035a10bd8ca50566',
+    currencyNo:  '0xc493e87c029b70d6dd6a58ea51d2bb5e7c5e19a61833547e3f3876242665b501',
+    companyYes:  '0x15883231add67852d8d5ae24898ec21779cc1a99897a520f12ba52021266e218',
+    companyNo:   '0x50b02574e86d37993b7a6ebd52414f9deea42ecfe9c3f1e8556a6d91ead41cc7',
+};
+
 // Standard ERC20 + ERC1155 ABI fragments — minimal surface for
 // read/write helpers. Keeping fragments inline avoids a separate
 // ABI file and makes the helpers self-contained.

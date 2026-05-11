@@ -49,6 +49,7 @@ import {
     getConditionalPosition,
     evmSnapshot,
     SNAPSHOT_ID_FILE,
+    HOOK_FALLBACK_POSITION_IDS,
 } from './fork-state.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -178,13 +179,8 @@ export default async function globalSetup() {
     // Funding both sets keeps the harness backwards-compatible with
     // future code paths that DO use the derived IDs (e.g., a refactor
     // that computes positionIds from chain state instead of reading
-    // hard-coded constants).
-    const HOOK_FALLBACK_POSITION_IDS = {
-        currencyYes: '0x0da8ddb6e1511c1b897fa0fdabac151efbe8a6a1cee0d042035a10bd8ca50566',
-        currencyNo:  '0xc493e87c029b70d6dd6a58ea51d2bb5e7c5e19a61833547e3f3876242665b501',
-        companyYes:  '0x15883231add67852d8d5ae24898ec21779cc1a99897a520f12ba52021266e218',
-        companyNo:   '0x50b02574e86d37993b7a6ebd52414f9deea42ecfe9c3f1e8556a6d91ead41cc7',
-    };
+    // hard-coded constants). The IDs themselves now live in
+    // `fork-state.mjs` so scenarios can mutate them mid-test.
     for (const [label, positionId] of Object.entries(HOOK_FALLBACK_POSITION_IDS)) {
         await setConditionalPosition(RPC_URL, wallet.address, BigInt(positionId), POSITION_FUND_AMOUNT_WEI);
         const got = await getConditionalPosition(RPC_URL, wallet.address, BigInt(positionId));

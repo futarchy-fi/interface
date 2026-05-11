@@ -2313,6 +2313,98 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-12-position-mutation-and-canary
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — adds scenarios #17 + #18 as a
+  paired mutation/canary covering the ERC1155 position
+  state path (distinct from #15/#16 which covered
+  ERC20 wallet state). Establishes the
+  mutation-pair-+-canary as a reusable pattern; future
+  mutation types (allowances, native xDAI, NFT
+  transfers, etc.) follow the same shape.
+
+  * **Scenario #17** —
+    `17-market-page-position-update.scenario.mjs`. Three
+    assertion steps:
+    1. Wait for pre-mutation baseline ("Available
+       1100 sDAI" — same as #11 + #16).
+    2. Mutate ERC1155 state via `setConditionalPosition`
+       on the `currencyYes` + `currencyNo` IDs in the
+       newly-exported `HOOK_FALLBACK_POSITION_IDS`,
+       raising both from 100 → 200.
+    3. Assert "Available 1200 sDAI" (wallet 1000 +
+       min(YES 200, NO 200) = 1200).
+
+  * **Why mutate BOTH outcomes** — the panel computes
+    `min(YES, NO)`, so mutating only YES leaves the
+    floor at 100 (the unchanged NO is the min). Both
+    must lift together to move Available off 1100.
+
+  * **Scenario #18** —
+    `18-market-page-isolation-canary-2.scenario.mjs`.
+    Single assertion: "Available 1100 sDAI" (the
+    baseline). Sorts after #17 alphabetically. If the
+    per-scenario revert handled #17's ERC1155
+    mutation correctly, the wallet+positions are back
+    to baseline and this passes. Otherwise positions
+    still hold 200 → "Available 1200 sDAI" → canary
+    fails.
+
+  * **Why two canaries** (#16 + #18) — they catch
+    DIFFERENT regression classes:
+    - #16 catches "snapshot/revert breaks for ERC20
+      flat-mapping mutations" (#15's setErc20Balance).
+    - #18 catches "snapshot/revert breaks for ERC1155
+      nested-mapping mutations" (#17's
+      setConditionalPosition). Anvil's `evm_revert`
+      could regress on one without the other —
+      partial-revert bugs that drop nested-mapping
+      writes from the snapshot diff are well-documented
+      in EVM tooling history.
+
+  * **Refactor** — extracted
+    `HOOK_FALLBACK_POSITION_IDS` from the inline
+    constant in `fork-state-setup.mjs` to an exported
+    constant in `fork-state.mjs`. Comment makes it
+    clear that these are the IDs the page READS (vs
+    the derived IDs from `proposal.conditionId()`,
+    which produce a DIFFERENT set per the step 5c
+    notes). globalSetup now imports + iterates the
+    same export. Scenarios #17 onward consume it
+    directly.
+
+  * **Bug-shapes captured** (NEW failure modes
+    pre-#17/#18 suite couldn't catch):
+    - ERC1155 position-balance refetch breaks while
+      ERC20 path stays intact (refactor that gates
+      `balanceOfBatch` on a missing flag while
+      leaving `balanceOf` untouched)
+    - `min(YES, NO)` regression: max() instead, or
+      unsigned overflow on subtraction
+    - position render memoizes against stale dep
+      (would skip the YES + NO recommit)
+    - `formatWith(200, 'balance')` regression that
+      mishandles non-100-aligned values
+    - ERC1155 nested-mapping snapshot/revert
+      partial-rollback (#18 catches this specifically)
+
+  * **Live re-validation**:
+    - 18/18 scenarios pass live in 1.3 min (was 51.5s
+      with 16 scenarios — +30s for #17 + #18, of
+      which ~15s is #17's auto-refresh wait + ~15s
+      cumulative for two new beforeEach revert+resnap
+      cycles)
+    - 65/65 smoke tests pass (no new fixture surface;
+      `setConditionalPosition` was already covered)
+
+  * **Pattern established** — mutation/canary pairs
+    are now a reusable shape:
+    1. Mutating scenario asserts pre-state, mutates,
+       asserts post-state.
+    2. Trailing canary asserts pre-state again
+       (proves revert worked).
+    Future mutation types follow the same template.
+
 - **slice fork-bootstrap-step-11-isolation-canary
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — adds scenario #16, an isolation-
