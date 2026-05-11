@@ -154,8 +154,46 @@ export default async function globalSetup() {
         );
     }
     console.log(
-        `[fork-state-setup] CT positions funded — wallet ${wallet.address} now holds ` +
+        `[fork-state-setup] CT positions funded (derived) — wallet ${wallet.address} now holds ` +
         `${yesBalance / 10n ** 18n} YES + ${noBalance / 10n ** 18n} NO ` +
         `(market ${MARKET_PROBE_ADDRESS}, conditionId ${conditionId})`
+    );
+
+    // Step 5c: ALSO fund the position IDs that
+    // `src/hooks/useContractConfig.js` returns as `MERGE_CONFIG.
+    // currencyPositions.{yes,no}.positionId` for the GIP-145 fallback
+    // path. Those literals are baked into the hook (lines 400 + 408)
+    // and DON'T match the IDs derived above (the hook hard-codes
+    // production GIP-145 values that go through a different
+    // collateral; ours derive from the live `proposal.conditionId()`
+    // call against MARKET_PROBE_ADDRESS on the fork). Without these
+    // ALSO funded, `useBalanceManager`'s ERC1155 balanceOf reads
+    // `0x0da8…` and `0xc493…` and gets 0 — the panel renders "0 sDAI"
+    // even though the balanceOf call succeeded against the fork.
+    //
+    // Funding both sets keeps the harness backwards-compatible with
+    // future code paths that DO use the derived IDs (e.g., a refactor
+    // that computes positionIds from chain state instead of reading
+    // hard-coded constants).
+    const HOOK_FALLBACK_POSITION_IDS = {
+        currencyYes: '0x0da8ddb6e1511c1b897fa0fdabac151efbe8a6a1cee0d042035a10bd8ca50566',
+        currencyNo:  '0xc493e87c029b70d6dd6a58ea51d2bb5e7c5e19a61833547e3f3876242665b501',
+        companyYes:  '0x15883231add67852d8d5ae24898ec21779cc1a99897a520f12ba52021266e218',
+        companyNo:   '0x50b02574e86d37993b7a6ebd52414f9deea42ecfe9c3f1e8556a6d91ead41cc7',
+    };
+    for (const [label, positionId] of Object.entries(HOOK_FALLBACK_POSITION_IDS)) {
+        await setConditionalPosition(RPC_URL, wallet.address, BigInt(positionId), POSITION_FUND_AMOUNT_WEI);
+        const got = await getConditionalPosition(RPC_URL, wallet.address, BigInt(positionId));
+        if (got !== POSITION_FUND_AMOUNT_WEI) {
+            throw new Error(
+                `[fork-state-setup] hook-fallback position funding verification FAILED for ${label} ` +
+                `(positionId ${positionId}) — wrote ${POSITION_FUND_AMOUNT_WEI}, balanceOf returned ${got}. ` +
+                `If CT_BALANCE_SLOT changed, both the derived AND fallback funding paths break together.`
+            );
+        }
+    }
+    console.log(
+        `[fork-state-setup] CT positions funded (hook-fallback IDs) — ` +
+        `currencyYes/No + companyYes/No each set to ${POSITION_FUND_AMOUNT_WEI / 10n ** 18n}`
     );
 }

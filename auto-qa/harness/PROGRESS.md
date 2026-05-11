@@ -2313,6 +2313,129 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-5c (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — completes
+  the multi-iteration fork-bootstrap arc. Scenario #14
+  now passes its full value-flow assertion: the rendered
+  position balance is "100 GNO" (and "100 sDAI"), proving
+  the entire chain from on-chain ERC1155 balanceOf
+  through MarketBalancePanel formatting. **First scenario
+  in the harness that asserts on a value end-to-end
+  derived from the live anvil fork.**
+
+  * **Two new fixtures**
+    1. **`makeAnvilRpcProxyHandler(opts)`** — Playwright
+       route handler that forwards an intercepted JSON-RPC
+       POST to the local anvil fork (default
+       `http://localhost:8546`). Uses Node-side `fetch`
+       (not `route.continue({ url })`) because anvil's
+       CORS doesn't whitelist the public RPCs' origins;
+       the proxy fetch happens in Playwright's Node
+       context where CORS doesn't apply. On unreachable
+       anvil, fails loudly with a JSON-RPC -32603 error
+       body that names the proxy URL inline (so a
+       scenario debugging a connection failure isn't
+       misled into blaming the public RPC).
+    2. **`installAnvilRpcProxy(context, opts)`** —
+       convenience: registers the handler against EVERY
+       URL in `PUBLIC_GNOSIS_RPC_URLS` (the union of
+       `src/utils/getBestRpc.js::RPC_LISTS[100]` +
+       `src/providers/providers.jsx`'s wagmi `http()`
+       chain). Pattern uses `${url}**` glob so trailing
+       slash + path suffix variants are all matched
+       (wagmi/ethers tend to POST to the root path with
+       a trailing slash; Playwright exact-match wouldn't
+       cover both forms).
+
+  * **One scenarios-runner extension** —
+    `flows/scenarios.spec.mjs` now respects a new
+    boolean field `scenario.useAnvilRpcProxy`. When
+    `true`, the runner installs the proxy after applying
+    `scenario.mocks`. Opt-in (not default) because
+    non-fork-backed scenarios don't need it and adding
+    it everywhere creates needless anvil load.
+
+  * **Two globalSetup additions**
+    1. ALSO funds the position IDs that
+       `src/hooks/useContractConfig.js` returns as
+       `MERGE_CONFIG.{currency,company}Positions.
+       {yes,no}.positionId` for the GIP-145 fallback
+       path (lines 400, 408, 418, 426). Those literals
+       are baked into the hook and DON'T match the IDs
+       derived from `proposal.conditionId()` (the hook
+       hardcodes production GIP-145 values from a
+       different collateral derivation). Without ALSO
+       funding the hardcoded IDs,
+       `useBalanceManager`'s ERC1155 balanceOf reads
+       `0x0da8…` and `0xc493…` and gets 0 — the panel
+       renders "0 sDAI" even though the balanceOf call
+       succeeded against the fork.
+    2. Read-back verification of the hook-fallback IDs
+       too — same posture as the derived-ID
+       verification: a wrong CT_BALANCE_SLOT breaks
+       both paths together and surfaces loudly at
+       globalSetup time, not silently downstream.
+
+  * **The "100.0000" → "100 GNO" assertion swap** —
+    `src/utils/precisionFormatter.js:74-76` for `type ===
+    'balance'` strips trailing zeros, so `formatWith(100,
+    'balance')` returns `"100"` not `"100.0000"`. The
+    rendered DOM string is `"100 GNO"` (BalanceItem
+    template literal). "100 GNO" is more distinctive
+    than "100 sDAI" — no other place in the page text
+    contains it (volume/liquidity strings could in
+    theory show "100 sDAI" as the page evolves; "100
+    GNO" only appears in the Balance panel).
+
+  * **Bug-shape catches added by this slice**:
+    - `getBestRpcProvider` regression that picks an
+      un-proxied URL → balance reads land on real
+      mainnet → panel shows zero
+    - hook-fallback positionId desync (a refactor that
+      changes one of the four hardcoded IDs in
+      useContractConfig.js without updating the harness
+      → the position is funded at the OLD ID, panel
+      reads at the NEW one, shows zero)
+    - `formatWith` regression that re-introduces
+      trailing zeros (asserting the literal "100 GNO"
+      with no decimals is a tighter check than "100"
+      alone)
+
+  * **Live re-validation**:
+    - 14/14 scenarios pass live (~30s, includes #14's
+      full value-flow assertion)
+    - 60/60 smoke tests pass (was 57 — added 3 for
+      `PUBLIC_GNOSIS_RPC_URLS` coverage,
+      `makeAnvilRpcProxyHandler` happy-path, and
+      `makeAnvilRpcProxyHandler` unreachable-anvil
+      error path)
+    - **No regression** in any existing scenario
+
+  * **Multi-iteration plan progress** — fork-bootstrap
+    arc COMPLETE on the interface side:
+    - ✓ Steps 1, 2, 2.5-2.9 (fork bootstrap)
+    - ✓ Step 4 (positions scenario, softened
+      assertions)
+    - ✓ Live-validation 1+2 (all 14 pass live)
+    - ✓ Step 5a (subgraph trades mocks)
+    - ✓ Step 5b (registry mock multi-line match)
+    - ✓ Step 5c (RPC proxy + hook-fallback funding;
+      this slice — value-flow assertion now passing)
+    - ✓ Step 6 (CI Foundry install)
+    - **Remaining maintainer task**: promote 4
+      staged workflows
+    - **Next-phase candidates** (incremental, not
+      blocking the staged-workflow promotion):
+      * Per-scenario state pinning (Step 3 in the
+        original plan) — `evm_snapshot`/`evm_revert`
+        between scenarios so a buy-flow scenario can
+        mutate state without polluting #14
+      * More fork-backed scenarios — buy/sell flows,
+        merge/split, allowance approvals
+      * Wire the proxy into other market-page
+        scenarios (#10-#13) so any of them can opt
+        into fork reads
+
 - **slice fork-bootstrap-step-5b (Phase 7 fork wiring)**
   (this iteration, on the interface side) — diagnoses
   the balance-display gate and ships a one-line fixture

@@ -31,6 +31,7 @@ import {
     installWalletStub,
     nStubWallets,
 } from '../fixtures/wallet-stub.mjs';
+import { installAnvilRpcProxy } from '../fixtures/api-mocks.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCENARIOS_DIR = join(__dirname, '..', 'scenarios');
@@ -87,6 +88,17 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
             // Apply mocks
             for (const [url, handler] of Object.entries(scenario.mocks ?? {})) {
                 await context.route(url, handler);
+            }
+
+            // Phase 7 step 5c: scenarios that need on-chain reads to land
+            // on the local anvil fork (not real Gnosis mainnet) opt in
+            // here. Routes the public Gnosis RPC URL set
+            // (`PUBLIC_GNOSIS_RPC_URLS`) to localhost:8546 so that
+            // `getBestRpcProvider(100)` and the wagmi fallback chain
+            // both read from the fork — a prerequisite for any
+            // assertion on a fork-funded balance.
+            if (scenario.useAnvilRpcProxy) {
+                await installAnvilRpcProxy(context);
             }
 
             // Navigate

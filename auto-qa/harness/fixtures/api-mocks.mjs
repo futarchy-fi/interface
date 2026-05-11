@@ -416,3 +416,109 @@ export function makeMarketCandlesMockHandler(opts = {}) {
         });
     };
 }
+
+// ── Public Gnosis RPC proxy → local anvil fork ──
+
+/**
+ * Public Gnosis RPC URLs that the futarchy app may probe.
+ *
+ * Two main code paths produce traffic to these URLs:
+ *
+ *   1. `src/utils/getBestRpc.js::getBestRpcProvider(100)` — read path
+ *      used by `unifiedBalanceFetcher` for ERC20 / ERC1155 balanceOf
+ *      calls. Probes the first four URLs below in parallel, picks the
+ *      fastest, and constructs an `ethers.JsonRpcProvider` against it.
+ *      Without proxying, balance reads land on real Gnosis mainnet —
+ *      which has none of the wallet's fork-funded YES / NO / sDAI —
+ *      and the panel renders 0 instead of the funded amount.
+ *
+ *   2. `src/providers/providers.jsx` (wagmi `http()` config) — the
+ *      RainbowKit / wagmi fallback chain. The same first four URLs
+ *      plus `gnosis.drpc.org` and `gnosis-mainnet.public.blastapi.io`
+ *      go through it.
+ *
+ * Proxying every URL in the union unifies BOTH paths against the local
+ * anvil fork so the app can't accidentally bypass the fork by picking
+ * an un-mocked RPC.
+ */
+export const PUBLIC_GNOSIS_RPC_URLS = [
+    'https://rpc.gnosischain.com',
+    'https://gnosis-rpc.publicnode.com',
+    'https://1rpc.io/gnosis',
+    'https://rpc.ankr.com/gnosis',
+    'https://gnosis.drpc.org',
+    'https://gnosis-mainnet.public.blastapi.io',
+];
+
+/**
+ * Build a Playwright route handler that forwards an intercepted
+ * JSON-RPC POST to the local anvil fork (default `http://localhost:8546`).
+ *
+ * Uses an in-process `fetch` instead of `route.continue({ url })`
+ * because anvil's CORS headers don't include the public RPCs' origins,
+ * and Chromium would block the response otherwise. The fetch happens
+ * inside Playwright's Node context, so CORS doesn't apply — we control
+ * what gets fulfilled back to the page.
+ *
+ * @param {object}   opts
+ * @param {string}   [opts.anvilUrl='http://localhost:8546'] anvil endpoint
+ * @param {(body:string)=>void} [opts.onCall]                 observer for each call
+ */
+export function makeAnvilRpcProxyHandler({
+    anvilUrl = 'http://localhost:8546',
+    onCall,
+} = {}) {
+    return async (route) => {
+        const request = route.request();
+        const body = request.postData() || '';
+        onCall?.(body);
+
+        try {
+            const response = await fetch(anvilUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body,
+            });
+            const text = await response.text();
+            await route.fulfill({
+                status: response.status,
+                contentType: 'application/json',
+                body: text,
+            });
+        } catch (err) {
+            // Anvil unreachable. Fail loudly with a JSON-RPC-shaped
+            // error body so consumer code logs something readable
+            // instead of a generic network error.
+            await route.fulfill({
+                status: 502,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: null,
+                    error: {
+                        code: -32603,
+                        message: `harness anvil proxy unreachable at ${anvilUrl}: ${err.message}`,
+                    },
+                }),
+            });
+        }
+    };
+}
+
+/**
+ * Convenience: register `makeAnvilRpcProxyHandler` against EVERY URL
+ * in `PUBLIC_GNOSIS_RPC_URLS`. Call once per scenario `context`.
+ *
+ * Returns the array of registered URLs so callers can log / assert
+ * on coverage.
+ */
+export async function installAnvilRpcProxy(context, opts = {}) {
+    const handler = makeAnvilRpcProxyHandler(opts);
+    for (const url of PUBLIC_GNOSIS_RPC_URLS) {
+        // Match the URL with OR without trailing slash and with
+        // any path suffix — wagmi/ethers tend to POST to the
+        // root path with a trailing slash.
+        await context.route(`${url}**`, handler);
+    }
+    return PUBLIC_GNOSIS_RPC_URLS;
+}

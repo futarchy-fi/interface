@@ -20,9 +20,11 @@ import {
     MARKET_PROBE_YES_POOL,
     MARKET_PROBE_NO_POOL,
     PROBE_AGG_ID,
+    PUBLIC_GNOSIS_RPC_URLS,
     fakeMarketProposalEntity,
     makeMarketCandlesMockHandler,
     makeGraphqlMockHandler,
+    makeAnvilRpcProxyHandler,
 } from '../fixtures/api-mocks.mjs';
 
 test('market-page fixture — constants exported with expected shape', () => {
@@ -317,4 +319,111 @@ test('makeGraphqlMockHandler — matches multi-line proposalentities form', asyn
     const body = JSON.parse(fulfilled.body);
     assert.equal(body.data.proposalentities.length, 1, 'multi-line form must hit the proposalentities branch');
     assert.equal(body.data.proposalentities[0].title, MARKET_PROBE_TITLE);
+});
+
+test('PUBLIC_GNOSIS_RPC_URLS — covers the four RPCs in src/utils/getBestRpc.js + the two extras from src/providers/providers.jsx', () => {
+    // The harness's RPC proxy installs handlers for every URL in
+    // this set. If `src/utils/getBestRpc.js::RPC_LISTS[100]` ever
+    // gains a new entry, OR `src/providers/providers.jsx` adds
+    // another wagmi `http()` URL, the new endpoint slips past the
+    // proxy and balance reads land on real Gnosis mainnet again.
+    // This smoke test re-derives the expected union — bumping the
+    // assertion forces a deliberate update of the proxy URL list.
+    const expected = [
+        // src/utils/getBestRpc.js (read path via getBestRpcProvider)
+        'https://rpc.gnosischain.com',
+        'https://gnosis-rpc.publicnode.com',
+        'https://1rpc.io/gnosis',
+        'https://rpc.ankr.com/gnosis',
+        // src/providers/providers.jsx (wagmi fallback chain) only
+        // adds these two not already in getBestRpc.js
+        'https://gnosis.drpc.org',
+        'https://gnosis-mainnet.public.blastapi.io',
+    ];
+    assert.deepEqual(
+        [...PUBLIC_GNOSIS_RPC_URLS].sort(),
+        [...expected].sort(),
+        'PUBLIC_GNOSIS_RPC_URLS must be the union of getBestRpc.js + providers.jsx Gnosis URLs',
+    );
+});
+
+test('makeAnvilRpcProxyHandler — forwards POST body to anvilUrl + fulfills with response', async () => {
+    // Stub anvil endpoint via globalThis.fetch monkey-patch — no
+    // network or live anvil needed. Confirms that whatever body the
+    // page sent is the body the proxy fetches with, AND the response
+    // text round-trips back to the page via route.fulfill.
+    const sentBody = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 42,
+        method: 'eth_call',
+        params: [{ to: '0xabc', data: '0xdeadbeef' }, 'latest'],
+    });
+    const fakeAnvilResponse = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 42,
+        result: '0x0000000000000000000000000000000000000000000000000000000000000064',
+    });
+
+    const originalFetch = globalThis.fetch;
+    let capturedFetchUrl = null;
+    let capturedFetchInit = null;
+    globalThis.fetch = async (url, init) => {
+        capturedFetchUrl = url;
+        capturedFetchInit = init;
+        return {
+            status: 200,
+            text: async () => fakeAnvilResponse,
+        };
+    };
+
+    try {
+        const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546' });
+        let fulfilled = null;
+        const stubRoute = {
+            request: () => ({ postData: () => sentBody }),
+            fulfill: async (resp) => { fulfilled = resp; },
+        };
+
+        await handler(stubRoute);
+
+        assert.equal(capturedFetchUrl, 'http://localhost:8546');
+        assert.equal(capturedFetchInit.method, 'POST');
+        assert.equal(capturedFetchInit.body, sentBody, 'proxy must forward the page body verbatim');
+        assert.equal(fulfilled.status, 200);
+        assert.equal(fulfilled.body, fakeAnvilResponse, 'proxy must round-trip the anvil response back');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('makeAnvilRpcProxyHandler — fails loudly with JSON-RPC error when anvil unreachable', async () => {
+    // When anvil is down the page would otherwise see a generic
+    // network error from the proxied URL. A scenario debugging that
+    // failure mode would be misled into thinking the public RPC was
+    // at fault. Returning a JSON-RPC error body with a clear message
+    // names the actual cause inline.
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+        throw new Error('connect ECONNREFUSED 127.0.0.1:8546');
+    };
+
+    try {
+        const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546' });
+        let fulfilled = null;
+        const stubRoute = {
+            request: () => ({ postData: () => '{}' }),
+            fulfill: async (resp) => { fulfilled = resp; },
+        };
+
+        await handler(stubRoute);
+
+        assert.equal(fulfilled.status, 502);
+        const body = JSON.parse(fulfilled.body);
+        assert.equal(body.jsonrpc, '2.0');
+        assert.equal(body.error.code, -32603);
+        assert.match(body.error.message, /harness anvil proxy unreachable/);
+        assert.match(body.error.message, /localhost:8546/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 });

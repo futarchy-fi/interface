@@ -69,7 +69,7 @@ import {
 
 export default {
     name:        '14-market-page-positions',
-    description: 'FIRST FORK-BACKED scenario. Live-validated: the page renders past the chain-validation gate with the wallet connected (synthetic 0xf39F…6e51 funded with 10000 ETH + 1000 sDAI + 100 YES + 100 NO via globalSetup). Asserts page-shell ("Balance" header) + position-aware UI ("Available" label) both render. Full value-flow assertion (specific "100.0000" balance text) deferred — needs follow-up mocks for subgraph/snapshot/spot-price clients.',
+    description: 'FIRST FORK-BACKED scenario, FIRST value-flow scenario. Live-validated: the page renders past the chain-validation gate with the wallet connected (synthetic 0xf39F…6e51 funded with 10000 ETH + 1000 sDAI + 100 YES + 100 NO at both derived AND hook-fallback position IDs via globalSetup). Asserts page-shell ("Balance" header) + position-aware UI ("Available" label) + the actual rendered VALUE ("100 GNO" — proves the full chain: useContractConfig → useBalanceManager → unifiedBalanceFetcher → getBestRpcProvider → proxied public Gnosis RPC → anvil fork → ERC1155 balanceOf → MarketBalancePanel format).',
     bugShape:    'page-shell never mounts on the market route / position-aware UI element absent / chain-validation gate fires false-positive for chain 100 / Supabase init throws (env-var gap) / probe address case-mismatch returns 404 from getStaticPaths',
     route:       `/markets/${MARKET_PROBE_ADDRESS}`,
 
@@ -79,6 +79,15 @@ export default {
         }),
         [CANDLES_GRAPHQL_URL]: makeMarketCandlesMockHandler(),
     },
+
+    // Phase 7 step 5c: route every public Gnosis RPC URL through
+    // anvil at localhost:8546 so `unifiedBalanceFetcher`'s ERC1155
+    // balanceOf reads see the fork-funded YES + NO positions
+    // instead of mainnet zeros. Without this, the fetcher's
+    // `getBestRpcProvider(100)` picks a public RPC and returns 0
+    // for every balance — the panel renders, but the value flow
+    // assertion below fails.
+    useAnvilRpcProxy: true,
 
     assertions: [
         // Page-shell mount check (same anchor as #11-#13). Validated
@@ -105,22 +114,37 @@ export default {
             ).toBeVisible({ timeout: 30_000 });
         },
 
-        // **TODO (deferred to follow-up iteration)**: the canonical
-        // value-flow assertion `getByText('100.0000')` is still gated
-        // by ONE remaining piece — `unifiedBalanceFetcher.js` calls
-        // `getBestRpcProvider(100)` which probes the public Gnosis
-        // RPC list (`rpc.gnosischain.com`, `gnosis-rpc.publicnode.com`,
-        // `1rpc.io/gnosis`, `rpc.ankr.com/gnosis`) and reads through
-        // the WINNER. Those public endpoints DON'T have our wallet's
-        // fork-funded YES/NO balances (which only exist on local
-        // anvil at port 8546). Step 5b unblocked the prerequisite
-        // chain — Registry mock now matches the multi-line query
-        // form so `useContractConfig` returns a real config →
-        // `useBalanceManager.fetchAllBalances` actually fires. Step
-        // 5c+ will route the public Gnosis RPC URLs through anvil
-        // via Playwright `context.route`, after which the
-        // ERC1155 balanceOf will return 100 YES + 100 NO and the
-        // panel will render "100.0000".
+        // **The canonical value-flow assertion** (Phase 7 step 5c
+        // payoff). With the registry-mock multi-line fix from 5b
+        // and the public Gnosis RPC → anvil proxy + hook-fallback
+        // position-ID funding from 5c all in place, the chain is:
+        //   - useContractConfig resolves a real config from the
+        //     mocked registry/subgraph
+        //   - useBalanceManager.fetchAllBalances fires
+        //   - unifiedBalanceFetcher's getBestRpcProvider(100) picks
+        //     a public RPC URL — proxied to anvil — and reads
+        //     conditional-token balances against the fork
+        //   - ERC1155 balanceOfBatch returns 100 YES + 100 NO at
+        //     the hook-fallback position IDs (separately funded by
+        //     globalSetup; the hook hardcodes those IDs and ignores
+        //     the values our derived path produces)
+        //   - MarketBalancePanel computes
+        //     min(currencyYes.total, currencyNo.total) = 100
+        //   - formatWith(100, 'balance') strips trailing zeros
+        //     (precisionFormatter.js:74-76) → renders "100 sDAI"
+        //
+        // The "100 GNO" string is the most distinctive — no other
+        // place in the page text contains it (Balance panel only),
+        // whereas "100 sDAI" could in theory show up in volume /
+        // liquidity strings as the page evolves.
+        // Long timeout because the read goes through wagmi/ethers
+        // provider initialization + the proxied RPC roundtrip,
+        // both of which add latency on a cold page.
+        async (page) => {
+            await expect(
+                page.getByText('100 GNO').first(),
+            ).toBeVisible({ timeout: 60_000 });
+        },
     ],
 
     timeout: 180_000,
