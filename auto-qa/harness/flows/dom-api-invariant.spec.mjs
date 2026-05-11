@@ -69,7 +69,7 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         }
     });
 
-    test('mocked org name flows from GraphQL response into the OrganizationsTable cell', async ({ context, page }) => {
+    test('slice 4 v1 — mocked org name flows from GraphQL response into the OrganizationsTable cell', async ({ context, page }) => {
         test.setTimeout(180_000);
 
         // Track every operation we intercepted, for the trace if the

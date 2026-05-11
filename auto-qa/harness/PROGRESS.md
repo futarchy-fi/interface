@@ -2313,6 +2313,88 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 72-invariants-naming-convention-lock
+  (Phase 5 invariant catalog — naming
+  convention enforced)** (this iteration,
+  on the interface side) — cleanup-and-lock
+  iteration. Renames the original test from
+  `'mocked org name flows from GraphQL...'`
+  to `'slice 4 v1 — mocked org name flows
+  from GraphQL...'` so it stops appearing
+  as `(unlabeled)` in INVARIANTS.md. Adds a
+  negative assertion in the smoke test that
+  prevents the `(unlabeled)` bucket from
+  ever being non-empty again — locking the
+  naming convention for future tests.
+
+  * **The change**:
+    - `flows/dom-api-invariant.spec.mjs` —
+      renamed the very first test (the one
+      from Phase 5 slice 4) to follow the
+      `slice X — Y` convention used by
+      every other invariant
+    - `flows/INVARIANTS.md` — regenerated;
+      "4 v1" now appears in the
+      Network-level section (was
+      "(unlabeled)")
+    - `tests/smoke-invariants-catalog.test.mjs`
+      — added `assert.match(after, /\| 4 v1
+      \s+\|/)` (positive: 4 v1 must appear)
+      AND `assert.doesNotMatch(after,
+      /\(unlabeled\)/)` (negative: no test
+      may land in the (unlabeled) bucket)
+
+  * **Why this matters structurally**: the
+    catalog script's behavior of putting
+    unlabeled tests in an `(unlabeled)`
+    bucket is a graceful-degradation path
+    for malformed test titles. But ANY
+    entry there is a missed opportunity to
+    classify the test correctly. The
+    negative assertion ensures the bucket
+    stays empty going forward — future
+    contributors who add a test without
+    the `slice X — ` prefix will see the
+    smoke test fail with a clear pointer to
+    the convention.
+
+  * **Pattern (worth pinning)**: "no
+    entries in the graceful-degradation
+    bucket" is a useful smoke assertion
+    pattern. It complements "expected
+    entries are present" (positive) by
+    also asserting "unexpected entries are
+    absent" (negative). For the invariants
+    catalog specifically, this enforces the
+    naming convention; for the chaos
+    matrix, an analog would be "no test
+    lands in the 'uncategorised' fall-
+    through" (currently the chaos matrix
+    only emits chaos OR non-chaos sections,
+    no fall-through — but the principle
+    generalizes).
+
+  * **Live re-validation**:
+    - Smoke tests: 81/81 (positive + negative
+      assertions both pass)
+    - All 28 DOM↔API invariant tests pass:
+      55.3s (no regression from the rename)
+    - `npm run invariants:catalog` →
+      regenerates cleanly; 4 v1 displays
+      in the Network-level section as a
+      first-class entry
+
+  * **What's next**:
+    - Open the market-page invariant axis
+      (all 28 current invariants are
+      /companies-side; /markets/[address]
+      has 16 chaos cells but ZERO
+      invariants — large untouched
+      coverage axis)
+    - State-transition tests
+    - Pool-shape invariants
+    - Pivot to api-side
+
 - **slice 71-invariants-catalog-grouped
   (Phase 5 invariant catalog — v2 grouping
   by coverage dimension)** (this iteration,

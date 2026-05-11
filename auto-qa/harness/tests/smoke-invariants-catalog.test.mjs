@@ -59,9 +59,17 @@ test('invariants-catalog CLI — runs cleanly + committed INVARIANTS.md is in sy
         // Sanity: well-known invariant ids appear in the regenerated
         // output. If this fails AND the drift check passed, the
         // script's output format silently changed.
+        assert.match(after, /\| 4 v1\s+\|/);
         assert.match(after, /\| 4b\s+\|/);
         assert.match(after, /\| 4m\s+\|/);
         assert.match(after, /\| 4y\s+\|/);
+
+        // Negative assertion: no entries should be classified as
+        // "(unlabeled)". If a future test gets added without the
+        // `slice X — ` prefix, it would land in (unlabeled) and
+        // skew the dimension count. This guards the naming
+        // convention.
+        assert.doesNotMatch(after, /\(unlabeled\)/);
 
         // Grouped structure: each dimension has its own section
         // header with a count parenthetical. At minimum,

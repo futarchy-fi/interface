@@ -15,56 +15,56 @@ Breakdown: 18 text-level field-flow · 3 network-level request body · 4 attribu
 
 ## Text-level field-flow (18)
 
-| slice       | description |
-|-------------|-------------|
-| 4b          | mocked proposal counts flow into OrgRow active/total cells |
-| 4c v1       | chain enum formatter (mocked metadata.chain → ChainBadge text) |
-| 4c v2       | chain enum FALLBACK formatter (unknown chain → "Chain N" template literal) |
-| 4c v3b      | candles price flows through prefetchedPrices into EventHighlightCard's formatter ("0.4200 SDAI") |
-| 4d          | zero-proposal edge case: OrgRow active/total cells render "0" / "0" when proposals=[] |
-| 4f          | archived filter applied in proposal counts (5 active + 2 hidden + 3 archived → "5" / "7") |
-| 4g          | resolved filter excludes from active only, not nonArchived (6 normal + 2 resolved → "6" / "8") |
-| 4h          | resolution_outcome-truthy branch of the resolved filter (7 normal + 3 outcome:"yes" → "7" / "10") |
-| 4i          | chain DEFAULT branch (no metadata.chain → chainId=100 default → "Gnosis") |
-| 4j          | precision=4 stays sticky when YES≥1 but NO<1 (1.42 / 0.58 → "1.4200 SDAI") |
-| 4k          | precision=2 branch: BOTH prices ≥1 drops precision to 2 (1.42 / 1.58 → "1.42 SDAI") |
-| 4l          | filter-chain stress test: 10 mixed-flag proposals → "3" / "6" (multi-flag combinations stable) |
-| 4r          | title PREFERRED branch: displayNameEvent set, displayNameQuestion null → event renders alone (closes title-cascade lattice) |
-| 4s          | eventTitle FALLBACK branch: displayNameEvent absent → displayNameQuestion rendered |
-| 4t          | eventTitle FINAL FALLBACK: both fields null → "Unknown Proposal" rendered |
-| 4u          | SPLIT-TITLE display when both fields set: card renders BOTH event and question text |
-| 4v          | "Unknown Organization" fallback: org.name=null → fallback string appears in table row |
-| 4w          | empty-state inverse invariant: registry returns 200 + empty orgs array → "No organizations found" |
+| slice  | description |
+|--------|-------------|
+| 4b     | mocked proposal counts flow into OrgRow active/total cells |
+| 4c v1  | chain enum formatter (mocked metadata.chain → ChainBadge text) |
+| 4c v2  | chain enum FALLBACK formatter (unknown chain → "Chain N" template literal) |
+| 4c v3b | candles price flows through prefetchedPrices into EventHighlightCard's formatter ("0.4200 SDAI") |
+| 4d     | zero-proposal edge case: OrgRow active/total cells render "0" / "0" when proposals=[] |
+| 4f     | archived filter applied in proposal counts (5 active + 2 hidden + 3 archived → "5" / "7") |
+| 4g     | resolved filter excludes from active only, not nonArchived (6 normal + 2 resolved → "6" / "8") |
+| 4h     | resolution_outcome-truthy branch of the resolved filter (7 normal + 3 outcome:"yes" → "7" / "10") |
+| 4i     | chain DEFAULT branch (no metadata.chain → chainId=100 default → "Gnosis") |
+| 4j     | precision=4 stays sticky when YES≥1 but NO<1 (1.42 / 0.58 → "1.4200 SDAI") |
+| 4k     | precision=2 branch: BOTH prices ≥1 drops precision to 2 (1.42 / 1.58 → "1.42 SDAI") |
+| 4l     | filter-chain stress test: 10 mixed-flag proposals → "3" / "6" (multi-flag combinations stable) |
+| 4r     | title PREFERRED branch: displayNameEvent set, displayNameQuestion null → event renders alone (closes title-cascade lattice) |
+| 4s     | eventTitle FALLBACK branch: displayNameEvent absent → displayNameQuestion rendered |
+| 4t     | eventTitle FINAL FALLBACK: both fields null → "Unknown Proposal" rendered |
+| 4u     | SPLIT-TITLE display when both fields set: card renders BOTH event and question text |
+| 4v     | "Unknown Organization" fallback: org.name=null → fallback string appears in table row |
+| 4w     | empty-state inverse invariant: registry returns 200 + empty orgs array → "No organizations found" |
 
 ## Network-level request body (3)
 
-| slice       | description |
-|-------------|-------------|
-| (unlabeled) | mocked org name flows from GraphQL response into the OrganizationsTable cell |
-| 4c v3a      | candles GraphQL endpoint is hit with the proposal's pool addresses |
-| 4e          | candles requests cover BOTH legs (PROBE_POOL_YES AND PROBE_POOL_NO) — catches "drop NO leg" optimization regression |
+| slice  | description |
+|--------|-------------|
+| 4 v1   | mocked org name flows from GraphQL response into the OrganizationsTable cell |
+| 4c v3a | candles GraphQL endpoint is hit with the proposal's pool addresses |
+| 4e     | candles requests cover BOTH legs (PROBE_POOL_YES AND PROBE_POOL_NO) — catches "drop NO leg" optimization regression |
 
 ## Attribute-level: `<img src>` (4)
 
-| slice       | description |
-|-------------|-------------|
-| 4m          | logo fallback image src (no org metadata → "/assets/fallback-company.png") |
-| 4n          | cover-image branch of fallback chain (metadata.coverImage wins over logo and fallback) |
-| 4o          | logo-only branch of image cascade (no coverImage → metadata.logo wins → completes image triplet) |
-| 4p          | image-cascade PRECEDENCE: BOTH coverImage AND logo set → coverImage wins (catches reorder regression) |
+| slice  | description |
+|--------|-------------|
+| 4m     | logo fallback image src (no org metadata → "/assets/fallback-company.png") |
+| 4n     | cover-image branch of fallback chain (metadata.coverImage wins over logo and fallback) |
+| 4o     | logo-only branch of image cascade (no coverImage → metadata.logo wins → completes image triplet) |
+| 4p     | image-cascade PRECEDENCE: BOTH coverImage AND logo set → coverImage wins (catches reorder regression) |
 
 ## Attribute-level: `<a href>` (1)
 
-| slice       | description |
-|-------------|-------------|
-| 4q          | href on event card link: proposal address flows through to /market?proposalId= URL |
+| slice  | description |
+|--------|-------------|
+| 4q     | href on event card link: proposal address flows through to /market?proposalId= URL |
 
 ## Attribute-level: `<img alt>` (a11y) (2)
 
-| slice       | description |
-|-------------|-------------|
-| 4x          | logo img ALT attribute flows from org.name (a11y bug-class) |
-| 4y          | img alt uses "Unknown Organization" fallback when org.name=null (alt + text coverage pair) |
+| slice  | description |
+|--------|-------------|
+| 4x     | logo img ALT attribute flows from org.name (a11y bug-class) |
+| 4y     | img alt uses "Unknown Organization" fallback when org.name=null (alt + text coverage pair) |
 
 ## Coverage dimensions (definitions)
 
