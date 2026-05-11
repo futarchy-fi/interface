@@ -47,13 +47,14 @@ const SCENARIOS_DIR = join(__dirname, '..', 'scenarios');
 // name that trigger each. Order matters — the FIRST matching key
 // wins so multi-word modes like `corrupt-pool` shadow `corrupt`.
 const FAILURE_MODE_KEYWORDS = [
-    ['hard 502',          ['-down', '-both-endpoints-down']],
-    ['malformed body',    ['malformed', 'malformed-body']],
-    ['empty 200',         ['-empty']],
-    ['per-row corrupt',   ['corrupt-org', 'corrupt-row', 'corrupt-pool']],
-    ['partial response',  ['-partial']],
-    ['slow valid resp',   ['-slow']],
-    ['rate-limited 429',  ['-rate-limited']],
+    ['hard 502',           ['-down', '-both-endpoints-down']],
+    ['malformed body',     ['malformed', 'malformed-body']],
+    ['empty 200',          ['-empty']],
+    ['per-row corrupt',    ['corrupt-org', 'corrupt-row', 'corrupt-pool']],
+    ['partial response',   ['-partial']],
+    ['slow valid resp',    ['-slow']],
+    ['rate-limited 429',   ['-rate-limited']],
+    ['gateway timeout 504', ['-504-gateway-timeout', '-504-']],
 ];
 
 // Failure modes that count toward the chaos matrix. Listed in the
@@ -66,6 +67,7 @@ const CANONICAL_FAILURE_MODES = [
     'per-row corrupt',
     'slow valid resp',
     'rate-limited 429',
+    'gateway timeout 504',
 ];
 
 // Canonical endpoints (the columns of the chaos matrix).

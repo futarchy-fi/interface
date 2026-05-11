@@ -35,6 +35,7 @@ test('scenarios-chaos-matrix CLI — prints per-page chaos coverage matrix', () 
         'per-row corrupt',
         'slow valid resp',
         'rate-limited 429',
+        'gateway timeout 504',
     ]) {
         assert.match(r.stdout, new RegExp(`\\| ${mode}\\s+\\|`));
     }
@@ -56,16 +57,18 @@ test('scenarios-chaos-matrix CLI — prints per-page chaos coverage matrix', () 
 });
 
 test('scenarios-chaos-matrix CLI — both pages have most chaos cells filled', () => {
-    // Pins current state of the harness. With 7 failure-mode
-    // rows × 2 endpoint columns = 14 cells per page. /companies
-    // has all 6 OG modes + rate-limited registry = 13/14;
-    // /markets/[address] has the 6 OG modes only = 12/14. As
-    // new chaos scenarios fill cells, bump the floor numerator
-    // here. The test EXISTS so a regression that DROPS a cell
-    // (e.g., deleting a scenario without renaming the file)
-    // surfaces immediately.
+    // Pins current state of the harness. With 8 failure-mode rows
+    // × 2 endpoint columns = 16 cells per page. /companies has
+    // all 7 prior modes + gateway-timeout registry = 15/16;
+    // /markets/[address] has all 7 prior modes only = 14/16 (the
+    // gateway-timeout row is opening on /companies first; market
+    // page cells fill in subsequent slices). As new chaos
+    // scenarios fill cells, bump the floor numerator here. The
+    // test EXISTS so a regression that DROPS a cell (e.g.,
+    // deleting a scenario without renaming the file) surfaces
+    // immediately.
     const r = spawnSync('node', [SCRIPT], { encoding: 'utf8' });
     assert.equal(r.status, 0);
-    assert.match(r.stdout, /Page: \/companies — (1[3-9]|[2-9]\d)\/14 cells filled/);
-    assert.match(r.stdout, /Page: \/markets\/\[address\] — (1[2-9]|[2-9]\d)\/14 cells filled/);
+    assert.match(r.stdout, /Page: \/companies — (1[5-9]|[2-9]\d)\/16 cells filled/);
+    assert.match(r.stdout, /Page: \/markets\/\[address\] — (1[4-9]|[2-9]\d)\/16 cells filled/);
 });

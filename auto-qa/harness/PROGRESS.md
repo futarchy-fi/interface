@@ -2313,6 +2313,138 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 44-scenario-40-registry-504-gateway-timeout
+  (Phase 7 chaos library — NEW failure-mode row)**
+  (this iteration, on the interface side) — opens
+  the EIGHTH row of the chaos matrix: "gateway
+  timeout 504". Adds scenario #40
+  (registry-504-gateway-timeout) on /companies and
+  wires the failure-mode classifier in
+  `scenarios:chaos-matrix` to recognize it. First
+  cell of a new 4-cell row (registry/candles ×
+  /companies/[address]) — subsequent slices fill
+  the other 3 cells.
+
+  * **Why 504 deserves its own row** (distinct
+    from prior 7 rows):
+    - vs #02 (hard 502 + JSON error envelope):
+      502 says "upstream sent a bad response";
+      504 says "upstream took too long". Different
+      operational signal; the LB itself synthesized
+      the error rather than forwarding from origin.
+      AND #02's body is JSON; #40's is HTML — the
+      consumer's `.json()` THROWS SyntaxError on
+      HTML, hitting an entirely different bug-class
+      than #02's structured-envelope path.
+    - vs #07 (malformed body — HTTP 200 with
+      non-JSON): #07's status is OK; failure
+      surfaces ONLY on parse. #40 has status
+      ERROR + non-JSON body — EITHER the status
+      check OR the parse path can fire depending
+      on consumer code order.
+    - vs #19 (slow-but-eventual valid response):
+      #19 ultimately returns 200; the page must
+      wait it out. #40 returns 504 — upstream is
+      signaling "the wait already happened and
+      exceeded LB timeout". Consumers should treat
+      504 as transient (retry) but NOT spin
+      indefinitely.
+    - vs #36 (rate-limited 429 + Retry-After):
+      429 is CLIENT-fault (rate limiter); 504 is
+      INFRA-fault (LB couldn't reach origin in
+      time). Different client handling: 429 →
+      respect Retry-After + back off; 504 → retry
+      once or twice with jitter. A consumer that
+      conflates them fails BOTH cases — invisible
+      regression class only chaos catches.
+
+  * **The scenario** —
+    `40-registry-504-gateway-timeout` on /companies.
+    Mocks REGISTRY_GRAPHQL_URL to respond:
+    `status: 504`, `Content-Type: text/html`, body
+    is a generic nginx-style HTML 504 page (NOT
+    JSON). Models real LB defaults (AWS ALB,
+    nginx, Cloudflare, GCP HTTPS LB). Asserts
+    /companies still degrades to "No organizations
+    found" — same terminal UX as #02 (502) but via
+    a fundamentally different control-flow path
+    (status-error + parse-error vs status-error +
+    valid-error-envelope).
+
+  * **Bug-shapes captured** (NEW vs #02, #07,
+    #19, #36):
+    - Page CRASHES because `response.json()`
+      throws on the HTML body (SyntaxError →
+      uncaught promise rejection → React error
+      boundary → "Application error")
+    - Page renders the HTML body raw in the org
+      list (consumer falls back to
+      `response.text()` and renders the LB error
+      page literally — leaks infra error to UX
+      surface)
+    - Page treats 504 as IF the request succeeded
+      with empty data (silent broken state)
+    - Page IMMEDIATELY retries in a tight loop
+      (no exponential backoff, hammers origin
+      while it's already overloaded)
+    - Page hangs in loading state forever (parse
+      error throws before the loading=false
+      setter runs)
+    - "Application error" rendered globally
+      (page-shell collapse from missing top-level
+      error boundary; same shape as #25 but via
+      504 + HTML rather than 502 + JSON)
+
+  * **Drift-resistant matrix tooling extended**:
+    `scripts/scenarios-chaos-matrix.mjs` gains a
+    new `FAILURE_MODE_KEYWORDS` entry (`'gateway
+    timeout 504'` → `['-504-gateway-timeout',
+    '-504-']`) and a new `CANONICAL_FAILURE_MODES`
+    row. The smoke test (`tests/smoke-scenarios-
+    chaos-matrix.test.mjs`) gets the new row added
+    to its keyword check, and the floor pin is
+    bumped from `/14` to `/16` (8 rows × 2
+    endpoints) with floors set to 15 (/companies)
+    and 14 (/markets/[address]).
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (matrix smoke updated
+      for new row; no other infra changes)
+    - Scenario #40 itself: passed in 1.8s on
+      first run
+    - Catalog regenerated: 40 scenarios (was 39)
+    - Matrix script: /companies now 15/16 (8th
+      row opened, 1st cell filled);
+      /markets/[address] stays at 14/16 (8th
+      row opens but no market-page cells yet)
+
+  * **Chaos coverage matrix on /companies after
+    this slice (15/16 — 8 rows × 2 endpoints,
+    new row first cell filled)**:
+    | failure mode        | registry | candles |
+    |---------------------|----------|---------|
+    | hard 502            | #02      | #03     |
+    | partial response    | #22      | #04     |
+    | empty 200           | #05      | #21     |
+    | malformed body      | #07      | #08     |
+    | per-row corrupt     | #09      | #23     |
+    | slow valid resp     | #19      | #20     |
+    | rate-limited 429    | #36      | #37     |
+    | gateway timeout 504 | #40 ★    | —       |
+
+  * **What's next**: matrix expansion proceeds
+    via the natural sequence — slice 45 fills
+    candles-504 on /companies (matches #37's
+    role); slice 46 fills market-page-registry-
+    504; slice 47 fills market-page-candles-504.
+    After 47, the 8-row matrix reaches 32/32
+    cells. Beyond that, options are: open another
+    failure-mode row (e.g., 304 Not Modified,
+    chunked-encoding stall), open chaos coverage
+    on a NEW page, or pivot to cross-layer
+    DOM↔API invariant expansion (interface side
+    has only 6; api side has 57 — large gap).
+
 - **slice 43-scenario-39-market-page-candles-rate-limited
   (Phase 7 chaos library — MATRIX PARITY MILESTONE)**
   (this iteration, on the interface side) — closes
