@@ -676,3 +676,55 @@ export async function deriveYesNoPositionIds(rpcUrl, proposalAddress, collateral
     const no  = await ctDerivePositionId(rpcUrl, collateralToken, conditionId, 2n);
     return { conditionId, yes, no };
 }
+
+// ── Step 7: snapshot/revert for per-scenario state isolation ──
+
+/**
+ * Take an EVM-state snapshot via `evm_snapshot`. Returns the
+ * snapshot ID (a 0x-prefixed hex string) that callers pass back
+ * to `evmRevert` to roll the chain to the captured state.
+ *
+ * Pinning this primitive in the fixture (rather than calling
+ * `anvilRpc('evm_snapshot', [])` inline) lets future callers
+ * upgrade the snapshot strategy in one place — e.g., adding
+ * structured snapshot metadata for debugging which scenario
+ * dirtied which slot.
+ *
+ * @param {string} rpcUrl
+ * @returns {Promise<`0x${string}`>} snapshot ID
+ */
+export async function evmSnapshot(rpcUrl) {
+    const id = await anvilRpc(rpcUrl, 'evm_snapshot', []);
+    if (typeof id !== 'string' || !id.startsWith('0x')) {
+        throw new Error(`[fork-state] evm_snapshot returned non-hex ID: ${JSON.stringify(id)}`);
+    }
+    return id;
+}
+
+/**
+ * Revert chain state to a previously-taken snapshot via
+ * `evm_revert`. **The snapshot ID is consumed** — anvil deletes
+ * it after the revert, so callers that want to revert again
+ * must take a fresh snapshot AFTER each revert. Returns true on
+ * success; throws on failure (rather than returning false the
+ * way anvil's raw RPC does — silent false-on-bad-id is exactly
+ * the kind of footgun that masks state-isolation bugs).
+ *
+ * @param {string} rpcUrl
+ * @param {string} snapshotId  ID returned by evmSnapshot
+ * @returns {Promise<true>}
+ */
+export async function evmRevert(rpcUrl, snapshotId) {
+    if (typeof snapshotId !== 'string' || !snapshotId.startsWith('0x')) {
+        throw new Error(`[fork-state] evmRevert requires a 0x-prefixed snapshot ID, got: ${JSON.stringify(snapshotId)}`);
+    }
+    const result = await anvilRpc(rpcUrl, 'evm_revert', [snapshotId]);
+    if (result !== true) {
+        throw new Error(
+            `[fork-state] evm_revert(${snapshotId}) returned ${JSON.stringify(result)} ` +
+            `instead of true. Snapshot ID likely already consumed (each ID can only be reverted once) ` +
+            `OR the ID was never produced by evm_snapshot on THIS anvil instance.`,
+        );
+    }
+    return true;
+}

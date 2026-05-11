@@ -2313,6 +2313,112 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-7-isolation (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — adds
+  per-scenario state isolation via
+  `evm_snapshot`/`evm_revert`. Foundation for future
+  fork-MUTATION scenarios (buy/sell/merge flows): each
+  scenario can now mutate fork state freely without
+  polluting siblings. Lays the groundwork even though
+  no scenario MUTATES yet — the cost of doing it now is
+  small and adding it later (after several mutating
+  scenarios are written) would require touching every
+  scenario.
+
+  * **Two new fixture primitives** (`fork-state.mjs`)
+    - `evmSnapshot(rpcUrl)` — issues `evm_snapshot`,
+      validates the result is 0x-prefixed hex (anvil
+      should always return a string but a regression
+      that returns null silently breaks the per-scenario
+      isolation chain), returns the snapshot ID.
+    - `evmRevert(rpcUrl, id)` — issues `evm_revert(id)`.
+      Anvil's raw evm_revert returns `false` on a bad /
+      consumed ID — this wrapper TURNS THAT INTO A
+      THROW with the offending ID quoted in the message.
+      Silent false-on-bad-id is exactly the kind of
+      footgun that masks state-isolation bugs (a
+      scenario runs against unrelated state and you
+      can't tell from the test name). Same wrapper also
+      pre-validates the ID format so a "forgot to
+      assign" caller bug points at the caller, not at a
+      confusing RPC error.
+
+  * **globalSetup wires it in** — after all funding
+    completes, takes one snapshot, writes the ID to
+    `auto-qa/harness/.fork-snapshot-id` (gitignored;
+    ephemeral, regenerated every run). The file is the
+    cross-process channel between globalSetup (Node,
+    pre-test) and per-scenario beforeEach (each test
+    worker). The runner re-snapshots after every revert
+    (anvil consumes IDs on revert) and rewrites the file
+    with the fresh ID. Verified working: anvil log shows
+    1+14 = 15 evm_snapshots + 14 evm_reverts for a
+    14-scenario run.
+
+  * **Runner extension** — `flows/scenarios.spec.mjs`'s
+    `beforeEach` now reads the snapshot ID, reverts,
+    and re-snapshots before each scenario starts. Skips
+    cleanly when the snapshot file is missing (e.g.,
+    `HARNESS_NO_ANVIL=1` was set during globalSetup) —
+    that's a deliberate fork-less mode, not an error.
+    Failures during snapshot infra log a warning and
+    continue (scenarios that don't mutate state still
+    pass without isolation).
+
+  * **Bug-shape catches added by this slice**:
+    - A future buy-flow scenario that approves +
+      submits a swap → globalSetup's snapshot is
+      consumed and #14 run AFTER it would see the
+      mutated state. Without isolation, scenario order
+      becomes a hidden test dependency. With isolation,
+      every scenario starts from the same baseline.
+    - A regression that breaks `evm_snapshot` /
+      `evm_revert` (e.g., anvil version that changes
+      the response shape, or a network proxy that
+      strips the response) lights up immediately:
+      scenario #14 fails because the wallet's funded
+      positions vanish (the revert went to a
+      pre-funding state).
+    - The runner's "soft-fail" branch (warn + continue)
+      means a snapshot infrastructure regression
+      doesn't take down the whole suite — but it WILL
+      surface as the first scenario that depends on
+      isolated state failing.
+
+  * **Smoke tests**: 5 new (65 total in fork-state file
+    suite, was 60):
+    - evmSnapshot happy path (issues `evm_snapshot`
+      with empty params + returns ID)
+    - evmSnapshot validation (throws on non-hex result)
+    - evmRevert happy path (issues `evm_revert(id)`
+      + returns true)
+    - evmRevert false-on-bad-id (throws with the
+      offending ID quoted in the message)
+    - evmRevert pre-validation (throws on bad ID
+      format BEFORE hitting anvil)
+
+  * **Live re-validation**:
+    - 14/14 scenarios pass live in 36.5s (was 29.6s
+      pre-isolation; +0.5s per scenario overhead for
+      the revert+snapshot RPC roundtrip pair —
+      acceptable cost for the isolation guarantee)
+    - 65/65 smoke tests pass (was 60)
+    - **No regression** in any existing scenario
+
+  * **What's next** (incremental, not blocking
+    anything):
+    - First fork-MUTATING scenario — e.g., scenario
+      #15 that calls `proposal.split()` to mint
+      additional YES + NO and asserts the panel
+      updates. With isolation in place, that scenario
+      can land without disturbing #14.
+    - Wire the RPC proxy + fork primitives into
+      market-page scenarios #10-#13 so any of them
+      can opt into fork reads without re-implementing
+      the plumbing.
+    - **Remaining maintainer task**: promote 4
+      staged workflows.
+
 - **slice fork-bootstrap-step-5c (Phase 7 fork wiring)**
   (this iteration, on the interface side) — completes
   the multi-iteration fork-bootstrap arc. Scenario #14

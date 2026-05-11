@@ -47,7 +47,19 @@ import {
     deriveYesNoPositionIds,
     setConditionalPosition,
     getConditionalPosition,
+    evmSnapshot,
 } from './fork-state.mjs';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// Step 7: snapshot ID written to disk so the per-scenario reverter
+// (in flows/scenarios.spec.mjs) can read it. globalSetup runs once
+// in Node before all tests; the runner runs per-scenario in a
+// separate worker. A file is the simplest cross-process channel
+// that doesn't require coupling Playwright's global state plumbing.
+export const SNAPSHOT_ID_FILE = join(__dirname, '..', '.fork-snapshot-id');
 
 const RPC_URL =
     process.env.HARNESS_FRONTEND_RPC_URL ||
@@ -195,5 +207,19 @@ export default async function globalSetup() {
     console.log(
         `[fork-state-setup] CT positions funded (hook-fallback IDs) — ` +
         `currencyYes/No + companyYes/No each set to ${POSITION_FUND_AMOUNT_WEI / 10n ** 18n}`
+    );
+
+    // Step 7: snapshot the post-funding state so per-scenario hooks
+    // can revert here for isolation. This MUST be the last side-effect
+    // in globalSetup — anything after the snapshot won't be in the
+    // restored state. Snapshot ID written to disk so the per-scenario
+    // beforeEach (in flows/scenarios.spec.mjs) can pick it up across
+    // process boundaries.
+    const snapshotId = await evmSnapshot(RPC_URL);
+    mkdirSync(dirname(SNAPSHOT_ID_FILE), { recursive: true });
+    writeFileSync(SNAPSHOT_ID_FILE, snapshotId, 'utf8');
+    console.log(
+        `[fork-state-setup] snapshot taken — id=${snapshotId} ` +
+        `written to ${SNAPSHOT_ID_FILE} for per-scenario revert`
     );
 }

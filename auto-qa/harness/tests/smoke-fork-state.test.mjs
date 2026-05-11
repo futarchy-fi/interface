@@ -44,6 +44,8 @@ import {
     getConditionalPosition,
     proposalGetConditionId,
     deriveYesNoPositionIds,
+    evmSnapshot,
+    evmRevert,
 } from '../fixtures/fork-state.mjs';
 
 // ── Stub server fixture ──────────────────────────────────────────────
@@ -641,6 +643,83 @@ test('impersonateAndSend — stops impersonating EVEN ON FAILURE (finally)', asy
             'eth_sendTransaction',
             'anvil_stopImpersonatingAccount',
         ]);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+// ── Step 7: snapshot/revert primitives ───────────────────────────────
+
+test('evmSnapshot — issues evm_snapshot + returns the 0x ID', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push({ method: req.method, params: req.params });
+        return { result: '0x1' };
+    });
+    try {
+        const id = await evmSnapshot(url);
+        assert.equal(id, '0x1');
+        assert.deepEqual(calls, [{ method: 'evm_snapshot', params: [] }]);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('evmSnapshot — throws on non-hex result', async () => {
+    const { url, server } = await startStub(() => ({ result: 42 }));
+    try {
+        await assert.rejects(
+            evmSnapshot(url),
+            /non-hex ID/,
+        );
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('evmRevert — issues evm_revert with the snapshot ID + returns true on success', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push({ method: req.method, params: req.params });
+        return { result: true };
+    });
+    try {
+        const got = await evmRevert(url, '0x1');
+        assert.equal(got, true);
+        assert.deepEqual(calls, [{ method: 'evm_revert', params: ['0x1'] }]);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('evmRevert — throws when anvil returns false (consumed-or-bad-id)', async () => {
+    // anvil's raw evm_revert returns false on bad ID. Silent false is
+    // exactly the kind of footgun that masks state-isolation bugs;
+    // the wrapper turns it into a loud throw with the offending ID
+    // named in the message.
+    const { url, server } = await startStub(() => ({ result: false }));
+    try {
+        await assert.rejects(
+            evmRevert(url, '0xabc'),
+            /evm_revert\(0xabc\) returned false/,
+        );
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('evmRevert — throws when called with a non-hex ID', async () => {
+    // Caller-side validation: catches an empty string / undefined ID
+    // BEFORE hitting anvil, so the failure points at the caller (a
+    // forgot-to-assign bug in the runner) instead of at a confusing
+    // RPC error.
+    let calls = 0;
+    const { url, server } = await startStub(() => { calls++; return { result: true }; });
+    try {
+        await assert.rejects(evmRevert(url, ''), /requires a 0x-prefixed/);
+        await assert.rejects(evmRevert(url, undefined), /requires a 0x-prefixed/);
+        await assert.rejects(evmRevert(url, 'abc'), /requires a 0x-prefixed/);
+        assert.equal(calls, 0, 'no RPC calls should be made when validation fails');
     } finally {
         await closeStub(server);
     }

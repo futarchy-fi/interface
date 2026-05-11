@@ -23,7 +23,7 @@
  */
 
 import { test } from '@playwright/test';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -32,6 +32,8 @@ import {
     nStubWallets,
 } from '../fixtures/wallet-stub.mjs';
 import { installAnvilRpcProxy } from '../fixtures/api-mocks.mjs';
+import { evmSnapshot, evmRevert } from '../fixtures/fork-state.mjs';
+import { SNAPSHOT_ID_FILE } from '../fixtures/fork-state-setup.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCENARIOS_DIR = join(__dirname, '..', 'scenarios');
@@ -62,9 +64,34 @@ const scenarios = await Promise.all(
 );
 
 test.describe('Phase 6 — captured bug-shape scenarios', () => {
-    test.beforeEach(({}, testInfo) => {
+    test.beforeEach(async ({}, testInfo) => {
         if (process.env.HARNESS_NO_WEBSERVER === '1') {
             testInfo.skip(true, 'scenarios require Next.js dev server (run :ui:full)');
+        }
+
+        // Step 7: revert to globalSetup's funded snapshot before each
+        // scenario, then immediately take a fresh snapshot for the
+        // next iteration. anvil consumes the snapshot ID on revert,
+        // so we re-snapshot after every revert and persist the new
+        // ID back to the same file. **Skip cleanly when no snapshot
+        // file exists** (e.g., HARNESS_NO_ANVIL was set during
+        // globalSetup); that's a deliberate fork-less mode, not an
+        // error. Same for missing anvil.
+        if (process.env.HARNESS_NO_ANVIL || !existsSync(SNAPSHOT_ID_FILE)) {
+            return;
+        }
+        const anvilUrl = STUB_RPC_URL;
+        try {
+            const id = readFileSync(SNAPSHOT_ID_FILE, 'utf8').trim();
+            await evmRevert(anvilUrl, id);
+            const newId = await evmSnapshot(anvilUrl);
+            writeFileSync(SNAPSHOT_ID_FILE, newId, 'utf8');
+        } catch (err) {
+            // Don't crash the suite on snapshot infrastructure failure
+            // — log it so the cause is visible, then proceed without
+            // isolation (scenarios that don't mutate state still pass).
+            console.warn(`[scenarios] snapshot revert FAILED: ${err.message}`);
+            console.warn('[scenarios] proceeding without per-scenario state isolation for this run');
         }
     });
 
