@@ -2313,6 +2313,116 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 70-invariants-catalog-tooling
+  (Phase 5 invariant catalog — TOOLING pivot)**
+  (this iteration, on the interface side) —
+  pivot from "add another invariant" to
+  "make the invariant set discoverable". Adds
+  `scripts/invariants-catalog.mjs` (sister to
+  `scenarios-catalog.mjs`) that parses
+  `flows/dom-api-invariant.spec.mjs`, extracts
+  each `test('slice X — Y', ...)` declaration,
+  and writes `flows/INVARIANTS.md` — an
+  auto-generated markdown index of all 28
+  current invariants.
+
+  * **The new script** —
+    `scripts/invariants-catalog.mjs`:
+    - Regex-parses `test('...', ...)`
+      declarations (Playwright tests are
+      inline functions, can't be `import`-ed
+      like scenario default-exports)
+    - Splits each title on the em-dash to
+      extract slice id (e.g. "4b", "4c v3a")
+      and description body
+    - Natural-sort by slice id so the output
+      is stable across runs
+    - Writes a markdown table to
+      `flows/INVARIANTS.md` with a header,
+      total count, the table, and a footer
+      naming the three coverage dimensions
+      (text-level / network-level /
+      attribute-level)
+
+  * **Why now**: the catalog has reached a
+    structural milestone — 5 complete lattices
+    (filter, chain, precision, image-cascade,
+    title-cascade) plus 3 attribute
+    sub-dimensions (src, href, alt). The
+    invariant set is large enough that
+    discovering "what does this harness
+    actually catch?" by reading the spec file
+    is no longer easy. A documented index is
+    the natural next step before the catalog
+    grows further.
+
+  * **Smoke test** —
+    `tests/smoke-invariants-catalog.test.mjs`:
+    - Asserts the script exits 0 and prints
+      its file-write line
+    - **Drift detection**: snapshots
+      `INVARIANTS.md`, runs the script,
+      asserts the regenerated content is
+      byte-identical to the snapshot, then
+      restores. Catches the bug "added an
+      invariant but forgot to run
+      `invariants:catalog`" — the doc rot
+      the catalog script exists to prevent.
+    - Sanity-matches well-known slice ids
+      (`4b`, `4m`, `4y`) and the three
+      coverage-dimension headers in the
+      footer
+
+  * **npm script** —
+    `invariants:catalog` (in
+    `auto-qa/harness/package.json`), sibling
+    to `scenarios:catalog`.
+
+  * **Side benefit (worth pinning)**: the
+    regex-based parsing approach is more
+    fragile than the import-based scenarios
+    approach but doesn't require any change
+    to how Playwright tests are authored. If
+    a future iteration moves invariant
+    metadata into a `describe` block's
+    parameter (e.g.,
+    `test.describe('slice 4z', { tag:
+    '@slice-4z' }, () => { ... })`), the
+    parser could shift to use Playwright's
+    own metadata APIs (e.g.,
+    `playwright test --list --reporter=json`)
+    for richer extraction.
+
+  * **Live re-validation**:
+    - Smoke tests: 81/81 (was 80; new
+      drift-detection test added)
+    - `npm run invariants:catalog` → exits 0,
+      prints "Wrote ... (28 invariants)"
+    - All 28 DOM↔API invariant tests still
+      pass (no regression to the catalog's
+      contents)
+
+  * **Catalog of catalog-generators now**:
+    - `scenarios:catalog` → SCENARIOS.md
+      (chaos + non-chaos scenarios)
+    - `scenarios:by-route` → grouping by
+      route prefix
+    - `scenarios:chaos-matrix` → drift-
+      resistant 2D chaos-coverage matrix
+    - `invariants:catalog` → INVARIANTS.md
+      (DOM↔API cross-layer invariants) ★
+
+  * **What's next**:
+    - State-transition tests (orgs `[PROBE]`
+      → `[]` via re-mock during a session)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers in carousel card)
+    - href on table row (currently uses
+      onClick; would require click + url
+      check)
+    - Pivot to api-side (currently 23
+      invariants there vs 28 here)
+
 - **slice 69-dom-api-invariant-alt-fallback-pair
   (Phase 5 invariant catalog — 28th DOM↔API
   invariant; alt + visible-text consistency
