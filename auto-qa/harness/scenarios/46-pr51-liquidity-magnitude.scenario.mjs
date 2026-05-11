@@ -109,12 +109,43 @@ function makeMarketCandlesMockHandlerForPR51({
     const companyToken    = MARKET_PROBE_COMPANY_TKN;
     const yesPool         = MARKET_PROBE_YES_POOL;
     const noPool          = MARKET_PROBE_NO_POOL;
-    // Default Algebra V3 pool shape that exercises the PR #51 math.
-    // liquidity=1e21 wei, tick=0 → sqrtPrice=1.0 →
-    //   post-fix: TVL = (1e21 × 1.0 × 2)/1e18 = 2000
-    //   pre-fix:  TVL = 1e21 × 1.0          = 1e21 (raw magnitude)
+    // Algebra V3 pool shape TUNED so post-fix vs pre-fix
+    // formatSubgraphPoolData outputs land at distinguishable
+    // rendered strings after passing through
+    // normalizeTokenAmount and formatLiquidity.
+    //
+    // liquidity = 7.5025e20 wei, tick = 0 → sqrtPrice = 1.0.
+    //
+    //   POST-FIX per pool:
+    //     adjustedLiquidity = (7.5025e20 × 1.0 × 2) / 1e18 = 1500.5
+    //     .toString() = "1500.5"  (has '.')
+    //     normalizeTokenAmount keeps as decimal → 1500.5
+    //     YES+NO sum  = 3001
+    //     formatLiquidity(3001) → "3.00K"     ← marker string
+    //
+    //   PRE-FIX per pool:
+    //     adjustedLiquidity = 7.5025e20 × 1.0 = 7.5025e20
+    //     toLocaleString('fullwide') = "750250000000000000000" (no '.')
+    //     normalizeTokenAmount sees integer string → /1e18 → 750.25
+    //     YES+NO sum  = 1500.5
+    //     formatLiquidity(1500.5) → "1.50K"   ← bug-shape string
+    //
+    // Both render with K suffix but at different leading values.
+    // Asserting the EXACT marker string "3.00K" catches a regression
+    // that flips the math back to the pre-fix form (the value
+    // becomes "1.50K" and the exact-match assertion fails).
+    //
+    // Choice of 7.5025e20:
+    //   - Below 1e21 so `.toString()` keeps the integer form
+    //     (no scientific-notation precision concern in pre-fix).
+    //   - Multiplied by 2 → 1.5005e21 (still well below JS
+    //     double precision cliff at ~9e15-significand for
+    //     integer arithmetic, but division by 1e18 lands inside
+    //     safe range so 1500.5 is exact).
+    //   - Yields a non-integer post-fix output (1500.5), which
+    //     forces the `.toString()` branch to retain '.'.
     const defaultPool = {
-        liquidity:    '1000000000000000000000', // 1e21
+        liquidity:    '750250000000000000000', // 7.5025e20
         volumeToken0: '1000000000000000000',
         volumeToken1: '1000000000000000000',
         tick:         '0',
@@ -206,9 +237,9 @@ function makeMarketCandlesMockHandlerForPR51({
 }
 
 export default {
-    name:        '46-subgraph-pool-data-path',
-    description: 'Opens the subgraph-sourced poolData code path on the market page. Inline candles handler returns `pools` in the compound discovery query (the shared handler does not), driving `usePoolData.fetchBestPoolsForProposal` → `formatSubgraphPoolData` (PR #51 fix site) to run. Asserts the Liquidity widget label changes from "Liquidity (Total; sDAI)" (legacy path) to plain "Liquidity" (subgraph path). Mechanically catching PR #51 itself requires tuning mock data so the post-fix vs pre-fix outputs differ at the `normalizeTokenAmount` layer — deferred to a future slice.',
-    bugShape:    'subgraph-sourced poolData path unreachable / `formatSubgraphPoolData` fix site stops running / Liquidity widget label conditional regresses',
+    name:        '46-pr51-liquidity-magnitude',
+    description: 'Catches PR #51 (Algebra V3 Liquidity-widget magnitude bug). Mock liquidity=7.5025e20 wei + tick=0 chosen so the post-fix math (×2/1e18 + .toString) produces "1500.5" per pool (decimal string preserved through normalizeTokenAmount), summed to 3001 → formatLiquidity → "3.00K". Reverting the math line in formatSubgraphPoolData makes adjustedLiquidity=7.5025e20 → "750250000000000000000" (integer string) → normalizeTokenAmount divides by 1e18 → 750.25 → sum 1500.5 → "1.50K". Exact-match assertion on "3.00K" fails under the regression.',
+    bugShape:    'PR #51 Algebra V3 raw-L wrong-magnitude in Liquidity widget (drop ×2 /1e18 in formatSubgraphPoolData)',
     route:       `/markets/${MARKET_PROBE_ADDRESS}`,
 
     mocks: {
@@ -227,7 +258,7 @@ export default {
             ).toBeVisible({ timeout: 30_000 });
         },
 
-        // The marker assertion. With `poolData?.source === 'subgraph'`
+        // Path-mount marker. With `poolData?.source === 'subgraph'`
         // (which only happens when `fetchBestPoolsForProposal`
         // returns non-null), the Liquidity widget label is the bare
         // string "Liquidity". Without the compound-query handler
@@ -238,6 +269,18 @@ export default {
         async (page) => {
             await expect(
                 page.getByText('Liquidity', { exact: true }).first(),
+            ).toBeVisible({ timeout: 30_000 });
+        },
+
+        // PR #51 catch — the load-bearing assertion. "3.00K" is the
+        // formatLiquidity output for sum=3001 (precision=2 from
+        // PRECISION_CONFIG.display.default + keep-trailing-zeros in
+        // precisionFormatter.js:79). Under the pre-fix math the
+        // rendered string becomes "1.50K" (sum=1500.5), so this
+        // exact-match assertion fails.
+        async (page) => {
+            await expect(
+                page.getByText('3.00K', { exact: true }).first(),
             ).toBeVisible({ timeout: 30_000 });
         },
     ],

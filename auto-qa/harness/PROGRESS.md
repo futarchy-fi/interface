@@ -2313,6 +2313,99 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 77-pr51-mechanical-catch (Phase 6
+  scenario library — scenario 46 NOW catches
+  PR #51 for real)** (this iteration, on the
+  interface side) — Tunes scenario 46's mock
+  data so post-fix vs pre-fix outputs of
+  `formatSubgraphPoolData` land at
+  mechanically-distinguishable rendered DOM
+  strings. Slice 76 unblocked the code path
+  (compound-query handler returns `pools`);
+  slice 77 turns it into an actual catch.
+
+  * **The math discovery**: with `liquidity =
+    7.5025e20 wei` and `tick = 0` (sqrtPrice =
+    1.0):
+    - Post-fix per pool: `(7.5025e20 × 1 × 2)
+      / 1e18 = 1500.5` → `.toString()` =
+      `"1500.5"` (has `.`) →
+      `normalizeTokenAmount` keeps as decimal
+      → YES+NO sum = 3001 → `formatLiquidity`
+      → **`"3.00K"`**
+    - Pre-fix per pool: `7.5025e20 × 1 =
+      7.5025e20` → `toLocaleString('fullwide')`
+      = `"750250000000000000000"` (no `.`) →
+      `normalizeTokenAmount` divides by 1e18 →
+      750.25 → YES+NO sum = 1500.5 →
+      `formatLiquidity` → **`"1.50K"`**
+
+    Both render with K suffix at different
+    leading values. Exact-match
+    `getByText('3.00K')` discriminates.
+
+  * **Choice of 7.5025e20 explained**: needed
+    `2 × L / 1e18` to be NON-INTEGER (so
+    post-fix `.toString()` retains the `.`,
+    forcing normalizeTokenAmount to skip the
+    /1e18 conversion). 7.5025 × 2 = 15.005,
+    divided by anything that keeps precision
+    → 1500.5. Below 1e21 so JS `.toString()`
+    on the pre-fix value stays in integer form
+    (no scientific notation that would
+    confuse the test).
+
+  * **Mechanical verification** (slice 74/75/76
+    pattern):
+    - Mutated `usePoolData.js:153` from
+      `(liquidityScaled * 2) / 1e18` to plain
+      `liquidityScaled` (the math bug)
+    - Ran scenario 46 → FAILED with `Locator:
+      getByText('3.00K', { exact: true })` ...
+      `element(s) not found`
+    - Page snapshot confirmed the Liquidity
+      widget rendered "1.50K" (the bug-shape
+      string predicted exactly by the math
+      analysis)
+    - Restored the math → PASSES
+
+  * **What this slice catches vs doesn't**:
+    - Catches: the MATH change in PR #51
+      (`× 2 / 1e18`). This is the magnitude
+      bug — the primary fix.
+    - Doesn't catch (subset of bug shapes PR
+      #51 fixed): the SERIALIZATION change
+      (`toString` vs `toLocaleString('fullwide')`),
+      the `isRaw` flag change, the `token`
+      string change. With the chosen mock
+      data, all 4 changes are simultaneously
+      in their post-fix form when the math
+      is correct; reverting all 4 also makes
+      this scenario fail (though indirectly).
+      A future sister scenario could pin each
+      independently, similar to scenario
+      44/45's prefix-shape pair.
+
+  * **The catalog state**: 46 scenarios; **4
+    mechanically verified** (44 + 45 + 46
+    [path] + 46 [PR #51 math]). Three of those
+    four guard a specific merged-PR
+    regression (#64, #64-prefixed, #51).
+
+  * **File rename**:
+    `scenarios/46-subgraph-pool-data-path.scenario.mjs`
+    → `scenarios/46-pr51-liquidity-magnitude.scenario.mjs`.
+    Slice 76 chose the "honest" name when the
+    scenario didn't catch PR #51; slice 77
+    earns the original name back by actually
+    catching it.
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `scenarios:catalog` clean
+    - Scenario 46 wall-clock: ~5s warm
+    - src/ tree clean post-validation
+
 - **slice 76-subgraph-pool-data-path (Phase 6
   scenario library — open the subgraph-poolData
   code path on the market page)** (this
