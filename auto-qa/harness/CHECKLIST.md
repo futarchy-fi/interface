@@ -596,6 +596,25 @@ freshly-generated addresses as recipients; documented in
       the 4 currently-staged CI workflows to promote;
       recommend doing this FIRST since it's pure node +
       no docker + no GH Actions secrets needed.
+- [x] **4d-architecture-sync-ci — cross-repo ARCHITECTURE.md
+      drift workflow STAGED on interface side.** New
+      `auto-qa/harness/ci/auto-qa-harness-architecture-sync.yml.staged`
+      curls the sister-side (futarchy-api) `ARCHITECTURE.md`
+      from raw.githubusercontent.com (public; no token),
+      diffs it against the local copy, fails loudly on byte
+      mismatch. Sister-side workflow on api side mirrors it
+      in reverse. Together with the doc-side smoke test
+      (`tests/smoke-architecture-sync.test.mjs`), gives
+      complete drift coverage: smoke test handles dev-with-
+      sibling-clone, workflow handles CI-with-one-repo-clone.
+      Trigger: `workflow_dispatch` only with optional
+      `sister_branch` input. YAML re-validated via
+      `js-yaml@4`; simulated locally against live raw URLs.
+- [ ] **4d-architecture-sync-ci-promote** — maintainer task:
+      copy this slice's staged file into
+      `.github/workflows/auto-qa-harness-architecture-sync.yml`
+      on the interface repo. Independent of the other staged
+      workflows; promote in any order.
 - [x] **4d-smoke-ci-interface — symmetric smoke-test workflow
       STAGED on interface side.** Sister to api's slice 3e —
       `auto-qa/harness/ci/auto-qa-harness-smoke.yml.staged`

@@ -2313,6 +2313,39 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 4d-architecture-sync-ci (CI integration)**
+  (this iteration, both sides) — cross-repo complement
+  to the previous-iteration smoke test. Together they
+  give complete drift coverage of the shared
+  `ARCHITECTURE.md` spec: smoke test catches dev-with-
+  sibling-clone at `npm test` time; workflow catches
+  CI-with-one-repo-checked-out at PR time.
+
+  * Stages `auto-qa/harness/ci/auto-qa-harness-architecture-sync.yml.staged`
+    on the interface side. Curls the sister-side
+    (futarchy-api) `ARCHITECTURE.md` from
+    raw.githubusercontent.com (public; no token), diffs
+    against local. Fails loudly on byte mismatch.
+
+  * Sister-side workflow on api mirrors it in reverse.
+
+  * Optional `sister_branch` input (default `auto-qa`;
+    switch to `main` post-merge).
+
+  * `ci/README.md` updated: 4 rows in the staged-table
+    now; promote order revised to put architecture-sync
+    between smoke and scenarios.
+
+  * Validation: YAML re-parsed clean via `js-yaml@4`;
+    both raw URLs return HTTP/2 200 from this dev
+    machine; simulated both workflows locally
+    (`curl + diff`) → both PASS against current
+    baseline.
+
+  * Trigger remains `workflow_dispatch` only; future
+    iterations can add `pull_request` paths trigger +
+    nightly cron.
+
 - **slice 41-doc-side (Phase 0 doc-side sister-link)**
   (this iteration, both sides) — addresses Phase 0
   CHECKLIST item 41 ("Sister-link verified: fresh
