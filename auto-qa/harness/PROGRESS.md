@@ -2313,6 +2313,98 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 71-invariants-catalog-grouped
+  (Phase 5 invariant catalog — v2 grouping
+  by coverage dimension)** (this iteration,
+  on the interface side) — extends slice 70's
+  catalog tooling: rather than a flat 28-row
+  table, the script now auto-DETECTS each
+  test's coverage dimension from the body's
+  Playwright assertions and groups entries
+  into sections in INVARIANTS.md.
+
+  * **Detection heuristic** — picks one of
+    five dimensions per test, based on the
+    test body's keyword presence:
+    - `toHaveAttribute('src', ...)` →
+      attribute-src
+    - `toHaveAttribute('href', ...)` →
+      attribute-href
+    - `toHaveAttribute('alt', ...)` →
+      attribute-alt
+    - `candlesCalls.push` or `onCall:` →
+      network-level
+    - otherwise → text-level
+
+  * **Current breakdown** (auto-derived):
+    - 18 text-level field-flow
+    - 3 network-level request body
+    - 4 attribute-src (image cascade)
+    - 1 attribute-href (navigation)
+    - 2 attribute-alt (a11y)
+    Total: 28 invariants.
+
+  * **Multi-dimensional test note**: slice
+    4 v1 (the unlabeled original) probes
+    BOTH text-level (org-name visible) AND
+    network-level (onCall tracks aggregator/
+    organizations queries). The heuristic
+    picks the more rare dimension (network)
+    when both are present — reasonable
+    default because text-level is the
+    catch-all bucket. A future iteration
+    could allow tests to declare a primary
+    dimension explicitly via a comment
+    annotation if this becomes inconvenient.
+
+  * **Catalog output structure**:
+    - Top: total count + per-dimension
+      breakdown summary line
+    - One markdown section per non-empty
+      dimension, with its own table
+    - Bottom: definitions of each dimension
+    Sections appear in display order: text →
+    network → src → href → alt (introduced
+    chronologically).
+
+  * **Why this matters**: with 28 invariants,
+    a flat list scans poorly. Grouped
+    sections let an engineer ask "what
+    src-attribute coverage do we have?" and
+    get a focused answer in 4 rows rather
+    than scrolling 28. As the catalog grows
+    (next chaos rows + invariant additions),
+    the structural benefit compounds.
+
+  * **Smoke test updated**: asserts the new
+    structure
+    - `## Text-level field-flow (\d+)` header
+      present (proves grouping landed)
+    - `Breakdown: \d+ text-level ...` line
+      present (proves the summary line is
+      auto-derived)
+    - Original sanity matches (well-known
+      slice ids, dimension footer
+      definitions) retained
+
+  * **Live re-validation**:
+    - Smoke tests: 81/81 (unchanged from
+      slice 70; same count, updated
+      assertions)
+    - `npm run invariants:catalog` → exits
+      0, prints "Wrote ... (28 invariants)"
+    - Catalog deterministic across multiple
+      runs
+
+  * **What's next**:
+    - State-transition tests (orgs
+      `[PROBE]` → `[]` via re-mock)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers)
+    - Pivot to api-side (23 vs 28 — interface
+      now LEADS but gap is narrow; api side
+      may have specific gaps worth closing)
+
 - **slice 70-invariants-catalog-tooling
   (Phase 5 invariant catalog — TOOLING pivot)**
   (this iteration, on the interface side) —

@@ -63,7 +63,17 @@ test('invariants-catalog CLI — runs cleanly + committed INVARIANTS.md is in sy
         assert.match(after, /\| 4m\s+\|/);
         assert.match(after, /\| 4y\s+\|/);
 
-        // Footer mentions the three coverage dimensions.
+        // Grouped structure: each dimension has its own section
+        // header with a count parenthetical. At minimum,
+        // text-level and attribute-src must have entries (the two
+        // largest categories).
+        assert.match(after, /## Text-level field-flow \(\d+\)/);
+        assert.match(after, /## Attribute-level: `<img src>` \(\d+\)/);
+
+        // Breakdown line summarises counts per dimension.
+        assert.match(after, /Breakdown: \d+ text-level field-flow/);
+
+        // Footer mentions the three top-level coverage dimensions.
         assert.match(after, /Text-level field-flow/);
         assert.match(after, /Network-level request body/);
         assert.match(after, /Attribute-level rendering/);
