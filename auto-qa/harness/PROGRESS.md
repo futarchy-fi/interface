@@ -2313,6 +2313,115 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 67-dom-api-invariant-empty-state-inverse
+  (Phase 5 invariant catalog — 26th DOM↔API
+  invariant; FIRST happy-path empty-state probe)**
+  (this iteration, on the interface side) —
+  closes a coverage hole at the empty-state
+  surface. Chaos scenarios #02 (registry-down)
+  and #05 (registry-empty-orgs) probe the
+  empty-state via FAILURE paths (502 and
+  200+error-body respectively). This slice
+  probes the THIRD distinct path: registry
+  returns 200 with a legitimate empty
+  `organizations: []` array — the happy-path
+  case where the aggregator simply has no orgs.
+
+  * **The new invariant** —
+    `slice 4w — empty-state inverse invariant`.
+    Mock `organizations: []` via the new
+    fixture parameter. Assert
+    `page.getByText('No organizations found')`
+    is visible.
+
+  * **Fixture extension (this iteration)**:
+    `makeGraphqlMockHandler` gains a new
+    `organizations` parameter:
+    - `null` (default) → synthesized one-org
+      payload (backwards-compatible with all
+      25 prior tests)
+    - `[]` → exercises the empty-array path
+
+  * **Three distinct empty-state paths now
+    probed**:
+    | path     | mock                      | control flow              |
+    |----------|---------------------------|---------------------------|
+    | chaos#02 | registry → 502 + error    | `.catch` (status check)   |
+    | chaos#05 | registry → 200 + error    | parses; handles `errors`  |
+    | 4w (new) | registry → 200 + `orgs:[]`| renders empty from length |
+
+  * **Why these are meaningfully distinct**:
+    each control-flow path is exercised
+    differently. The third path is the ONE
+    path where the server is healthy AND
+    returning valid GraphQL but the aggregator
+    legitimately has nothing to show. Bugs
+    here are production-shape (e.g., a brand
+    new aggregator before any orgs are added).
+    A regression that breaks the empty-state
+    render for this case would NOT surface in
+    either chaos test because both of those
+    exercise failure paths.
+
+  * **Bug classes caught** (NEW vs chaos #02
+    and #05):
+    - Regression in OrganizationsTable that
+      doesn't handle `.length === 0` branch
+      (e.g., crashes on `orgs[0]` access
+      without bounds-checking)
+    - Regression that conflates empty-array
+      with undefined (`if (!orgs)
+      showEmpty()` instead of
+      `if (!orgs?.length) showEmpty()`) —
+      fails to render the empty state when
+      API returns a well-formed empty array
+    - Regression that returns the WRONG
+      empty-state string (e.g., "No data" or
+      "Loading...") — the "No organizations
+      found" substring catches the change
+    - Regression that doesn't update the UI
+      when the orgs array transitions from
+      `[PROBE]` to `[]` (e.g., stale state
+      held in a useMemo without a length
+      dep) — wouldn't surface in this fresh-
+      page-load test but would surface in a
+      future state-transition test
+
+  * **Pattern emerging**: "inverse" tests
+    that exercise happy-path failure-shape
+    cases (legitimate empty/zero/null inputs)
+    complement chaos-axis tests (which exercise
+    network-level failure). Both axes catch
+    related bug classes but at different
+    code-paths. Future iterations can extend
+    the inverse-test pattern to candles
+    (empty pools/swaps/candles arrays as
+    happy-path).
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (fixture extension
+      backwards-compatible)
+    - All 26 DOM↔API invariant tests pass:
+      58.1s (was 25 in 53.9s); new slice 4w
+      alone: 1.5s on first run
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: **19 invariants**
+      (was 18; empty-state joins the rendered-
+      text family)
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: 5 invariants
+
+  * **What's next**:
+    - aria-label on counts cells (a11y
+      dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers)
+    - Inverse test for candles (empty pools
+      array → graceful price degradation)
+    - State-transition test (orgs `[PROBE]`
+      → `[]` mid-session via a re-mock)
+
 - **slice 66-dom-api-invariant-title-preferred-branch
   (Phase 5 invariant catalog — 25th DOM↔API
   invariant; CLOSES title-cascade lattice)**

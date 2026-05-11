@@ -76,6 +76,18 @@ export const MARKET_PROBE_NO_POOL       = '0xddddddddddddddddddddddddddddddddddd
  *                                         `org.name || 'Unknown
  *                                         Organization'` fallback in
  *                                         useAggregatorCompanies.
+ * @param {object[]|null} [opts.organizations] override for the
+ *                                         organizations array
+ *                                         response. `null` (default)
+ *                                         uses the synthesized
+ *                                         one-org payload (see
+ *                                         `orgName`/`orgMetadata`).
+ *                                         Pass `[]` to exercise the
+ *                                         "no organizations found"
+ *                                         empty-state path
+ *                                         (legitimate happy-path
+ *                                         empty result vs chaos
+ *                                         #05 which arrives via 502).
  * @param {(query:string)=>void} [opts.onCall] observer for the
  *                                         operation, useful in
  *                                         failure-trace assertions
@@ -84,6 +96,7 @@ export function makeGraphqlMockHandler({
     proposals = [],
     orgMetadata = null,
     orgName = PROBE_ORG_NAME,
+    organizations = null,
     onCall,
 } = {}) {
     return async (route) => {
@@ -103,7 +116,7 @@ export function makeGraphqlMockHandler({
             };
         } else if (q.includes('organizations(where:')) {
             data = {
-                organizations: [{
+                organizations: organizations !== null ? organizations : [{
                     id:           PROBE_ORG_ID,
                     name:         orgName,
                     description:  'Probe org returned by mocked GraphQL',

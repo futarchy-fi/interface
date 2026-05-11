@@ -1578,6 +1578,87 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         ).toBeVisible({ timeout: 30_000 });
     });
 
+    test('slice 4w — empty-state inverse invariant: registry returns 200 + empty orgs array → "No organizations found"', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // First explicit happy-path probe of the empty-state
+        // surface. Chaos scenarios #02 and #05 already test the
+        // empty-state via FAILURE paths:
+        //   - #02 (registry-down): registry returns 502 →
+        //     consumer .catch fires → empty-state shows
+        //   - #05 (registry-empty-orgs): registry returns 200
+        //     but with an error envelope (NOT pure empty array)
+        //
+        // This slice tests the THIRD distinct path:
+        //   - 4w (this slice): registry returns 200 + empty
+        //     `organizations: []` array (legitimate happy
+        //     result; the aggregator has zero orgs)
+        //
+        // Why these three are meaningfully distinct:
+        // each control-flow path is exercised differently:
+        //   - 502 + error body  → `.catch` branch (status check)
+        //   - 200 + error body  → parses successfully; consumer
+        //     handles `errors` field; uses empty
+        //   - 200 + empty array → parses successfully; consumer
+        //     sees a valid array with 0 elements; renders empty
+        //     state from the `.length === 0` branch
+        //
+        // The third path is the ONE path where the server is
+        // healthy AND returning valid GraphQL but the aggregator
+        // legitimately has nothing to show. Bugs here are
+        // production-shape (e.g., a brand new aggregator before
+        // any orgs are added). A regression that breaks the
+        // empty-state render for this case would NOT surface in
+        // either chaos test because both of those exercise
+        // failure paths.
+        //
+        // Fixture extension (this iteration): added
+        // `organizations` parameter to `makeGraphqlMockHandler`.
+        // `null` (default) uses the synthesized one-org payload;
+        // passing `[]` overrides to exercise the empty-array
+        // path.
+        //
+        // Bug classes caught (NEW vs chaos #02 and #05):
+        //   - Regression in OrganizationsTable that doesn't
+        //     handle the `.length === 0` branch (e.g., crashes
+        //     on `orgs[0]` access without bounds-checking when
+        //     the array is empty)
+        //   - Regression that conflates empty-array with
+        //     undefined (`if (!orgs) showEmpty()` instead of
+        //     `if (!orgs?.length) showEmpty()`) — fails to
+        //     render the empty state when the API returns a
+        //     well-formed empty array
+        //   - Regression that returns the WRONG empty-state
+        //     string (e.g., "No data" or "Loading...") — the
+        //     "No organizations found" substring assertion
+        //     catches the change
+        //   - Regression that doesn't update the UI when the
+        //     orgs array transitions from [PROBE] to [] (e.g.,
+        //     stale state held in a useMemo without a length
+        //     dep) — wouldn't surface in this fresh-page-load
+        //     test but would surface in a future
+        //     state-transition test
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            organizations: [],
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Assert the empty-state message appears (happy-path
+        // empty, distinct from chaos-path empty).
+        await expect(
+            page.getByText('No organizations found').first(),
+        ).toBeVisible({ timeout: 30_000 });
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 
