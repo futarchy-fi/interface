@@ -2313,6 +2313,115 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-17-proxy-pause
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — adds `pause()`/`resume()`/
+  `withPaused(fn)` to the anvil RPC proxy + threads
+  the API into the per-scenario assertion context
+  as `withProxyPaused`. Scenario #17's mutation
+  block now uses it. **Honest result**: cold-anvil
+  is 16/18 in this run (vs step 16's 17/18, but the
+  sample size of 1 is not enough to call it a
+  regression — see "what we observed" below).
+
+  * **Why this should help (the model)**:
+    Scenario mutations (`setStorageAt`) bypass the
+    proxy entirely — they fetch anvil directly from
+    the Node-side scenario body. Page polling goes
+    THROUGH the proxy. So pausing the proxy stops
+    only PAGE traffic; mutation traffic flows free.
+    During a mutation window, anvil sees only the
+    mutation, doesn't have to share queue time with
+    page eth_calls.
+
+  * **The mechanism**:
+    - Counter-based gate inside
+      `makeAnvilRpcProxyHandler`. `pause()`
+      increments and creates a Promise; `resume()`
+      decrements and resolves the Promise when
+      count reaches zero. Counter semantics let
+      nested pause/resume pairs compose without
+      premature gate release.
+    - `withPaused(fn)` wraps `pause/try{await fn}
+      finally{resume}` so a thrown mutation can't
+      strand the proxy in a permanently-paused
+      state.
+    - `installAnvilRpcProxy` returns
+      `{urls, handler}` (was just `urls`); only one
+      caller (scenarios.spec.mjs) used the return
+      value, and it ignored it before.
+    - The runner pulls `handler.withPaused` and
+      injects it into assertion context as
+      `withProxyPaused`. No-op (pass-through) when
+      the scenario didn't opt into the proxy.
+
+  * **What we observed (cold-anvil, #15-#18 only)**:
+    - Run 1 (full 18-scenario suite): 16/18
+      (#15 + #17 fail; both setStorageAt 60s
+      timeout; #15 doesn't even use the new pause).
+    - Run 2 (only #15-#18, fresh anvil): 16/18 →
+      i.e., 2/4 of the mutation tests fail again
+      with same error. Reproducible, not transient.
+    - Step 16's run had 17/18; step 14 had 15/18.
+      Variance across runs is at least ±1 with
+      single samples. Conclusion: with ~3 cold runs
+      sampled total, can't claim step 17 is
+      consistently better OR worse than step 16.
+
+  * **Why the pause didn't visibly help**:
+    Hypothesized: the proxy gate stops only NEW
+    page traffic. EXISTING in-flight eth_calls have
+    already been forwarded to anvil and are sitting
+    in anvil's internal request queue. If 50+
+    cold-cache-miss eth_calls are already queued at
+    anvil, our `setStorageAt` waits behind them
+    regardless of what the proxy does next. Proxy-
+    side pausing addresses queue GROWTH, not queue
+    DRAIN.
+
+  * **What's NEXT** (the un-addressed remainder —
+    still the same cold flake from steps 13/14/15):
+    - Augment `withProxyPaused` to wait for the
+      anvil queue to drain before yielding (e.g.,
+      issue a probe `eth_chainId` directly to
+      anvil, measure latency, only proceed when it
+      drops below a threshold). The mechanism is
+      now in place; the drain-wait is additive.
+    - Inspect anvil's actual queue depth at the
+      mutation moment to confirm the hypothesis
+      (anvil has no introspection RPC; would
+      require parsing its log output or strace).
+    - Accept cold flake as known and rely on
+      warm-anvil for CI signal. Warm has been
+      18/18 since step 12.
+
+  * **Live re-validation**:
+    - Smoke tests: 74/74 (was 71; +3 for the
+      pause/resume mechanism — basic gating,
+      counter composition, withPaused-on-throw)
+    - Cold scenarios (run 1, full suite): 16/18
+      with #15 + #17 failing on setStorageAt 60s
+      timeout
+    - Cold scenarios (run 2, mutation-only filter):
+      same 2 failures
+    - Warm scenarios: not re-validated this
+      iteration — change is non-architectural for
+      non-mutating scenarios (the `withProxyPaused`
+      ctx slot is a no-op pass-through when
+      `proxyHandler` is null), and smoke tests
+      cover the mechanism in isolation. Expected
+      18/18 from prior steps.
+
+  * **What this DOES give us going forward**: a
+    clean, smoke-tested mechanism for excluding
+    page traffic during a mutation window. Even
+    when the cold flake is solved by something
+    else, this is the right shape for "I want to
+    do an atomic chain mutation without the page
+    racing me." Future scenarios that mutate AFTER
+    a render assertion can adopt the same wrap
+    without re-deriving the pattern.
+
 - **slice fork-bootstrap-step-16-trace-probe
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — closes the address-level gap in

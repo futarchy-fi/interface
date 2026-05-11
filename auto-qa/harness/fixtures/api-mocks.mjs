@@ -494,10 +494,34 @@ export function makeAnvilRpcProxyHandler({
 } = {}) {
     let blockNumberCache = null; // { value: string, expiresAt: number }
 
-    return async (route) => {
+    // Step 17: pause gate. When `pause()` is called, page traffic
+    // through this handler awaits the gate before forwarding. This
+    // lets a scenario block page polling during a mutation window
+    // (e.g., scenario #17's two `setStorageAt` calls) so anvil
+    // doesn't have its request queue saturated by browser eth_calls
+    // when the mutation lands. Mutations bypass this proxy entirely
+    // (they fetch anvil directly from the Node-side scenario body),
+    // so a pause stops PAGE traffic but leaves MUTATION traffic
+    // free — exactly the asymmetry we want.
+    //
+    // Counter-based so nested pause/resume pairs compose cleanly
+    // (caller A pauses, caller B pauses, caller A resumes — gate
+    // stays closed until B also resumes).
+    let pauseCount = 0;
+    let pauseGate = null; // { promise, resolve } | null
+
+    const handler = async (route) => {
         const request = route.request();
         const body = request.postData() || '';
         onCall?.(body);
+
+        // Hold page requests at the gate while paused. Capture the
+        // gate reference first so a concurrent resume() that nulls
+        // pauseGate doesn't cause a race.
+        const gate = pauseGate;
+        if (gate) {
+            await gate.promise;
+        }
 
         // Cache fast path. Parse the body once, dispatch on method.
         // Failure to parse means the body is malformed; fall through
@@ -578,14 +602,42 @@ export function makeAnvilRpcProxyHandler({
             });
         }
     };
+
+    handler.pause = () => {
+        pauseCount += 1;
+        if (pauseCount === 1) {
+            let resolve;
+            const promise = new Promise((r) => { resolve = r; });
+            pauseGate = { promise, resolve };
+        }
+    };
+    handler.resume = () => {
+        if (pauseCount === 0) return; // double-resume is a no-op
+        pauseCount -= 1;
+        if (pauseCount === 0 && pauseGate) {
+            const g = pauseGate;
+            pauseGate = null;
+            g.resolve();
+        }
+    };
+    handler.withPaused = async (fn) => {
+        handler.pause();
+        try { return await fn(); }
+        finally { handler.resume(); }
+    };
+
+    return handler;
 }
 
 /**
  * Convenience: register `makeAnvilRpcProxyHandler` against EVERY URL
  * in `PUBLIC_GNOSIS_RPC_URLS`. Call once per scenario `context`.
  *
- * Returns the array of registered URLs so callers can log / assert
- * on coverage.
+ * Returns `{ urls, handler }` — `handler` carries the same
+ * `pause()` / `resume()` / `withPaused(fn)` API as the underlying
+ * `makeAnvilRpcProxyHandler` return value, so callers (e.g., the
+ * scenarios runner) can hand the pause API into the per-scenario
+ * assertion context for mutation-window blocking.
  */
 export async function installAnvilRpcProxy(context, opts = {}) {
     const handler = makeAnvilRpcProxyHandler(opts);
@@ -595,5 +647,5 @@ export async function installAnvilRpcProxy(context, opts = {}) {
         // root path with a trailing slash.
         await context.route(`${url}**`, handler);
     }
-    return PUBLIC_GNOSIS_RPC_URLS;
+    return { urls: PUBLIC_GNOSIS_RPC_URLS, handler };
 }

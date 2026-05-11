@@ -146,8 +146,17 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
             // `getBestRpcProvider(100)` and the wagmi fallback chain
             // both read from the fork — a prerequisite for any
             // assertion on a fork-funded balance.
+            //
+            // Step 17: capture the proxy handler so its `withPaused`
+            // API can be threaded into the assertion context. Mutating
+            // scenarios wrap their fork writes in `withProxyPaused`
+            // to block page polling during the mutation window —
+            // anvil sees only the mutation traffic (which goes direct,
+            // not via the proxy), avoiding the request-queue
+            // saturation that caused the cold-anvil #17 timeout.
+            let proxyHandler = null;
             if (scenario.useAnvilRpcProxy) {
-                await installAnvilRpcProxy(context);
+                ({ handler: proxyHandler } = await installAnvilRpcProxy(context));
             }
 
             // Navigate
@@ -160,9 +169,16 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
             // primitives (the wallet here is the SAME synthetic
             // address globalSetup funded, derived deterministically
             // from `nStubWallets(1)[0]`).
+            //
+            // Step 17: `withProxyPaused(fn)` blocks page traffic
+            // through the anvil proxy while `fn` runs. No-op (just
+            // runs `fn`) when the scenario didn't opt into the proxy.
             const ctx = {
                 wallet,
                 anvilUrl: STUB_RPC_URL,
+                withProxyPaused: proxyHandler
+                    ? proxyHandler.withPaused
+                    : (async (fn) => fn()),
             };
 
             // Run assertions in order

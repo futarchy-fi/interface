@@ -92,19 +92,31 @@ export default {
         // directly to the CT contract's _balances slot — no tx
         // submission, no mining required. Both YES + NO must be
         // raised together because the panel reads min(YES, NO).
-        async (_page, { wallet, anvilUrl }) => {
-            await setConditionalPosition(
-                anvilUrl,
-                wallet.address,
-                BigInt(HOOK_FALLBACK_POSITION_IDS.currencyYes),
-                NEW_POSITION_AMOUNT_WEI,
-            );
-            await setConditionalPosition(
-                anvilUrl,
-                wallet.address,
-                BigInt(HOOK_FALLBACK_POSITION_IDS.currencyNo),
-                NEW_POSITION_AMOUNT_WEI,
-            );
+        //
+        // Step 17: wrap the back-to-back mutations in
+        // `withProxyPaused` to block page polling through the anvil
+        // proxy while both `setStorageAt` calls land. Without this,
+        // anvil's request queue is saturated by the page's eth_call
+        // burst during the mutation window, and on cold anvil the
+        // mutation primitives time out (60s ceiling) waiting their
+        // turn. Mutations bypass the proxy entirely (they fetch
+        // anvil directly), so pausing the proxy stops PAGE traffic
+        // but leaves OUR traffic free.
+        async (_page, { wallet, anvilUrl, withProxyPaused }) => {
+            await withProxyPaused(async () => {
+                await setConditionalPosition(
+                    anvilUrl,
+                    wallet.address,
+                    BigInt(HOOK_FALLBACK_POSITION_IDS.currencyYes),
+                    NEW_POSITION_AMOUNT_WEI,
+                );
+                await setConditionalPosition(
+                    anvilUrl,
+                    wallet.address,
+                    BigInt(HOOK_FALLBACK_POSITION_IDS.currencyNo),
+                    NEW_POSITION_AMOUNT_WEI,
+                );
+            });
         },
         // Step 3: post-mutation assert. Wallet sDAI = 1000 + min(YES
         // 200, NO 200) = 1200. 30s timeout = 2× the auto-refresh

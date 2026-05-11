@@ -528,3 +528,118 @@ test('makeAnvilRpcProxyHandler — cache=false disables both short-circuits', as
         globalThis.fetch = originalFetch;
     }
 });
+
+test('makeAnvilRpcProxyHandler — pause() blocks page traffic until resume()', async () => {
+    // Step 17: scenarios with mid-test mutations need to keep anvil's
+    // request queue clear during the mutation window. Pausing the
+    // page proxy holds page eth_calls at the gate; resume() releases
+    // them. The mutation path bypasses this proxy (Node-side direct
+    // fetch), so a paused proxy stops PAGE traffic without blocking
+    // the scenario's own writes.
+    //
+    // cache=false so the eth_call we send to test gating doesn't
+    // get short-circuited by the chainId / blockNumber cache.
+    const originalFetch = globalThis.fetch;
+    let fetchCount = 0;
+    globalThis.fetch = async () => {
+        fetchCount++;
+        return { status: 200, text: async () => JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x42' }) };
+    };
+
+    try {
+        const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546', cache: false });
+        const stubRoute = {
+            request: () => ({ postData: () => JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: '0xabc', data: '0x' }, 'latest'] }) }),
+            fulfill: async () => {},
+        };
+
+        handler.pause();
+        const blocked = handler(stubRoute);
+        // Yield once to let the handler advance to its `await gate`.
+        // Without this, the assertion below races the handler's
+        // synchronous prefix.
+        await new Promise((r) => setImmediate(r));
+        assert.equal(fetchCount, 0, 'pause() must hold page traffic before forwarding to anvil');
+
+        handler.resume();
+        await blocked;
+        assert.equal(fetchCount, 1, 'resume() must release the held request');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('makeAnvilRpcProxyHandler — pause/resume counter composes (nested pairs)', async () => {
+    // Two callers nest pause/resume. The gate stays closed until
+    // BOTH have resumed. Without this, a sub-block resuming would
+    // prematurely release page traffic mid-mutation in the outer
+    // block. Counter semantics are what makes nested mutation
+    // helpers safe to compose.
+    const originalFetch = globalThis.fetch;
+    let fetchCount = 0;
+    globalThis.fetch = async () => {
+        fetchCount++;
+        return { status: 200, text: async () => '{}' };
+    };
+
+    try {
+        const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546', cache: false });
+        const stubRoute = {
+            request: () => ({ postData: () => JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [] }) }),
+            fulfill: async () => {},
+        };
+
+        handler.pause();
+        handler.pause(); // count = 2
+        const blocked = handler(stubRoute);
+        await new Promise((r) => setImmediate(r));
+
+        handler.resume(); // count = 1; gate stays closed
+        await new Promise((r) => setImmediate(r));
+        assert.equal(fetchCount, 0, 'first resume() must NOT release while a second pause is still active');
+
+        handler.resume(); // count = 0; gate opens
+        await blocked;
+        assert.equal(fetchCount, 1, 'second resume() opens the gate and the held request lands');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('makeAnvilRpcProxyHandler — withPaused(fn) always resumes, even on throw', async () => {
+    // The convenience wrapper is the safer surface for scenarios:
+    // it guarantees the gate gets released even when the wrapped
+    // mutation throws. Without try/finally semantics, a thrown
+    // mutation would strand the proxy in a permanently-paused
+    // state and the next page poll would hang forever.
+    const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546', cache: false });
+
+    let caughtFromHelper = null;
+    try {
+        await handler.withPaused(async () => {
+            throw new Error('mutation failed');
+        });
+    } catch (err) {
+        caughtFromHelper = err;
+    }
+    assert.equal(caughtFromHelper?.message, 'mutation failed', 'withPaused must propagate the inner throw');
+
+    // After the throw, a follow-up call should NOT be gated — the
+    // pause was released by the finally block.
+    const originalFetch = globalThis.fetch;
+    let fetchCount = 0;
+    globalThis.fetch = async () => {
+        fetchCount++;
+        return { status: 200, text: async () => '{}' };
+    };
+    try {
+        const stubRoute = {
+            request: () => ({ postData: () => JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [] }) }),
+            fulfill: async () => {},
+        };
+        await handler(stubRoute);
+        assert.equal(fetchCount, 1, 'after a thrown withPaused, subsequent traffic must NOT be gated');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
