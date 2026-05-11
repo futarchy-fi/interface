@@ -2313,6 +2313,125 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 65-dom-api-invariant-unknown-organization-fallback
+  (Phase 5 invariant catalog — 24th DOM↔API
+  invariant; org-level fallback parallel to
+  proposal-level 4t)** (this iteration, on the
+  interface side) — closes the ORG-LEVEL
+  fallback to match the proposal-level fallback
+  in slice 4t. Per
+  `useAggregatorCompanies.js:93`:
+    `title: org.name || 'Unknown Organization'`
+
+  * **The new invariant** —
+    `slice 4v — "Unknown Organization"
+    fallback`. Mock `orgName: null` via the
+    new fixture parameter (just added). Assert
+    `page.getByText('Unknown Organization')`
+    is visible.
+
+  * **Fixture extension (this iteration)**:
+    `makeGraphqlMockHandler` gains a new
+    `orgName` parameter (defaults to
+    `PROBE_ORG_NAME` so all 23 prior tests are
+    unaffected). Passing `orgName: null`
+    exercises the fallback path. Cleanly
+    additive — sibling parameter to the
+    existing `orgMetadata` (used by 4c v1/v2,
+    4i, 4n/o/p).
+
+  * **Why this matters**: 'Unknown Organization'
+    is the structural safety net at the org
+    level — parallel role to 'Unknown Proposal'
+    at the proposal level (slice 4t). A
+    regression that drops this fallback would
+    render an empty cell or throw on null,
+    cascading into a broken table row.
+
+  * **Bug classes caught**:
+    - Regression that DROPS the 'Unknown
+      Organization' fallback string entirely —
+      title becomes undefined or empty
+    - Regression that uses a different
+      fallback string (e.g., 'No Name',
+      'Untitled Org') — substring assertion
+      catches the change
+    - Regression that throws on
+      `org.name.trim()` or similar
+      method-on-null — table never reaches
+      render; test times out
+    - Refactor that uses `??` instead of `||`
+      — empty string `""` becomes truthy
+      under `??` but falsy under `||`, producing
+      a visibly broken empty cell that existing
+      tests don't catch (because they use
+      non-empty `PROBE_ORG_NAME`)
+
+  * **Symmetric fallback pair**:
+    - 4t: proposal-level — 'Unknown Proposal'
+    - 4v: org-level — 'Unknown Organization' ★
+    Both probe the production-realistic
+    null-input case. A future iteration can
+    extend with an 'Unknown Aggregator'
+    fallback at the aggregator level if such
+    a fallback exists in the registry's
+    aggregator query.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (fixture extension
+      backwards-compatible)
+    - All 24 DOM↔API invariant tests pass:
+      50.9s (was 23 in 51.7s; net 50ms FASTER
+      with one more test — variance, not
+      meaningful)
+    - New slice 4v alone: 1.8s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (24 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4v unknown org ★     | org.name=null → "Unknown Organization" appears     |
+    | slice 4m logo fallback     | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4n cover-image       | coverImage='/test-probe-cover.png' → img.src       |
+    | slice 4o logo-only         | logo='/test-probe-logo.png' → img.src              |
+    | slice 4p img precedence    | both set → coverImage wins; logo NOT in src        |
+    | slice 4q href on card      | event card anchor → /market?proposalId=<addr>      |
+    | slice 4s title fallback    | event=null + question='X' → "X" appears            |
+    | slice 4t title final FB    | both=null → "Unknown Proposal" appears             |
+    | slice 4u split-title       | both set → BOTH render (event AND question)        |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: **17 invariants**
+      (was 16; 'Unknown Organization' fallback
+      joins the title family)
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: 5 invariants
+
+  * **What's next**:
+    - aria-label on counts cells (a11y
+      dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers)
+    - Pool address rendering in card subtext
+    - 'Unknown Aggregator' fallback (if one
+      exists at the aggregator query level)
+
 - **slice 64-dom-api-invariant-split-title-display
   (Phase 5 invariant catalog — 23rd DOM↔API
   invariant; STRUCTURAL DISCOVERY)**

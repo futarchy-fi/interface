@@ -69,11 +69,23 @@ export const MARKET_PROBE_NO_POOL       = '0xddddddddddddddddddddddddddddddddddd
  *                                         the consumer hook; e.g.
  *                                         `JSON.stringify({chain: '10'})`
  *                                         flips ChainBadge → "Optimism")
+ * @param {string|null} [opts.orgName] override for
+ *                                         organizations[0].name.
+ *                                         Defaults to PROBE_ORG_NAME.
+ *                                         Pass `null` to exercise the
+ *                                         `org.name || 'Unknown
+ *                                         Organization'` fallback in
+ *                                         useAggregatorCompanies.
  * @param {(query:string)=>void} [opts.onCall] observer for the
  *                                         operation, useful in
  *                                         failure-trace assertions
  */
-export function makeGraphqlMockHandler({ proposals = [], orgMetadata = null, onCall } = {}) {
+export function makeGraphqlMockHandler({
+    proposals = [],
+    orgMetadata = null,
+    orgName = PROBE_ORG_NAME,
+    onCall,
+} = {}) {
     return async (route) => {
         const body = JSON.parse(route.request().postData() || '{}');
         const q = body.query || '';
@@ -93,7 +105,7 @@ export function makeGraphqlMockHandler({ proposals = [], orgMetadata = null, onC
             data = {
                 organizations: [{
                     id:           PROBE_ORG_ID,
-                    name:         PROBE_ORG_NAME,
+                    name:         orgName,
                     description:  'Probe org returned by mocked GraphQL',
                     metadata:     orgMetadata,
                     metadataURI:  null,

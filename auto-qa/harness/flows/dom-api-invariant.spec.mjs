@@ -1423,6 +1423,78 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         ).toBeVisible({ timeout: 15_000 });
     });
 
+    test('slice 4v — "Unknown Organization" fallback: org.name=null → fallback string appears in table row', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Parallel in shape to slice 4t (proposal-level 'Unknown
+        // Proposal' fallback) but at the ORG level. Per
+        // `src/hooks/useAggregatorCompanies.js:93`:
+        //   title: org.name || 'Unknown Organization',
+        //
+        // When `org.name` is null/undefined/falsy, the cascade
+        // falls through to the hardcoded 'Unknown Organization'
+        // string. This slice mocks `org.name = null` (via the
+        // new `orgName` fixture parameter just added to
+        // `makeGraphqlMockHandler`) and asserts the fallback
+        // appears in the table row.
+        //
+        // Two render surfaces affected by the title field:
+        //   - OrgRow's name cell (td[1]) — displays the title
+        //   - Carousel cards — the carousel does its own thing
+        //     with proposal titles (slice 4s/4t/4u), so this
+        //     test scopes to the table row only
+        //
+        // Why this matters: 'Unknown Organization' is the
+        // structural safety net at the org level — parallel
+        // role to 'Unknown Proposal' at the proposal level.
+        // A regression that drops this fallback would render
+        // an empty cell or throw on null, cascading into a
+        // broken table row.
+        //
+        // Bug classes caught:
+        //   - Regression that DROPS the 'Unknown Organization'
+        //     fallback string entirely — title becomes undefined
+        //     or empty
+        //   - Regression that uses a different fallback string
+        //     (e.g., 'No Name', 'Untitled Org') — the
+        //     'Unknown Organization' substring assertion catches
+        //     the change immediately
+        //   - Regression that throws on `org.name.trim()` or
+        //     similar method-on-null — the carousel/table never
+        //     reach render; test times out waiting
+        //   - Refactor that uses nullish coalescing `??`
+        //     instead of `||` — empty string `""` becomes
+        //     truthy under `??` but falsy under `||`,
+        //     producing a visibly broken empty cell that
+        //     existing tests don't catch (because they use
+        //     non-empty PROBE_ORG_NAME)
+        //
+        // Fixture extension (this iteration): added `orgName`
+        // parameter to `makeGraphqlMockHandler`. Defaults to
+        // `PROBE_ORG_NAME` so all 23 prior tests are unaffected.
+        // Passing `orgName: null` exercises the fallback path.
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            orgName: null,
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Assert the fallback string appears. Substring match
+        // tolerates the string being rendered inside a longer
+        // phrase or as part of an aria-label.
+        await expect(
+            page.getByText('Unknown Organization').first(),
+        ).toBeVisible({ timeout: 30_000 });
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 
