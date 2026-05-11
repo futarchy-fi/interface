@@ -845,6 +845,94 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         );
     });
 
+    test('slice 4o — logo-only branch of image cascade (no coverImage → metadata.logo wins → completes image triplet)', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Completes the image-cascade triplet alongside slice 4m
+        // (fallback branch) and slice 4n (coverImage branch). The
+        // 3-tier cascade in `useAggregatorCompanies.js:95` is:
+        //   image: meta.coverImage || meta.logo
+        //          || '/assets/fallback-company.png'
+        //
+        // All three branches now have isolated probes:
+        //   - coverImage set    → uses coverImage (4n)
+        //   - logo set, no cover → uses logo (4o) ★
+        //   - both unset        → uses fallback (4m)
+        //
+        // Why this slice now: with 4m and 4n in place, a refactor
+        // that drops the LOGO branch entirely (e.g., shortening
+        // the cascade to `coverImage || fallback`) would still
+        // pass both existing tests but break this one — the
+        // failure log would point exactly at the dropped middle
+        // branch.
+        //
+        // The mock sets `logo` but NOT `coverImage`, so the
+        // cascade has to fall through coverImage's `undefined`
+        // (which is falsy via `||`) to read logo. If a regression
+        // SHORT-CIRCUITS the cascade earlier (e.g., always uses
+        // coverImage even when undefined, falling back to
+        // fallback directly), the test catches it because
+        // `test-probe-logo` wouldn't appear in the rendered src
+        // — only `fallback-company` would.
+        //
+        // Bug classes caught (NEW vs 4m and 4n):
+        //   - Regression that DROPS the logo branch entirely
+        //     (cascade becomes `coverImage || fallback`) —
+        //     when logo is set but coverImage is not, the
+        //     fallback renders instead; this test catches it
+        //   - Regression that uses `meta.logoUrl` or
+        //     `meta.logoImage` instead of `meta.logo` —
+        //     typo-class bug; the field would be read as
+        //     undefined and the fallback renders
+        //   - Regression that wraps `meta.logo` in
+        //     `parseLogoUrl(meta.logo)` (adds a transformation
+        //     step) — would silently mutate the URL and the
+        //     substring match might miss the canonical
+        //     `test-probe-logo` token if the transformation
+        //     adds prefixes/suffixes
+        //   - Regression where the JSON parse fails on
+        //     `meta.logo` (e.g., expecting an object instead
+        //     of a string) and `meta.logo` becomes undefined
+        //     in a try/catch — would fall through to fallback
+        //
+        // Note on precedence — what this slice does NOT catch:
+        // a cascade REORDER (e.g., `logo || coverImage` instead
+        // of `coverImage || logo`) would still pass this test
+        // because logo is set and coverImage is undefined,
+        // either order produces the same outcome. Catching the
+        // reorder requires a "BOTH set" test where coverImage
+        // wins — that's a natural future slice 4p (precedence
+        // test) analogous to slice 4l's multi-flag pattern for
+        // the filter triplet.
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            orgMetadata: JSON.stringify({ logo: '/test-probe-logo.png' }),
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        // Substring match on `test-probe-logo` (distinctive token
+        // that cannot appear in `test-probe-cover.png` or
+        // `fallback-company.png` — the other two branches' outputs).
+        // This means a failure log here directly identifies which
+        // wrong branch was rendered.
+        await expect(row.locator('img').first()).toHaveAttribute(
+            'src',
+            /test-probe-logo/,
+        );
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 

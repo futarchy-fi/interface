@@ -2313,6 +2313,152 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 59-dom-api-invariant-logo-only-branch
+  (Phase 5 invariant catalog — 18th DOM↔API
+  invariant; COMPLETES the image-cascade triplet)**
+  (this iteration, on the interface side) —
+  completes the image-cascade triplet alongside
+  slice 4m (fallback branch) and slice 4n
+  (coverImage branch). All three branches of
+  the 3-tier cascade in
+  `useAggregatorCompanies.js:95` now have
+  isolated probes:
+    - coverImage set                → 4n
+    - logo set (no coverImage)      → 4o ★
+    - both unset                    → 4m
+
+  * **The new invariant** —
+    `slice 4o — logo-only branch of image
+    cascade`. Mock `orgMetadata: JSON.stringify({
+    logo: '/test-probe-logo.png' })` (NO
+    coverImage). Assert
+    `row.locator('img').first()` has `src`
+    matching `/test-probe-logo/` regex.
+
+  * **Why this slice now**: with 4m and 4n in
+    place, a refactor that drops the LOGO
+    branch entirely (e.g., shortening the
+    cascade to `coverImage || fallback`) would
+    still pass both existing tests but break
+    this one — the failure log would point
+    exactly at the dropped middle branch.
+
+  * **Why this works as a fall-through probe**:
+    the mock sets `logo` but NOT `coverImage`,
+    so the cascade has to fall through
+    coverImage's `undefined` (falsy via `||`)
+    to read logo. If a regression
+    SHORT-CIRCUITS the cascade earlier (e.g.,
+    always uses coverImage even when undefined,
+    falling back to fallback directly), the
+    test catches it because `test-probe-logo`
+    wouldn't appear in the rendered src —
+    only `fallback-company` would.
+
+  * **Bug classes caught** (NEW vs 4m and 4n):
+    - Regression that DROPS the logo branch
+      entirely (cascade becomes
+      `coverImage || fallback`)
+    - Regression that uses `meta.logoUrl` or
+      `meta.logoImage` instead of `meta.logo`
+      (typo-class bug; field would be read as
+      undefined → falls to fallback)
+    - Regression that wraps `meta.logo` in
+      `parseLogoUrl(meta.logo)` (adds a
+      transformation step that mutates the URL)
+    - Regression where the JSON parse fails on
+      `meta.logo` (expecting an object instead
+      of a string) and `meta.logo` becomes
+      undefined in a try/catch
+
+  * **What this slice does NOT catch (pinned
+    for future iteration)**: a cascade REORDER
+    (e.g., `logo || coverImage` instead of
+    `coverImage || logo`) would still pass
+    this test because logo is set and
+    coverImage is undefined — either order
+    produces the same outcome. Catching the
+    reorder requires a "BOTH set" test where
+    coverImage wins — that's a natural future
+    slice 4p (precedence test) analogous to
+    slice 4l's multi-flag pattern for the
+    filter triplet.
+
+  * **Distinctive probe tokens form a
+    crystal-clear failure log**:
+    - `test-probe-cover` (4n) — coverImage path
+    - `test-probe-logo`  (4o) — logo path
+    - `fallback-company` (4m) — fallback path
+    Any single test failure clearly identifies
+    WHICH wrong branch was rendered because
+    the three tokens are mutually exclusive
+    substrings. The triplet's failure logs
+    form a precise diagnostic axis.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 18 DOM↔API invariant tests pass:
+      28.8s (was 17 in 27.2s); new slice 4o
+      alone: 1.7s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (18 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4m logo fallback     | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4n cover-image       | coverImage='/test-probe-cover.png' → img.src       |
+    | slice 4o logo-only ★       | logo='/test-probe-logo.png' → img.src              |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: 13 invariants
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: **3 invariants**
+      (was 2; 4m + 4n + 4o now form a complete
+      image-triplet probe set)
+
+  * **Triplet completions to date**:
+    - Filter triplet (hidden/archived/resolved):
+      4b + 4f + 4g + 4h + 4l (stress)
+    - Chain triplet (lookup/fallback/default):
+      4c v1 + 4c v2 + 4i
+    - Precision triplet (both<1 / one<1 / none<1):
+      4c v3b + 4j + 4k
+    - Image triplet (coverImage/logo/fallback):
+      4n + 4o + 4m ★
+    Each triplet has a structured coverage
+    LATTICE: individual branches in isolation,
+    plus (where applicable) a multi-flag
+    stress test. Future precedence tests like
+    slice 4p can extend the image triplet's
+    coverage to ordering invariants.
+
+  * **What's next**:
+    - Image-cascade PRECEDENCE test (both
+      coverImage AND logo set; coverImage
+      should win — catches the reorder bug)
+    - href attribute on the org row's nav link
+      (clicking → /markets/{address} routing)
+    - aria-label on active/total cells (a11y
+      dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers)
+
 - **slice 58-dom-api-invariant-cover-image-branch
   (Phase 5 invariant catalog — 17th DOM↔API
   invariant; attribute-level dimension growing)**
