@@ -2313,6 +2313,68 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 41-scenario-37-candles-rate-limited
+  (Phase 7 chaos library)** (this iteration, on
+  the interface side) — fills the (CANDLES, rate-
+  limited 429) cell on /companies, completing the
+  rate-limited row across both endpoints on
+  /companies (mirrors #36 on the candles side).
+
+  * **The scenario** — `37-candles-rate-limited`
+    on /companies. Registry happy (carousel
+    mounts) + candles returns 429 +
+    Retry-After: 1 + JSON-shape error body.
+    Asserts the price card degrades to "0.00
+    SDAI" — same terminal UX as #03 (hard 502)
+    but DIFFERENT control flow (4xx-with-
+    Retry-After vs 5xx).
+
+  * **Bug-shapes captured** (NEW vs #03):
+    - Per-pool fetcher CRASHES on 429 (treats
+      `response.json()` as valid pool data —
+      downstream `.map`/`.length` access throws
+      on the error envelope shape; status 429
+      is "successful" from a Promise standpoint
+      so `.then` fires)
+    - Per-pool fetcher IMMEDIATELY RETRIES on
+      429 with no Retry-After respect
+      (thundering-herd shape; invisible without
+      infra instrumentation)
+    - Raw "rate limited" error message rendered
+      in the price card (leaks infra error to
+      UX surface)
+    - Card forever-LoadingSpinner (429 doesn't
+      trigger `loading=false` because the
+      consumer's `.catch` only handles 5xx,
+      not 4xx)
+    - Bulk-prefetch vs per-pool fallback race
+      wins/loses unpredictably under partial
+      rate-limiting
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no test infra changes)
+    - Scenario #37 itself: passed in 9.9s on
+      first run
+    - Catalog regenerated: 37 scenarios (was 36)
+    - Matrix script: /companies now 14/14
+      (rate-limited row complete on /companies),
+      /markets/[address] still 12/14
+
+  * **Chaos coverage matrix on /companies after
+    this slice (14/14 COMPLETE — 7 rows × 2
+    endpoints)**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #02      | #03     |
+    | partial response  | #22      | #04     |
+    | empty 200         | #05      | #21     |
+    | malformed body    | #07      | #08     |
+    | per-row corrupt   | #09      | #23     |
+    | slow valid resp   | #19      | #20     |
+    | rate-limited 429  | #36      | #37 ★   |
+    Every cell catches a DISTINCT class of bug
+    landing at different control-flow branches.
+
 - **slice 40-scenario-36-registry-rate-limited
   (Phase 7 chaos library — NEW failure-mode row)**
   (this iteration, on the interface side) — opens
