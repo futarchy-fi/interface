@@ -1223,6 +1223,94 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         ).toBeVisible({ timeout: 30_000 });
     });
 
+    test('slice 4t — eventTitle FINAL FALLBACK: both fields null → "Unknown Proposal" rendered', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Completes the title-cascade triplet alongside slice 4s
+        // (fallback branch). Per
+        // `src/hooks/useAggregatorProposals.js:145`:
+        //   eventTitle: proposal.displayNameEvent
+        //               || proposal.displayNameQuestion
+        //               || 'Unknown Proposal'
+        //
+        // Branches probed:
+        //   - displayNameEvent set    → uses event (4r, future)
+        //   - event absent, question set → uses question (4s)
+        //   - both absent             → 'Unknown Proposal' (4t) ★
+        //
+        // This slice exercises the FINAL FALLBACK. Setting both
+        // fields to null forces the cascade to fall through to
+        // the hardcoded 'Unknown Proposal' string.
+        //
+        // Why this branch matters: the 'Unknown Proposal' string
+        // is a structural safety net — it prevents the entire
+        // carousel from crashing on a malformed proposal entity.
+        // A regression that drops this string entirely would
+        // either:
+        //   - Render an empty card title (visually broken UX)
+        //   - Throw an exception during render (whole-carousel
+        //     crash because React can't render `undefined` as
+        //     children inline) → cascading failure across the
+        //     /companies page
+        //
+        // Both outcomes are real bugs that text-level invariants
+        // catch cleanly.
+        //
+        // Bug classes caught (NEW vs 4s):
+        //   - Regression that DROPS the 'Unknown Proposal'
+        //     fallback string entirely — eventTitle becomes
+        //     undefined, downstream consumers crash
+        //   - Regression that uses a different fallback string
+        //     (e.g., 'No Title', 'Untitled', '?') — the
+        //     'Unknown Proposal' substring assertion catches
+        //     the change immediately
+        //   - Regression that changes the fallback to an empty
+        //     string `''` — visually broken, the assertion
+        //     would still fail because 'Unknown Proposal' is
+        //     absent
+        //   - Regression that throws on null/undefined input
+        //     (e.g., `proposal.displayNameEvent.toLowerCase()`
+        //     without null-guarding) — the carousel never
+        //     reaches the render path; the test times out
+        //     waiting for 'Unknown Proposal'
+        //
+        // Note on filter interactions: useAggregatorProposals
+        // might filter out proposals with null titles in some
+        // future regression (e.g., adding a `proposal.displayNameEvent
+        // && proposal.displayNameQuestion` precondition). If
+        // that filter is added, this test would fail because
+        // the proposal would be filtered before reaching the
+        // carousel render. That itself is a bug (the 'Unknown
+        // Proposal' fallback exists for a reason), so the
+        // failure is informative.
+
+        const richProposal = {
+            ...fakePoolBearingProposal({}),
+            displayNameEvent:    null,
+            displayNameQuestion: null,
+        };
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Assert the final-fallback string appears in the card.
+        // Substring match on 'Unknown Proposal' (without
+        // exactness constraint) — the string may appear inside
+        // a longer rendered phrase or aria-label.
+        await expect(
+            page.getByText('Unknown Proposal').first(),
+        ).toBeVisible({ timeout: 30_000 });
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 

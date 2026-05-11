@@ -2313,6 +2313,136 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 63-dom-api-invariant-title-final-fallback
+  (Phase 5 invariant catalog — 22nd DOM↔API
+  invariant; title-cascade FINAL FALLBACK)**
+  (this iteration, on the interface side) —
+  fills the bottom of the title-cascade triplet
+  alongside slice 4s (fallback branch). Both
+  `displayNameEvent` AND `displayNameQuestion`
+  set to null → eventTitle falls through to the
+  hardcoded `'Unknown Proposal'` string. Assert
+  that string appears in the carousel card.
+
+  * **The new invariant** —
+    `slice 4t — eventTitle FINAL FALLBACK:
+    both fields null → "Unknown Proposal"
+    rendered`. Override fakePoolBearingProposal:
+    `displayNameEvent: null, displayNameQuestion:
+    null`. Assert `page.getByText('Unknown
+    Proposal')` is visible.
+
+  * **Why this branch matters**: the 'Unknown
+    Proposal' string is a structural safety net
+    — it prevents the entire carousel from
+    crashing on a malformed proposal entity. A
+    regression that drops this string would
+    either:
+      - Render an empty card title (visually
+        broken UX)
+      - Throw an exception during render
+        (whole-carousel crash because React
+        can't render `undefined` as children
+        inline) → cascading failure across
+        /companies
+    Both outcomes are real bugs that text-level
+    invariants catch cleanly.
+
+  * **Bug classes caught** (NEW vs 4s):
+    - Regression that DROPS the 'Unknown
+      Proposal' fallback string entirely —
+      eventTitle becomes undefined; downstream
+      consumers crash
+    - Regression that uses a different fallback
+      string (e.g., 'No Title', 'Untitled',
+      '?') — the 'Unknown Proposal' substring
+      assertion catches the change
+    - Regression that changes the fallback to
+      empty string `''` — visually broken; the
+      assertion fails because 'Unknown Proposal'
+      is absent
+    - Regression that throws on null/undefined
+      input (e.g.,
+      `proposal.displayNameEvent.toLowerCase()`
+      without null-guarding) — carousel never
+      reaches render; the test times out
+      waiting for 'Unknown Proposal'
+
+  * **Filter interaction risk pinned**:
+    useAggregatorProposals might add a
+    null-title filter in a future regression
+    (e.g., `proposal.displayNameEvent &&
+    proposal.displayNameQuestion` precondition).
+    That filter would skip proposals reaching
+    the carousel render entirely, breaking this
+    test. The breakage is informative — the
+    'Unknown Proposal' fallback exists for a
+    reason; filtering would silently remove
+    legitimate but malformed-title proposals.
+
+  * **Title-cascade triplet status**:
+    - 4r (preferred branch, displayNameEvent set)
+      — future, deferred because every existing
+      carousel test trivially covers it
+    - 4s (fallback branch, event=null) — done
+    - 4t (final fallback, both null) — done ★
+    - 4u (precedence, both set, event wins) —
+      future
+    Two of four slices now landed; the
+    coverage lattice is half-complete.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 22 DOM↔API invariant tests pass:
+      47.0s (was 21 in 39.6s; +7.4s for the
+      new test); new slice 4t alone: 5.4s on
+      first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (22 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4m logo fallback     | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4n cover-image       | coverImage='/test-probe-cover.png' → img.src       |
+    | slice 4o logo-only         | logo='/test-probe-logo.png' → img.src              |
+    | slice 4p img precedence    | both set → coverImage wins; logo NOT in src        |
+    | slice 4q href on card      | event card anchor → /market?proposalId=<addr>      |
+    | slice 4s title fallback    | event=null + question='X' → "X" appears            |
+    | slice 4t title final FB ★  | both=null → "Unknown Proposal" appears             |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: **15 invariants**
+      (was 14; title-cascade fallbacks landing)
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: 5 invariants
+
+  * **What's next**:
+    - Title-cascade precedence test (both set,
+      displayNameEvent wins) — slice 4u
+      completes the title-cascade lattice
+    - aria-label on counts cells (a11y dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers in carousel card)
+    - 'Unknown Organization' fallback test
+      (parallel to 'Unknown Proposal' but for
+      org-level data)
+
 - **slice 62-dom-api-invariant-title-fallback-branch
   (Phase 5 invariant catalog — 21st DOM↔API
   invariant; opens title-cascade triplet)**
