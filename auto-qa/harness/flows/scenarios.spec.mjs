@@ -32,8 +32,7 @@ import {
     nStubWallets,
 } from '../fixtures/wallet-stub.mjs';
 import { installAnvilRpcProxy } from '../fixtures/api-mocks.mjs';
-import { evmSnapshot, evmRevert } from '../fixtures/fork-state.mjs';
-import { SNAPSHOT_ID_FILE } from '../fixtures/fork-state-setup.mjs';
+import { evmSnapshot, evmRevert, SNAPSHOT_ID_FILE } from '../fixtures/fork-state.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCENARIOS_DIR = join(__dirname, '..', 'scenarios');

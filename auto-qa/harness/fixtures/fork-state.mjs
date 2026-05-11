@@ -31,6 +31,8 @@ import {
     pad,
     toHex as viemToHex,
 } from 'viem';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 
@@ -694,7 +696,13 @@ export async function deriveYesNoPositionIds(rpcUrl, proposalAddress, collateral
  * @returns {Promise<`0x${string}`>} snapshot ID
  */
 export async function evmSnapshot(rpcUrl) {
-    const id = await anvilRpc(rpcUrl, 'evm_snapshot', []);
+    // 30s timeout (default is 5s): a snapshot under load — e.g.,
+    // taken right after the page made a burst of eth_call requests
+    // through the proxy that anvil is still draining — has been
+    // observed to take longer than 5s to acknowledge. The cost of
+    // failing here is high (the suite continues without isolation
+    // for the rest of the run) so the timeout is generous.
+    const id = await anvilRpc(rpcUrl, 'evm_snapshot', [], 30_000);
     if (typeof id !== 'string' || !id.startsWith('0x')) {
         throw new Error(`[fork-state] evm_snapshot returned non-hex ID: ${JSON.stringify(id)}`);
     }
@@ -718,7 +726,11 @@ export async function evmRevert(rpcUrl, snapshotId) {
     if (typeof snapshotId !== 'string' || !snapshotId.startsWith('0x')) {
         throw new Error(`[fork-state] evmRevert requires a 0x-prefixed snapshot ID, got: ${JSON.stringify(snapshotId)}`);
     }
-    const result = await anvilRpc(rpcUrl, 'evm_revert', [snapshotId]);
+    // 30s timeout: same reasoning as evmSnapshot above. Reverting
+    // through dirtied state (hundreds of cached storage slots from
+    // the previous scenario's RPC reads) takes longer than the
+    // 5s default.
+    const result = await anvilRpc(rpcUrl, 'evm_revert', [snapshotId], 30_000);
     if (result !== true) {
         throw new Error(
             `[fork-state] evm_revert(${snapshotId}) returned ${JSON.stringify(result)} ` +
@@ -728,3 +740,19 @@ export async function evmRevert(rpcUrl, snapshotId) {
     }
     return true;
 }
+
+/**
+ * Cross-process channel for the active snapshot ID. globalSetup
+ * (`fork-state-setup.mjs`) writes here once after funding; the
+ * per-scenario `beforeEach` in `flows/scenarios.spec.mjs` reads,
+ * reverts, re-snapshots, and rewrites.
+ *
+ * Lives in `fork-state.mjs` (NOT in `fork-state-setup.mjs`) because
+ * Playwright treats the globalSetup module as part of the config:
+ * a test file importing from the config file fails with
+ * "Playwright Test did not expect test() to be called here." Hosting
+ * the constant in a fixture-only module sidesteps that constraint
+ * while keeping the path definition in one place.
+ */
+const __forkStateDir = dirname(fileURLToPath(import.meta.url));
+export const SNAPSHOT_ID_FILE = join(__forkStateDir, '..', '.fork-snapshot-id');

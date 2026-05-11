@@ -2313,6 +2313,72 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-8-extend-trading
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — first second-scenario value-flow
+  assertion. Scenario #11 (trading panel) now opts
+  into the anvil RPC proxy and asserts on the
+  AGGREGATE "Available 1100 sDAI" line — distinct from
+  #14's RAW per-outcome "100 GNO" assertion.
+
+  * **What "1100 sDAI" proves** — the trading panel's
+    Available line is `wallet sDAI + min(YES, NO
+    position)`. With wallet=1000 + YES=100 + NO=100
+    this aggregates to 1100. A regression that:
+    - drops the wallet-balance term (Available shows
+      "100 sDAI" — just the position)
+    - drops the position-balance term (Available shows
+      "1000 sDAI" — just the wallet)
+    - swaps the min() for max() (wouldn't change here
+      since YES==NO, but a follow-up scenario with
+      asymmetric positions would catch it)
+    - misformats the result via `formatWith` (a value
+      that ISN'T integer would catch the trailing-zero
+      handling)
+    Each of these is a distinct bug-shape #14 doesn't
+    cover.
+
+  * **Two infrastructure fixes** alongside the
+    assertion:
+    - One-line fix in `fork-state.mjs`: moved the
+      `SNAPSHOT_ID_FILE` constant from
+      `fork-state-setup.mjs` (the globalSetup module)
+      to `fork-state.mjs`. Playwright treats the
+      globalSetup module as part of the config, so a
+      test file importing from it fails with
+      "Playwright Test did not expect test() to be
+      called here." Hosting the constant in a
+      fixture-only module sidesteps the constraint.
+      Caught when scenario.spec.mjs (which DOES need
+      the constant) was loading. Smoke tests don't hit
+      this path; only browser-test discovery does.
+    - Bumped snapshot/revert RPC timeout from 5s
+      (default) to 30s. A snapshot taken right after
+      the page made a burst of eth_calls through the
+      proxy that anvil is still draining has been
+      observed to take longer than 5s to acknowledge.
+      Doesn't fully eliminate the flake (see step 9
+      below) but reduces the false-positive rate.
+
+  * **Known issue (carried into step 9)**: the
+    per-scenario `evm_revert` STILL times out in some
+    runs even with the 30s bump. The runner's
+    soft-fail branch catches it — the rest of the
+    suite proceeds without isolation, scenarios that
+    don't mutate state still pass. Currently no
+    scenario mutates, so the flake is non-blocking.
+    Step 9 will diagnose the underlying anvil
+    behavior (suspected: cumulative state from the
+    proxy's eth_call traffic + anvil's revert
+    implementation having O(N) cost in dirtied
+    slots).
+
+  * **Live re-validation**:
+    - 14/14 scenarios pass live in ~48s-2.0min (cold
+      run; varies with anvil state — see step 9)
+    - 65/65 smoke tests pass (no regression; same
+      coverage as step 7)
+
 - **slice fork-bootstrap-step-7-isolation (Phase 7 fork wiring)**
   (this iteration, on the interface side) — adds
   per-scenario state isolation via

@@ -63,7 +63,7 @@ import {
 
 export default {
     name:        '11-market-page-trading',
-    description: 'Asserts the trading panel (ShowcaseSwapComponent) mounted with both outcome tabs ("If Yes" / "If No") and both action buttons ("Buy" / "Sell") visible. Same mocks as #10; the assertion reaches a structural slice of the page no scenario has covered yet.',
+    description: 'Asserts the trading panel (ShowcaseSwapComponent) mounted with both outcome tabs ("If Yes" / "If No") and both action buttons ("Buy" / "Sell") visible, AND the "Available 1100 sDAI" line — fork-derived aggregate (wallet sDAI 1000 + min(YES 100, NO 100) position = 1100). Same registry/candles mocks as #10; opts into the anvil RPC proxy so wallet-balance reads see the fork-funded state.',
     bugShape:    'trading panel never mounts / outcome tab collapsed / action buttons missing or swapped / Connect Wallet renders SOLO instead of the panel (foundation regression for the trading feature area)',
     route:       `/markets/${MARKET_PROBE_ADDRESS}`,
 
@@ -73,6 +73,16 @@ export default {
         }),
         [CANDLES_GRAPHQL_URL]: makeMarketCandlesMockHandler(),
     },
+
+    // Phase 7 step 8: opt into the anvil RPC proxy so the trading
+    // panel's "Available" line reads from the fork-funded wallet
+    // (1000 sDAI + 100 YES + 100 NO position from globalSetup) and
+    // the assertion below can target the AGGREGATE value
+    // (wallet sDAI + min(YES, NO) = 1100 sDAI). Without the proxy,
+    // unifiedBalanceFetcher reads from real Gnosis mainnet and the
+    // wallet has zero balances → the line shows "1000 sDAI"
+    // (wallet only) or "0 sDAI" depending on which RPC wins.
+    useAnvilRpcProxy: true,
 
     assertions: [
         // Outcome tabs — two static labels rendered side-by-side.
@@ -97,6 +107,26 @@ export default {
             await expect(
                 page.getByRole('button', { name: /^Sell$/ }).first(),
             ).toBeVisible({ timeout: 15_000 });
+        },
+        // Phase 7 step 8: AGGREGATE value-flow assertion. With the
+        // RPC proxy installed (useAnvilRpcProxy: true above), the
+        // page's `unifiedBalanceFetcher` reads from the local anvil
+        // fork and sees the wallet's funded state. The trading
+        // panel's "Available" line aggregates wallet sDAI + the
+        // wallet's MIN(YES position, NO position) — the largest
+        // amount the user could BUY of an outcome (since each buy
+        // consumes 1 sDAI from the wallet OR redeems 1 unit of the
+        // OPPOSING position to free up sDAI). With wallet=1000 sDAI
+        // and YES=100 + NO=100, the value is 1000 + min(100, 100)
+        // = 1100. Distinct from #14's "100 GNO" assertion: that one
+        // covers RAW per-outcome position rendering; this one covers
+        // a DERIVED aggregate (the same `formatWith` formatter is
+        // hit, but through a different code path that sums values
+        // before formatting).
+        async (page) => {
+            await expect(
+                page.getByText('1100 sDAI').first(),
+            ).toBeVisible({ timeout: 60_000 });
         },
     ],
 

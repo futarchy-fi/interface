@@ -48,18 +48,10 @@ import {
     setConditionalPosition,
     getConditionalPosition,
     evmSnapshot,
+    SNAPSHOT_ID_FILE,
 } from './fork-state.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-// Step 7: snapshot ID written to disk so the per-scenario reverter
-// (in flows/scenarios.spec.mjs) can read it. globalSetup runs once
-// in Node before all tests; the runner runs per-scenario in a
-// separate worker. A file is the simplest cross-process channel
-// that doesn't require coupling Playwright's global state plumbing.
-export const SNAPSHOT_ID_FILE = join(__dirname, '..', '.fork-snapshot-id');
+import { dirname } from 'node:path';
 
 const RPC_URL =
     process.env.HARNESS_FRONTEND_RPC_URL ||
