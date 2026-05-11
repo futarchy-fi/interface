@@ -194,8 +194,36 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
                 }
             });
 
-            // Apply mocks
-            for (const [url, handler] of Object.entries(scenario.mocks ?? {})) {
+            // Slice 86: build the assertion ctx early so factory-
+            // form `mocks` can attach state to it (e.g., a strict-
+            // schema mock that pushes each rejected query so the
+            // assertion can verify "no legacy shape leaked"). The
+            // proxy-dependent fields (`withProxyPaused`) get
+            // patched in below once `proxyHandler` is known. Object
+            // identity is preserved so the mock's closure and the
+            // assertion see the same `ctx`.
+            const ctx = {
+                wallet,
+                anvilUrl:        STUB_RPC_URL,
+                withProxyPaused: async (fn) => fn(), // overwritten below if proxy active
+                pageErrors,
+                networkRequests,
+                callsTo: (pattern) => networkRequests.filter((r) =>
+                    pattern instanceof RegExp
+                        ? pattern.test(r.url)
+                        : r.url.includes(pattern),
+                ),
+            };
+
+            // Apply mocks. Scenarios that need to share state with
+            // assertions pass a FACTORY function for `mocks` —
+            // invoked here with the live `ctx` so the closure sees
+            // the same scope as the assertions below. Plain-object
+            // `mocks` are still supported for the common case.
+            const mocksObj = typeof scenario.mocks === 'function'
+                ? scenario.mocks(ctx)
+                : (scenario.mocks ?? {});
+            for (const [url, handler] of Object.entries(mocksObj)) {
                 await context.route(url, handler);
             }
 
@@ -217,50 +245,23 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
             let proxyHandler = null;
             if (scenario.useAnvilRpcProxy) {
                 ({ handler: proxyHandler } = await installAnvilRpcProxy(context));
+                ctx.withProxyPaused = proxyHandler.withPaused;
             }
 
             // Navigate
             await page.goto(scenario.route, { waitUntil: 'domcontentloaded' });
 
-            // Step 10: enriched assertion context. Existing
-            // scenarios destructure `(page) =>` and ignore the
-            // second argument. Mutating scenarios use it to issue
-            // mid-test fork state changes via the fork-state.mjs
-            // primitives (the wallet here is the SAME synthetic
-            // address globalSetup funded, derived deterministically
-            // from `nStubWallets(1)[0]`).
-            //
-            // Step 17: `withProxyPaused(fn)` blocks page traffic
-            // through the anvil proxy while `fn` runs. No-op (just
-            // runs `fn`) when the scenario didn't opt into the proxy.
-            const ctx = {
-                wallet,
-                anvilUrl: STUB_RPC_URL,
-                withProxyPaused: proxyHandler
-                    ? proxyHandler.withPaused
-                    : (async (fn) => fn()),
-                // Step 79: live page-error log. Assertions can read
-                // this directly OR rely on the `assertNoPageErrors`
-                // flag-driven check below.
-                pageErrors,
-                // Step 82: live network-request log. Assertions can
-                // filter / count / assert presence-and-absence of
-                // outbound calls. Filters use the helper below or
-                // raw array.
-                networkRequests,
-                // Helper: callsTo(pattern) returns the subset of
-                // captured requests whose URL matches `pattern`
-                // (string substring OR RegExp). For positive
-                // assertions ("X must be called") and negative
-                // ("Y must NOT be called") both, scenarios use
-                // this with `expect.poll` since the request may
-                // fire asynchronously after navigation.
-                callsTo: (pattern) => networkRequests.filter((r) =>
-                    pattern instanceof RegExp
-                        ? pattern.test(r.url)
-                        : r.url.includes(pattern),
-                ),
-            };
+            // ctx was built earlier (slice 86); proxy fields were
+            // patched in if `useAnvilRpcProxy` is true. Live fields:
+            //   - wallet              (Step 10)
+            //   - anvilUrl            (Step 10)
+            //   - withProxyPaused     (Step 17)
+            //   - pageErrors          (Step 79 page-error monitor)
+            //   - networkRequests     (Step 82 network monitor)
+            //   - callsTo(pattern)    (Step 82 helper)
+            //   - any field a factory-mocks closure attached
+            //     during scenario.mocks(ctx) — slice 86 strict
+            //     schema mock uses `ctx.strictSchemaViolations`.
 
             // Run assertions in order
             for (const assertion of scenario.assertions ?? []) {

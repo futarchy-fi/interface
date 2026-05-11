@@ -216,43 +216,127 @@ export function makeGraphqlMockHandler({
  * False positives are unlikely given the controlled query surface
  * the futarchy frontend issues.
  */
-export function makeStrictCheckpointGraphqlMockHandler(opts = {}) {
-    const permissive = makeGraphqlMockHandler(opts);
+/**
+ * Catalog of Checkpoint-schema violations.
+ *
+ * Each entry is one legacy query shape that worked against the old
+ * AWS Graph-Node subgraph but trips the Checkpoint indexer. Pairs a
+ * regex (loose match — no real GraphQL parser) with the verbatim
+ * error string Checkpoint would emit. Used by both the registry- and
+ * candles-endpoint strict mocks so the same violation list lights up
+ * any consumer.
+ *
+ * **Three legacy KINDS captured** (slice 78 + extended in slice 86):
+ *
+ *   1. Reverse-relation references — Checkpoint doesn't auto-
+ *      generate reverse fields. `Aggregator.organizations`,
+ *      `Organization.proposals`, `Proposal.pools`, `Pool.candles`
+ *      all hit this.
+ *
+ *   2. Nested selection on a scalar field — many old subgraph fields
+ *      were entity references (`companyToken: Token`), but in
+ *      Checkpoint they're plain address strings. Selecting subfields
+ *      ({ id symbol decimals }) trips
+ *      "Field 'X' must not have a selection since type 'String!'
+ *       has no subfields".
+ *
+ *   3. Unknown fields / scalars — `BigInt!` variable type
+ *      (Checkpoint uses Int); `metadataContract` etc.
+ *
+ * Adding a new violation: include the verbatim error from a real
+ * indexer response so the mock matches production diagnostics. Add a
+ * PR-number tag in the comment so future maintainers can trace.
+ */
+export const CHECKPOINT_SCHEMA_VIOLATIONS = [
+    // ── KIND 1: reverse-relation references ─────────────────────────
+    {
+        // aggregator(...) { ... organizations { ... } }
+        //   PR #60: legacy nested aggregator query
+        pattern: /aggregator\s*\([^)]*\)\s*\{[^}]*\borganizations\b\s*\{/,
+        error: "Cannot query field 'organizations' on type 'Aggregator'",
+    },
+    {
+        // organization(s)? { ... proposals { ... } } — Checkpoint has
+        //   no reverse-relation Organization.proposals
+        //   PR #60, #61
+        pattern: /organizations?\s*[\({][^}]*?\}?[\s\S]*?\bproposals\s*\{/,
+        error: "Cannot query field 'proposals' on type 'Organization'",
+    },
+    {
+        // proposal(...) { ... pools { ... } } — Proposal.pools is not
+        //   auto-generated; post-fix uses pools(where: { proposal: }).
+        //   PR #65
+        pattern: /proposal\s*\([^)]*\)\s*\{[\s\S]*?\bpools\s*\{/,
+        error: "Cannot query field 'pools' on type 'Proposal'",
+    },
+    {
+        // pool(...) or pools(...) { ... candles { ... } } — Pool.candles
+        //   is not auto-generated either.
+        //   PR #65
+        pattern: /pools?\s*\([^)]*\)\s*\{[\s\S]*?\bcandles\s*\{/,
+        error: "Cannot query field 'candles' on type 'Pool'",
+    },
 
-    const violations = [
-        {
-            // aggregator(...) { ... organizations { ... } }
-            //   PR #60: legacy nested aggregator query
-            pattern: /aggregator\s*\([^)]*\)\s*\{[^}]*\borganizations\b\s*\{/,
-            error: "Cannot query field 'organizations' on type 'Aggregator'",
-        },
-        {
-            // organization(s)? { ... proposals { ... } } (Checkpoint has
-            //   no reverse-relation Organization.proposals)
-            pattern: /organizations?\s*[\({][^}]*?\}?[\s\S]*?\bproposals\s*\{/,
-            error: "Cannot query field 'proposals' on type 'Organization'",
-        },
-        {
-            // proposalentities? { ... metadataContract ... }
-            //   PR #45: field doesn't exist on Checkpoint ProposalEntity
-            pattern: /proposalentities?\s*[\({][^}]*?\}?[\s\S]*?\bmetadataContract\b/,
-            error: "Cannot query field 'metadataContract' on type 'ProposalEntity'",
-        },
-    ];
+    // ── KIND 2: nested selection on a scalar address field ──────────
+    // The same diagnostic in real Checkpoint quotes the offending
+    // field name dynamically. The capture group below carries it
+    // through to the simulated error so the test trace mirrors prod.
+    {
+        // Any of the known address-typed scalar fields followed by `{
+        //   PR #62 (companyToken, currencyToken, outcomeTokens,
+        //           token0, token1), PR #63 (tokenIn, tokenOut, pool)
+        pattern: /\b(companyToken|currencyToken|outcomeTokens|token0|token1|tokenIn|tokenOut|pool)\s*\{/,
+        // Renderer that pulls the matched field into the error message.
+        error: (match) => `Field '${match[1]}' must not have a selection since type 'String!' has no subfields`,
+    },
 
+    // ── KIND 3: unknown field / scalar ──────────────────────────────
+    {
+        // proposalentities? { ... metadataContract ... } — field
+        //   doesn't exist on Checkpoint ProposalEntity
+        //   PR #45
+        pattern: /proposalentities?\s*[\({][^}]*?\}?[\s\S]*?\bmetadataContract\b/,
+        error: "Cannot query field 'metadataContract' on type 'ProposalEntity'",
+    },
+    {
+        // `$<var>: BigInt!` — Checkpoint exposes period etc. as Int
+        //   PR #65
+        pattern: /:\s*BigInt!?\b/,
+        error: 'Unknown type "BigInt". Did you mean "Int"?',
+    },
+];
+
+/**
+ * Generic factory: takes an underlying permissive handler and an
+ * optional violations array (defaults to the canonical
+ * `CHECKPOINT_SCHEMA_VIOLATIONS`). Returns a route handler that
+ * inspects every POST body, rejects legacy shapes with a real
+ * GraphQL error envelope, and delegates the rest to the permissive
+ * underlying. The same factory is used for both the registry and
+ * candles endpoints — only the permissive layer differs.
+ */
+function makeStrictGraphqlMockHandler({ permissive, violations = CHECKPOINT_SCHEMA_VIOLATIONS, onCall, onViolation } = {}) {
     return async (route) => {
         const body = JSON.parse(route.request().postData() || '{}');
         const query = body.query || '';
-        opts.onCall?.(query);
+        onCall?.(query);
 
         for (const { pattern, error } of violations) {
-            if (pattern.test(query)) {
+            const match = query.match(pattern);
+            if (match) {
+                const message = typeof error === 'function' ? error(match) : error;
+                // onViolation lets scenarios fail loudly even when the
+                // consumer swallows the GraphQL error and the DOM
+                // still renders something. Receives { message, query,
+                // match } so the failure trace can pinpoint which
+                // legacy shape leaked back in.
+                onViolation?.({ message, query, match });
                 return route.fulfill({
                     status: 200,
                     contentType: 'application/json',
                     body: JSON.stringify({
                         errors: [{
-                            message: error,
+                            message,
                             extensions: { code: 'GRAPHQL_VALIDATION_FAILED' },
                         }],
                     }),
@@ -260,10 +344,35 @@ export function makeStrictCheckpointGraphqlMockHandler(opts = {}) {
             }
         }
 
-        // Query is valid Checkpoint shape — delegate to permissive
-        // handler for the actual data response.
+        // Query is valid Checkpoint shape — delegate to permissive.
         return permissive(route);
     };
+}
+
+export function makeStrictCheckpointGraphqlMockHandler(opts = {}) {
+    return makeStrictGraphqlMockHandler({
+        permissive:  makeGraphqlMockHandler(opts),
+        onCall:      opts.onCall,
+        onViolation: opts.onViolation,
+    });
+}
+
+/**
+ * Strict-schema variant of the candles-side handler. Same violation
+ * catalog as the registry strict handler; the underlying permissive
+ * is the FOUR-shape candles handler so the assertions on the market
+ * page have valid responses for whichever queries pass the strictness
+ * filter. Use when authoring scenarios that target the candles
+ * endpoint specifically (market page proposal/pool/swap fetches).
+ *
+ * @param {object} opts forwarded to `makeMarketCandlesMockHandler`
+ */
+export function makeStrictCandlesGraphqlMockHandler(opts = {}) {
+    return makeStrictGraphqlMockHandler({
+        permissive:  makeMarketCandlesMockHandler(opts),
+        onCall:      opts.onCall,
+        onViolation: opts.onViolation,
+    });
 }
 
 /**

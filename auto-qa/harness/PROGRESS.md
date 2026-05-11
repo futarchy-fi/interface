@@ -2313,6 +2313,201 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 86-strict-schema-extension (Phase 6 —
+  three more verified PRs without a new KIND)**
+  (this iteration, on the interface side) — Extends
+  the strict-schema mock catalog from 3 to 7
+  patterns and adds a market-page sibling
+  (scenario 53) of the /companies-side scenario
+  47. Mechanically verifies catches of PRs #62 +
+  #63 + #65, moving recent-PR coverage from
+  **6/22 = 27%** to **9/22 = 41%** in one
+  iteration without inventing new infrastructure.
+
+  * **The capability gap closed**: scenario 47
+    claimed to cover PRs #45, #60, #61, #62, #63,
+    #65 — but only patterns for #45 and #60 were
+    actually implemented. PRs #62 (`companyToken
+    { id }` nested-on-scalar), #63 (`tokenIn { id
+    }` same shape on Swap), and #65 (`BigInt!`
+    variable type) used legacy shapes the mock
+    never inspected. So three "claimed" catches
+    were vapor; the user's earlier audit question
+    ("which PRs are caught vs missing?") exposed
+    them.
+
+  * **Three new violation patterns added**:
+    ```js
+    // Nested-on-scalar address fields (PR #62, #63)
+    /\b(companyToken|currencyToken|outcomeTokens|
+      token0|token1|tokenIn|tokenOut|pool)\s*\{/
+    // Proposal.pools reverse relation (PR #65)
+    /proposal\s*\([^)]*\)\s*\{[\s\S]*?\bpools\s*\{/
+    // Pool.candles reverse relation (PR #65)
+    /pools?\s*\([^)]*\)\s*\{[\s\S]*?\bcandles\s*\{/
+    // BigInt! scalar (PR #65)
+    /:\s*BigInt!?\b/
+    ```
+    Error renderers use match-group captures so
+    the simulated GraphQL error mirrors what real
+    Checkpoint would emit (e.g., "Field
+    'companyToken' must not have a selection
+    since type 'String!' has no subfields"). The
+    field name in the trace pinpoints exactly
+    which legacy shape leaked back in.
+
+  * **Refactor: shared violation catalog**. The
+    7 patterns now live in a module-level
+    `CHECKPOINT_SCHEMA_VIOLATIONS` constant.
+    `makeStrictCheckpointGraphqlMockHandler` (the
+    registry-side wrapper) and the new
+    `makeStrictCandlesGraphqlMockHandler` both
+    delegate to a common
+    `makeStrictGraphqlMockHandler` factory. Adding
+    a future violation extends ONE list and
+    lights up every consumer.
+
+  * **New scaffolding: `onViolation` callback +
+    factory-form `mocks`**. The earlier "Trading
+    Pair" DOM anchor turned out to be a false-
+    negative trap — the ChartParameters component
+    renders a hard-coded default ('GNO/SDAI')
+    regardless of whether the proposal fetch
+    succeeded. So a PR #62 regression would trip
+    the strict mock, the consumer would silently
+    swallow the GraphQL error
+    (`fetchProposalFromSubgraph` does `if
+    (result.errors) return null`), and the test
+    would still see the label. False positive
+    AVOIDED by:
+    - Strict mock factory now accepts an
+      `onViolation(v)` callback. Every
+      legacy-shape query that trips a pattern
+      records `{ message, query, match }` to a
+      scenario-scoped array.
+    - Scenario `mocks` can now be a FACTORY
+      function (not just a static object) —
+      `scenarios.spec.mjs` invokes it with the
+      live `ctx`, so the mock closure and the
+      assertion share the same scope.
+    - Scenario 53's assertion: throw if
+      `ctx.strictSchemaViolations.length > 0`,
+      with a 5-line preview of each offending
+      query.
+
+    Side benefit: `ctx` is now hoisted earlier in
+    the per-test setup, so future scenarios can
+    attach arbitrary state from `mocks` factory
+    to be read by assertions.
+
+  * **Scenario 53 (`scenarios/53-market-page-
+    checkpoint-schema-strictness.scenario.mjs`)**:
+    - Route: `/markets/${MARKET_PROBE_ADDRESS}`
+      (GIP-145 from MARKETS_CONFIG — same as
+      scenario 10)
+    - Registry mock: permissive
+      (strictness is on candles side this slice)
+    - Candles mock: strict (the new factory)
+    - Assertion: wait 8s for queries to fire,
+      then assert no violations recorded
+    - Sanity check: `callsTo(/candles\/graphql/)
+      .length > 0` so an empty violations list
+      isn't vacuously true
+
+  * **Mechanical verification — three real PRs**:
+
+    1. **PR #62 (`companyToken { id symbol
+       decimals }`)** — added back to
+       `src/adapters/subgraphConfigAdapter.js`
+       line 70-71. Scenario 53 FAILED with:
+       ```
+       Scenario 53 found 2 violation(s):
+       1. [Field 'companyToken' must not have a
+          selection since type 'String!' has no
+          subfields]
+          matched field: companyToken
+          query: { proposal(id: "0x45e1...") { id
+          marketName companyToken { id symbol
+          decimals } currencyToken { id symbol
+          decim…
+       ```
+       Restored → PASSED.
+
+    2. **PR #63 (`tokenIn { id symbol decimals
+       }`, `tokenOut { ... }`, `pool { id }`)** —
+       added back to
+       `src/utils/subgraphTradesClient.js` line
+       123-129. Scenario 53 FAILED with 3
+       violations (tokenIn matches for each of
+       the page's three swap-query reissues).
+       Restored → PASSED.
+
+    3. **PR #65 (`$cutoff: BigInt!`)** — added a
+       variable declaration to the candles query
+       in `src/hooks/useSubgraphData.js:26`.
+       Scenario 53 FAILED with 1 violation
+       (BigInt regex matches globally, no
+       captured field name). Restored → PASSED.
+
+    All three regressions caught by ONE scenario
+    via ONE handler — the multiplier promise of
+    the strict-schema design.
+
+  * **Bonus latent bugs found in current src**
+    while tracking the patterns:
+    - `src/utils/SubgraphPoolFetcher.js:200` still
+      has `$period: BigInt!` (PR #65 didn't reach
+      it).
+    - `src/services/subgraphClient.js:68` has the
+      same.
+    - `src/components/futarchyFi/marketPage/
+      MarketPageShowcase.jsx` still has nested
+      `tokenIn { id symbol }` / `tokenOut { ... }`
+      (PR #63 didn't reach it).
+    None of these are exercised by the harness
+    /markets/ route today, but they're real
+    latent bugs that would surface as 502s
+    against the live Checkpoint indexer. Filed as
+    follow-up; could be caught by a future
+    scenario that drives Showcase or the
+    SubgraphPoolFetcher path.
+
+  * **Audit-driven slice**. This iteration was
+    triggered by the user's direct question
+    "what PRs are missing?". The honest
+    accounting (6 verified / ~3 partial / 13
+    uncovered out of 22 recent PRs) made the
+    27% → 41% gap concrete enough to attack.
+    Slice 86 picks off the "partial" tranche
+    cheaply. Future slices: tackle the 13
+    uncovered (PR #54 needs TIME-EVOLUTION KIND;
+    PR #58 needs a build-mode scenario; the rest
+    are DOM-list or URL-state scenarios).
+
+  * **Live re-validation**:
+    - Scenario 47 (`/companies` strict): 9.1s
+      cold — unchanged. Refactor preserved
+      semantics.
+    - Scenario 53 (`/markets/` strict): 11.6s
+      cold, 8s of which is the page-settle wait
+      (`waitForTimeout(8000)`). Could be reduced
+      to expect.poll on
+      `ctx.callsTo(/candles/).length >= N` in
+      a future tightening pass.
+    - Both pass in clean state, both fail with
+      ANY of the four targeted PR regressions.
+    - src/ tree clean after verification cycle
+      (companyToken, tokenIn, BigInt all
+      restored).
+
+  * **Catalog state**: 53 scenarios, **11
+    mechanically verified** (44, 45, 46, 47, 48,
+    10, 49, 50, 51, 52, 53). Recent-PR catch
+    coverage: **9/22 = 41%**. Eight assertion
+    KINDs unchanged (slice 86 didn't add a new
+    one — it deepened an existing KIND's catch
+    surface).
+
 - **slice 85-build-mode-runtime (Phase 6 — EIGHTH
   NEW assertion-target KIND: post-minification
   runtime regressions)** (this iteration, on the
