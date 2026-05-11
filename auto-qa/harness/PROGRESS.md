@@ -2313,6 +2313,104 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 74-pr64-real-catcher (Phase 6
+  scenario library — first MECHANICALLY-VERIFIED
+  bug-shape claim)** (this iteration, on the
+  interface side) — PIVOT iteration following
+  step 73's honest gap acknowledgement. Replaces
+  shallow mock-permutation slices with a scenario
+  that actually catches the bug it claims to
+  guard against.
+
+  * **The gap closed**: scenario 01 is tagged
+    `bugShape: 'PR #64 stale-price-but-API-
+    healthy'` but does NOT exercise PR #64's bug
+    site. `fakePoolBearingProposal()` embeds
+    `metadata.conditional_pools.{yes,no}.address`
+    → `transformProposalToEvent` (hook line 162)
+    populates `proposal.poolAddresses` directly
+    from metadata, BEFORE `bulkFetchPoolsByChain`
+    runs. At hook line 451, the bulk fetcher only
+    OVERRIDES `poolAddresses` when `poolMap` is
+    non-empty — an empty poolMap (the PR #64
+    bug) silently keeps the metadata-derived
+    addresses. Empirically confirmed: with the
+    PR #64 guard at hook line 319 reverted to the
+    pre-fix form (`raw.split('-').slice(1)
+    .join('-')` unconditional), **scenario 01
+    still passes**.
+
+  * **The catch**: `scenarios/44-pr64-real
+    .scenario.mjs` uses a poolless probe
+    proposal (`metadata: { chain: '100' }` —
+    NO `conditional_pools`), forcing the
+    carousel to depend on `bulkFetchPoolsByChain`
+    for price discovery. Custom inline candles
+    handler differentiates the two query shapes
+    the hook emits:
+    - `pools(where: { proposal_in: ["100-0x..."] })`
+      → returns rows with `proposal: "0x..."`
+      (plain, PRODUCTION-PROXIED shape — exactly
+      what `/candles/graphql` returns per PR #64
+      description)
+    - `pools(where: { id_in: [...] })`
+      → returns rows with `price: 0.42` /
+      `price: 0.58`
+    Asserts `"0.4200 SDAI"` appears.
+
+  * **Mechanical verification protocol**:
+    Temporarily reverted `src/hooks/
+    useAggregatorProposals.js:319` from
+    `raw.includes('-') ? raw.split('-')
+    .slice(1).join('-') : raw` to the pre-PR-#64
+    form. Ran both scenarios:
+    - scenario 01: PASS (gap real — metadata
+      shortcut bypasses the bug site)
+    - scenario 44: FAIL with `Locator:
+      getByText('0.4200 SDAI').first()` ...
+      `element(s) not found` (catch real)
+    Restored the guard. Scenario 44 PASSES again.
+
+  * **Why this matters**: until this slice, no
+    DOM↔API invariant or captured scenario was
+    mechanically traceable to the merged-PR
+    regressions they claimed to guard. This is
+    the FIRST scenario whose `bugShape` label
+    can be tested by reverting the upstream fix.
+    Generalizes to a discipline: each new
+    scenario should be validated by revert-the-
+    fix, run, expect FAIL — otherwise the
+    `bugShape` tag is decorative.
+
+  * **What this is NOT (honest framing)**: this
+    is still a mock-level test. The candles
+    response is fabricated by the handler, not
+    produced by a real /candles/graphql proxy
+    in front of a real Checkpoint indexer. The
+    test catches the SPECIFIC code path that PR
+    #64 fixed, but a true cross-layer
+    disagreement (e.g., indexer staleness
+    relative to chain) is still out of reach
+    until Phase 7 slice 4e (single
+    `docker compose up`) lands. **This step is a
+    bridge**: same scenario can be "promoted"
+    once the full stack is up — drop the mock,
+    point at local `/candles/graphql` going
+    through the real api → indexer → anvil.
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `npm run scenarios:catalog` → 44
+      scenarios (was 43)
+    - Scenario 44 wall-clock: ~3s warm
+
+  * **Follow-up (slice 75, deferred)**: sister
+    scenario with `pool.proposal: "100-0x..."`
+    (direct-upstream shape) to pin the OTHER
+    branch of the `raw.includes('-')` guard.
+    Together they pin both shapes the post-PR-#64
+    code claims to handle.
+
 - **slice 72-invariants-naming-convention-lock
   (Phase 5 invariant catalog — naming
   convention enforced)** (this iteration,
