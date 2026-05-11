@@ -2313,6 +2313,86 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-5a (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — extends
+  `makeMarketCandlesMockHandler` with 3 new query
+  branches for the subgraph trades client. **Doesn't
+  fully unblock #14's value-flow assertion yet** but
+  removes one of the gating endpoints.
+
+  * **Three new query branches**:
+    1. `swaps(where: ...)` → returns empty list
+       (fresh probe market with no trades). Used by
+       `subgraphTradesClient.fetchSwapsFromSubgraph`
+       (Recent Activity / My Trades panels).
+    2. `pools(where: { id_in: [...] })` → returns
+       matching probe pools when their addresses are
+       referenced; filters out unknowns. Used by the
+       trade-history's pool-ref bulk lookup AND by
+       the /companies-side bulk fetcher pattern (no
+       overlap with the existing scenarios but
+       harmless).
+    3. `pools(where: { proposal: ..., type: ... })`
+       → returns YES + NO probe pools when the
+       proposal address matches; empty otherwise
+       (so an unrelated proposalAddress doesn't
+       accidentally get our probes). Used by
+       `subgraphTradesClient.fetchPoolsForProposal`.
+
+  * **Why these matter**: the live snapshot from
+    live-validation pass 1 showed
+    "Loading from Subgraph..." — that's
+    `SubgraphTradesDataLayer` fetching trade history.
+    Without the mocks above, the queries hit the real
+    `api.futarchy.fi/candles/graphql`, the page sees
+    network errors, the trade-history panel stays in
+    its loading state. Mocking them lets the consumer
+    move past that state.
+
+  * **Live re-validation**:
+    - 31/31 live tests pass (14 scenarios + 17 older
+      spec tests, ~41s total)
+    - **No regression** in any existing scenario
+    - **#14's "100.0000" balance still NOT visible** —
+      probe spec confirmed; the balance panel STILL
+      shows "Loading balances..." even after the
+      subgraph mock unblocks the trade-history flow.
+      That means `useBalanceManager` is gated on
+      something else further upstream — likely
+      `useContractConfig`'s per-market config build
+      not completing because of an unmocked endpoint
+      or a missing data field. **Will diagnose in
+      step 5b.**
+
+  * **Smoke test extensions** — 5 new tests
+    (56 total in the file now, was 51):
+    - swaps query returns empty list
+    - pools id_in batch returns matching probes
+    - pools id_in batch filters unknowns
+    - pools-by-proposal returns YES + NO
+    - pools-by-proposal returns empty on
+      proposal mismatch
+
+  * **Multi-iteration plan progress**:
+    - ✓ Steps 1, 2, 2.5-2.9 (fork bootstrap)
+    - ✓ Step 4 (positions scenario, softened
+      assertions)
+    - ✓ Live-validation 1+2 (all 14 pass live)
+    - ✓ Step 6 (CI Foundry install)
+    - ✓ Step 5a (this slice — subgraph trades
+      mocks)
+    - ⏳ Step 5b: diagnose what's gating
+      `useBalanceManager` past the subgraph mock.
+      Candidates: useContractConfig waits on
+      Snapshot voting data; or
+      unifiedBalanceFetcher needs a config field
+      not in the registry mock; or wagmi
+      `isConnected` not flipping true in time.
+    - ⏳ Step 5c+: Snapshot mock, spot-price mock,
+      and any other endpoint identified in 5b
+    - **Remaining maintainer task**: promote 4
+      staged workflows
+
 - **slice fork-bootstrap-step-6 (Phase 7 fork wiring)**
   (this iteration, on the interface side) — closes the
   fork-bootstrap multi-iteration plan. CI workflow now

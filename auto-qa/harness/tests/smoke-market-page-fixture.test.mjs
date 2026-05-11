@@ -164,6 +164,91 @@ test('makeMarketCandlesMockHandler — singular pool query returns pool detail',
     assert.equal(body.data.pool[0].proposal, MARKET_PROBE_ADDRESS.toLowerCase());
 });
 
+test('makeMarketCandlesMockHandler — swaps query returns empty list (default)', async () => {
+    const handler = makeMarketCandlesMockHandler();
+    let fulfilled = null;
+    const stubRoute = {
+        request: () => ({
+            postData: () => JSON.stringify({
+                query: `{ swaps(where: { pool_in: ["${MARKET_PROBE_YES_POOL}"] }, first: 30, orderBy: timestamp, orderDirection: desc) { id timestamp } }`,
+            }),
+        }),
+        fulfill: async (resp) => { fulfilled = resp; },
+    };
+    await handler(stubRoute);
+    const body = JSON.parse(fulfilled.body);
+    assert.deepEqual(body.data.swaps, []);
+});
+
+test('makeMarketCandlesMockHandler — pools id_in batch returns matching probe pools', async () => {
+    const handler = makeMarketCandlesMockHandler();
+    let fulfilled = null;
+    const stubRoute = {
+        request: () => ({
+            postData: () => JSON.stringify({
+                query: `{ pools(where: { id_in: ["${MARKET_PROBE_YES_POOL}", "${MARKET_PROBE_NO_POOL}"] }) { id name type outcomeSide } }`,
+            }),
+        }),
+        fulfill: async (resp) => { fulfilled = resp; },
+    };
+    await handler(stubRoute);
+    const body = JSON.parse(fulfilled.body);
+    assert.equal(body.data.pools.length, 2);
+    assert.equal(body.data.pools[0].outcomeSide, 'YES');
+    assert.equal(body.data.pools[1].outcomeSide, 'NO');
+});
+
+test('makeMarketCandlesMockHandler — pools id_in batch filters out unknown addresses', async () => {
+    const handler = makeMarketCandlesMockHandler();
+    let fulfilled = null;
+    const stubRoute = {
+        request: () => ({
+            postData: () => JSON.stringify({
+                query: `{ pools(where: { id_in: ["0x9999999999999999999999999999999999999999"] }) { id name type outcomeSide } }`,
+            }),
+        }),
+        fulfill: async (resp) => { fulfilled = resp; },
+    };
+    await handler(stubRoute);
+    const body = JSON.parse(fulfilled.body);
+    assert.deepEqual(body.data.pools, []);
+});
+
+test('makeMarketCandlesMockHandler — pools by proposal returns YES + NO probe pools', async () => {
+    const handler = makeMarketCandlesMockHandler();
+    let fulfilled = null;
+    const stubRoute = {
+        request: () => ({
+            postData: () => JSON.stringify({
+                query: `{ pools(where: { proposal: "${MARKET_PROBE_ADDRESS.toLowerCase()}", type: "CONDITIONAL" }) { id name type outcomeSide } }`,
+            }),
+        }),
+        fulfill: async (resp) => { fulfilled = resp; },
+    };
+    await handler(stubRoute);
+    const body = JSON.parse(fulfilled.body);
+    assert.equal(body.data.pools.length, 2);
+    const ids = body.data.pools.map((p) => p.id);
+    assert.ok(ids.includes(MARKET_PROBE_YES_POOL));
+    assert.ok(ids.includes(MARKET_PROBE_NO_POOL));
+});
+
+test('makeMarketCandlesMockHandler — pools by proposal returns empty when proposal mismatches', async () => {
+    const handler = makeMarketCandlesMockHandler();
+    let fulfilled = null;
+    const stubRoute = {
+        request: () => ({
+            postData: () => JSON.stringify({
+                query: `{ pools(where: { proposal: "0x9999999999999999999999999999999999999999", type: "CONDITIONAL" }) { id name type outcomeSide } }`,
+            }),
+        }),
+        fulfill: async (resp) => { fulfilled = resp; },
+    };
+    await handler(stubRoute);
+    const body = JSON.parse(fulfilled.body);
+    assert.deepEqual(body.data.pools, []);
+});
+
 test('makeGraphqlMockHandler — accepts a market-shaped proposal row', async () => {
     // The existing /companies-side handler dispatches on
     // `proposalentities(where:` and returns the `proposals` array.

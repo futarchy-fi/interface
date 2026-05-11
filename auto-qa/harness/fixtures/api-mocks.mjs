@@ -342,6 +342,49 @@ export function makeMarketCandlesMockHandler(opts = {}) {
                         : poolId === noPool  ? noPrice
                         : null;
             data = { candles: close == null ? [] : [{ close: String(close) }] };
+        } else if (q.includes('swaps(where:')) {
+            // Trade-history query (#6, added step 5a): subgraphTradesClient's
+            // `fetchSwapsFromSubgraph`. Returns recent swaps for one or
+            // more pools, ordered by timestamp desc. Default fixture
+            // returns an empty list — fresh probe market with no trades
+            // yet — which is what the trade-history table will render
+            // as "No trades to display" or similar (the Loading…
+            // spinner WILL clear since the response is well-formed).
+            // Scenarios that need specific swap rows can override the
+            // handler.
+            data = { swaps: [] };
+        } else if (q.includes('pools(where:') && q.includes('id_in:')) {
+            // Pool-batch query (#7, added step 5a): the /companies-side
+            // bulk fetcher pattern AND the subgraphTradesClient's pool-
+            // ref lookup. Lighter shape than the per-pool detail (no
+            // tick/liquidity fields needed). Returns the YES + NO probe
+            // pools when their addresses are referenced.
+            const idMatches = [...q.matchAll(/"(0x[a-fA-F0-9]{40})"/g)]
+                .map((m) => m[1].toLowerCase());
+            const pools = idMatches
+                .filter((addr) => addr === yesPool || addr === noPool)
+                .map((addr) => ({
+                    id:          addr,
+                    name:        `harness-pool-${addr.slice(2, 10)}`,
+                    type:        'CONDITIONAL',
+                    outcomeSide: addr === yesPool ? 'YES' : 'NO',
+                }));
+            data = { pools };
+        } else if (q.includes('pools(where:') && q.includes('proposal:')) {
+            // fetchPoolsForProposal query (#8, added step 5a): asks for
+            // CONDITIONAL pools belonging to a specific proposal. Returns
+            // the YES + NO probe pools when the proposal matches; empty
+            // otherwise (so an unrelated proposalAddress doesn't get our
+            // probes accidentally).
+            const propMatch = q.match(/proposal:\s*"(0x[a-fA-F0-9]{40})"/);
+            const queryProposal = propMatch ? propMatch[1].toLowerCase() : null;
+            const pools = queryProposal === proposalLower ? [
+                { id: yesPool, name: `harness-pool-${yesPool.slice(2, 10)}`,
+                  type: 'CONDITIONAL', outcomeSide: 'YES' },
+                { id: noPool,  name: `harness-pool-${noPool.slice(2, 10)}`,
+                  type: 'CONDITIONAL', outcomeSide: 'NO' },
+            ] : [];
+            data = { pools };
         } else if (q.includes('pools(where:') && q.includes('id:') && !q.includes('id_in:')) {
             // Per-pool detail query (#2) — singular id form.
             const idMatch = q.match(/id:\s*"(0x[a-fA-F0-9]{40})"/);
