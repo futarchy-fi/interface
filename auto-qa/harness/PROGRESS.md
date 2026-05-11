@@ -2313,6 +2313,77 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 36-scenario-33-market-page-candles-partial
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (CANDLES, partial-
+  response) cell, completing the partial-response
+  row on the market-page chaos matrix. Mirror of
+  #04 (candles-partial on /companies) applied to
+  the market page's two-outcome contract. Distinct
+  from #25 (candles 502), #27 (candles empty-200),
+  #29 (candles malformed), #31 (candles slow)
+  because candles stays UP and HEALTHY and
+  returns VALID responses, but ONE of two probe
+  pools (NO) has its latest-candle data missing.
+
+  * **The scenario** — `33-market-page-candles-
+    partial` on /markets/<MARKET_PROBE_ADDRESS>.
+    Custom handler delegates to
+    `makeMarketCandlesMockHandler` for every
+    query EXCEPT the latest-candle lookup for
+    the NO pool — which returns
+    `{ candles: [] }`. Simulates an indexer that
+    caught up on YES but not NO.
+
+  * **Distinct from #04** (same shape, different
+    page contract):
+    - #04 /companies: two events side-by-side
+      in the carousel; one priced, one unpriced.
+      Contrast between TWO CARDS.
+    - #33 /markets/[address]: one event but two
+      outcome pools side-by-side. Contrast
+      between TWO OUTCOMES of the same proposal.
+      Different render path, same defensive-
+      coding expectation.
+
+  * **Bug-shapes captured** (NEW vs #25/#27/
+    #29/#31):
+    - Missing-candles-for-one-pool corrupts
+      BOTH price displays (cache-key collision)
+    - NO outcome tab VANISHES from trading
+      panel (overzealous filter drops missing-
+      candles outcomes instead of degrading)
+    - Formatter CRASHES on null close-price
+      (same shape as #04's defensive-coding
+      assertion)
+    - YES and NO prices SWAP between outcome
+      tabs (cache-key / pool-address
+      comparison regression — PR #64-shape
+      cache misuse applied to two-outcome
+      rendering)
+    - Chart panel goes BLANK for BOTH outcomes
+      from shared chart-data hook propagating
+      one pool's null data
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #33 itself: passed in 10.9s on
+      first run
+    - Catalog regenerated: 33 scenarios (was 32)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  | #32      | #33 ★   |
+    | empty 200         | #26      | #27     |
+    | malformed body    | #28      | #29     |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   | #30      | #31     |
+    10 of 12 cells filled (5 rows complete).
+    Last row: (registry/candles, per-row corrupt).
+
 - **slice 35-scenario-32-market-page-registry-partial
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (REGISTRY, partial-
