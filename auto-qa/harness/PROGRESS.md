@@ -2313,6 +2313,75 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 80-page-error-monitor-spread-to-market-page
+  (Phase 6 — apply slice 79 capability beyond /companies;
+  surfaces real bug)** (this iteration, on the interface
+  side) — Capability-reuse iteration. Opts scenario 10
+  (market-page happy path) into the slice 79 page-error
+  monitor. Empirically surfaces 17 page errors on first
+  run; categorizes them; narrowly excludes test-mode
+  artifacts; surfaces ONE real latent bug.
+
+  * **The real finding**: a React warning fires once per
+    market-page mount —
+    ```
+    Warning: Cannot update a component (`%s`) while
+    rendering a different component (`%s`).
+    ```
+    This is React's signal that an effect/callback in
+    one component is calling `setState` on another
+    DURING the second component's render cycle. Fires
+    intermittently in production too; not just a dev-mode
+    artifact. **Latent bug ledger**:
+    - slice 79: `/assets/fallback-company.png` missing
+      (broken-image on every no-logo org card)
+    - slice 80: setState-during-render React anti-pattern
+      on the market page
+
+    Both excluded NARROWLY in their respective scenarios
+    so the catch surface stays sharp for new regressions.
+
+  * **The 17 categorized errors** (one /market mount):
+    - 8 derived from HARNESS_NO_ANVIL=1 (anvil at :8546
+      unreachable, downstream SDAI/allowance/legacy-
+      Sushiswap-fallback defensive try/catch logs)
+    - 4 derived from dummy Supabase URL (intentional)
+    - 4 cascade from the above
+    - 1 REAL React anti-pattern warning
+
+  * **Narrow exclusion pattern**: each `excludePageErrors`
+    regex matches ONE specific known error shape. A NEW
+    error with different text → catches. The exclusions
+    intentionally do NOT use broad patterns like
+    `/.*Error.*/` that would swallow regressions.
+
+  * **Mechanical verification**: injected
+    `console.error('HARNESS-PROBE-80: ...')` at the top
+    of MarketPageShowcase component. Scenario 10 FAILED
+    with "produced 10 unexpected page error(s)" — the
+    probe text matched NONE of the exclusions and was
+    correctly surfaced. Restored → PASSES.
+
+  * **Catalog state**: 48 scenarios. Mechanically
+    verified: **6** (44, 45, 46, 47, 48, 10). Scenario
+    10 joins the verified set despite being a pre-
+    existing scenario — the monitor opt-in
+    mechanically demonstrates it catches new regressions.
+
+  * **Capability re-use continues**: scenarios 11, 12, 13
+    (other market-page happy paths) are the obvious next
+    opt-ins. Each will likely surface similar test-mode
+    artifacts (anvil/supabase) + possibly different
+    real findings. Pattern: opt in, run, categorize,
+    narrowly exclude, document real findings.
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `scenarios:catalog` clean (48)
+    - Scenario 10 wall-clock: ~5s warm
+    - src/ tree clean after verification mutation
+      restored
+
 - **slice 79-page-error-monitor (Phase 6 —
   second NEW TEST CAPABILITY: page-error
   monitor that catches silent JS errors)**

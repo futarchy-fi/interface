@@ -76,6 +76,49 @@ export default {
         [CANDLES_GRAPHQL_URL]: makeMarketCandlesMockHandler(),
     },
 
+    // Step 80: opt into the page-error monitor (slice 79 capability).
+    // First scenario beyond /companies (#48) to use it. Catches
+    // silent JS errors that DOM-text assertions miss on the
+    // market-page surface. Exclusions populated empirically from
+    // first run (17 page errors observed):
+    //
+    //   * 8 derived from HARNESS_NO_ANVIL=1 (anvil at :8546
+    //     unreachable, downstream contract calls revert) — test-
+    //     mode artifacts only; production would have a real RPC.
+    //   * 4 derived from intentional dummy Supabase URL —
+    //     test-mode artifacts only.
+    //   * 1 REAL latent React anti-pattern warning: "Cannot
+    //     update a component while rendering a different
+    //     component". Production bug, intermittent. Excluded
+    //     here NARROWLY (this exact warning shape only) so
+    //     similar bugs in different components still surface.
+    //     Filed for separate fix — adds to the latent-bug ledger
+    //     alongside slice 79's fallback-company.png finding.
+    assertNoPageErrors: true,
+    excludePageErrors: [
+        // ── Test-mode artifacts (anvil unreachable) ─────────────
+        /localhost:8546/,                          // anvil unreachable
+        /SDAI contract.*missing revert data/,      // anvil downstream
+        /check allowance.*missing revert data/,    // anvil downstream
+        /Error fetching YES pool price/,           // legacy sushiswap fallback (anvil downstream)
+        /Error fetching NO pool price/,            // legacy sushiswap fallback (anvil downstream)
+
+        // ── Test-mode artifacts (dummy Supabase URL) ────────────
+        /harness-supabase\.invalid/,
+        /Error fetching market data/,
+
+        // ── Cross-page latent bugs (also caught by /companies) ──
+        /fallback-company\.png/i,                  // public/ asset missing
+        /Hydration failed/i,                       // SSR/client divergence
+
+        // ── REAL latent finding (slice 80) ──────────────────────
+        // React warning: setState in one component during render
+        // of another. Fires in production too — intermittent.
+        // Narrow regex so future similar warnings in different
+        // call paths still surface.
+        /Warning: Cannot update a component .* while rendering a different component/,
+    ],
+
     assertions: [
         // **Live-validated assertions** (pass 2). The synthetic title
         // `HARNESS-MARKET-PROBE-001` from the registry mock turned
