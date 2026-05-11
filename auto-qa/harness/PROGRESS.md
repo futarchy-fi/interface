@@ -2313,6 +2313,90 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 28-scenario-25-market-page-candles-down
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (CANDLES, hard-502)
+  cell on the market-page chaos matrix. Mirror of
+  #03 (candles 502 on /companies) but applied to
+  the market page's distinct candles dependency
+  graph (chart panel + per-pool spot-price
+  displays). Verifies a candles outage does NOT
+  cascade to a hung/crashed page-shell, and that
+  on-chain-dependent panels (trading, allowances,
+  positions) remain functional independent of
+  the candles endpoint.
+
+  * **The scenario** — `25-market-page-candles-
+    down` on /markets/<MARKET_PROBE_ADDRESS>.
+    Registry happy (proposal metadata populates)
+    + candles GraphQL returns 502 for all four
+    distinct query shapes
+    (proposal+whitelistedtokens, pools-singular,
+    candles-latest, whitelistedtokens-only).
+    Same page-shell assertions as #24 (Trading
+    Pair label + wallet shorthand) — proves the
+    candles failure is contained and doesn't
+    cascade.
+
+  * **Distinct from #03** (same failure mode,
+    different page) because /companies and the
+    market page use candles differently:
+    - /companies: candles drives EVERY price
+      card; #03 covers the "0.00 SDAI" fallback
+      shape
+    - /markets/[address]: candles drives the
+      CHART PANEL + per-pool spot-price
+      displays; the trading/allowances/positions
+      panels are on-chain-driven and should
+      remain functional
+
+  * **Distinct from #24** (different failure
+    axis on the same page) because:
+    - #24 registry-down: proposal metadata
+      gone, but chart panel still works
+    - #25 candles-down: chart panel degraded,
+      but proposal metadata intact
+
+  * **Bug-shapes captured** (NEW vs #03 and
+    #24):
+    - Market-page CRASHES on candles 502 (no
+      defensive `.catch` in `usePoolData` /
+      `useYesNoPoolData` / chart-fetch chain;
+      error bubbles to React error boundary)
+    - Chart panel HANGS in loading state
+      forever (loading flag never clears on
+      candles `.catch`)
+    - "Bad Gateway: ..." raw error leaked to
+      chart placeholder or price card (error
+      rendering bypasses UX-grade wrapper)
+    - WHOLE PAGE crashes from missing chart-
+      panel error boundary — collateral damage
+      taking down trading + allowances +
+      positions panels too
+    - Trading panel goes BLANK because a
+      derived price hook (e.g.,
+      useLatestPoolPrices feeding the trading
+      panel for pre-trade preview) propagates
+      the candles error up the dep tree
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #25 itself: passed in 12.7s on
+      first run
+    - Catalog regenerated: 25 scenarios (was 24)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25 ★   |
+    | partial response  |   —      |   —     |
+    | empty 200         |   —      |   —     |
+    | malformed body    |   —      |   —     |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   |   —      |   —     |
+    2 of 12 cells filled.
+
 - **slice 27-scenario-24-market-page-registry-down
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — OPENS the chaos matrix on a
