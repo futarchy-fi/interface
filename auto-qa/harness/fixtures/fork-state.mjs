@@ -58,14 +58,25 @@ export const SDAI_TOKEN_GNOSIS_ADDRESS = '0xaf204776c7245bF4147c2612BF6e5972Ee48
 // does at runtime.
 export const SDAI_BALANCE_SLOT = 0; // PROVISIONAL — re-verifying live below
 
-// Standard ERC20 ABI fragments — minimal surface for read/write
-// helpers. Keeping the fragments inline avoids a separate ABI
-// file and makes the helpers self-contained.
+// Standard ERC20 + ERC1155 ABI fragments — minimal surface for
+// read/write helpers. Keeping fragments inline avoids a separate
+// ABI file and makes the helpers self-contained.
 const ERC20_BALANCE_OF_ABI = [{
     type: 'function',
     name: 'balanceOf',
     stateMutability: 'view',
     inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+}];
+
+const ERC1155_BALANCE_OF_ABI = [{
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [
+        { name: 'account', type: 'address' },
+        { name: 'id',      type: 'uint256' },
+    ],
     outputs: [{ name: '', type: 'uint256' }],
 }];
 
@@ -310,4 +321,128 @@ export async function getErc20Balance(rpcUrl, token, holder) {
  */
 export async function fundWalletWithSDAI(rpcUrl, holder, amountWei = 1000n * 10n ** 18n) {
     return setErc20Balance(rpcUrl, SDAI_TOKEN_GNOSIS_ADDRESS, holder, amountWei, SDAI_BALANCE_SLOT);
+}
+
+// ── Step 2.7: ERC1155 storage-write primitives ──
+
+/**
+ * Compute the storage key for `mapping(K1 => mapping(K2 => V))`
+ * at a given outer slot, accessing position [outerKey][innerKey].
+ *
+ * Solidity layout (for outer slot S):
+ *   inner_slot   = keccak256(abi.encode(outerKey, S))
+ *   actual_slot  = keccak256(abi.encode(innerKey, inner_slot))
+ *
+ * The argument order matches the access pattern `[outerKey][innerKey]`
+ * — same as Solidity. **`outerKeyType` and `innerKeyType` are
+ * required** because the inner mapping's key type changes the
+ * abi.encode padding (uint256 stays 32 bytes, address pads to
+ * 32 bytes left-aligned — both happen to encode identically here,
+ * but typing it explicitly future-proofs against bytes32 vs
+ * smaller-uint mismatches).
+ *
+ * @param {`0x${string}`|bigint|number} outerKey
+ * @param {`0x${string}`|bigint|number} innerKey
+ * @param {bigint|number} outerSlot
+ * @param {'address'|'uint256'} outerKeyType
+ * @param {'address'|'uint256'} innerKeyType
+ * @returns {`0x${string}`}
+ */
+export function nestedMappingStorageKey(
+    outerKey, innerKey, outerSlot,
+    outerKeyType = 'uint256', innerKeyType = 'address',
+) {
+    const innerEncoded = encodeAbiParameters(
+        [{ type: outerKeyType }, { type: 'uint256' }],
+        [coerceForType(outerKey, outerKeyType), BigInt(outerSlot)],
+    );
+    const innerSlot = keccak256(innerEncoded);
+
+    const valueEncoded = encodeAbiParameters(
+        [{ type: innerKeyType }, { type: 'uint256' }],
+        [coerceForType(innerKey, innerKeyType), BigInt(innerSlot)],
+    );
+    return keccak256(valueEncoded);
+}
+
+// Coerce JS values to the runtime types viem's encodeAbiParameters
+// expects. Address params want 0x-prefixed strings; uint params want
+// bigint.
+function coerceForType(v, type) {
+    if (type === 'address') {
+        if (typeof v !== 'string' || !v.startsWith('0x')) {
+            throw new Error(`coerceForType(address): expected 0x-string, got ${typeof v}`);
+        }
+        return v;
+    }
+    if (type === 'uint256') {
+        return BigInt(v);
+    }
+    throw new Error(`coerceForType: unsupported type ${type}`);
+}
+
+/**
+ * Set an ERC1155 `balanceOf(holder, tokenId)` result by writing
+ * directly to the contract's `_balances` mapping storage. Sister
+ * to `setErc20Balance`; the difference is the nested mapping
+ * (`mapping(uint256 => mapping(address => uint256))` vs ERC20's
+ * single `mapping(address => uint256)`).
+ *
+ * **Caveat** (same as ERC20 sister): doesn't update event logs or
+ * any auxiliary supply/balance trackers the contract may maintain.
+ * For OpenZeppelin's standard ERC1155, only `_balances` and the
+ * `TransferSingle` event matter for downstream reads — and the
+ * event isn't emitted from a storage write, so app code that
+ * subscribes to `TransferSingle` will miss this funding. Use
+ * impersonate-and-mint via the contract's own `mint` function if
+ * a scenario specifically asserts on event subscriptions.
+ *
+ * @param {string} rpcUrl
+ * @param {`0x${string}`} contract
+ * @param {`0x${string}`} holder
+ * @param {bigint|number|string} tokenId  ERC1155 position id
+ * @param {bigint|number|string} amount
+ * @param {bigint|number} [slot=0]  outer mapping slot index
+ * @returns {Promise<unknown>}
+ */
+export async function setErc1155Balance(rpcUrl, contract, holder, tokenId, amount, slot = 0) {
+    // ERC1155 layout: mapping(tokenId => mapping(account => balance))
+    // outerKey = tokenId, innerKey = holder
+    const key = nestedMappingStorageKey(
+        tokenId, holder, slot,
+        /* outerKeyType */ 'uint256',
+        /* innerKeyType */ 'address',
+    );
+    return setStorageAt(rpcUrl, contract, key, BigInt(amount));
+}
+
+/**
+ * Read an ERC1155 balance via `eth_call` (proper
+ * `balanceOf(address, uint256)` call, not a storage read). Returns
+ * a bigint.
+ *
+ * Use as the verification step after `setErc1155Balance` — wrong
+ * slot writes show up as the unchanged on-chain balance.
+ *
+ * @param {string} rpcUrl
+ * @param {`0x${string}`} contract
+ * @param {`0x${string}`} holder
+ * @param {bigint|number|string} tokenId
+ * @returns {Promise<bigint>}
+ */
+export async function getErc1155Balance(rpcUrl, contract, holder, tokenId) {
+    const data = encodeFunctionData({
+        abi:          ERC1155_BALANCE_OF_ABI,
+        functionName: 'balanceOf',
+        args:         [holder, BigInt(tokenId)],
+    });
+    const result = await anvilRpc(rpcUrl, 'eth_call', [
+        { to: contract, data },
+        'latest',
+    ]);
+    return decodeFunctionResult({
+        abi:          ERC1155_BALANCE_OF_ABI,
+        functionName: 'balanceOf',
+        data:         result,
+    });
 }

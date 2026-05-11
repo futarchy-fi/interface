@@ -2313,6 +2313,104 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-2.7 (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — fifth step
+  of the multi-iteration fork bootstrap. Adds ERC1155
+  storage-write primitives — the foundation that
+  `mintConditionalPosition` (next iteration) sits on.
+
+  * **`fixtures/fork-state.mjs` extensions**:
+    - `nestedMappingStorageKey(outerKey, innerKey,
+      outerSlot, outerKeyType, innerKeyType)` —
+      computes the storage key for `mapping(K1 =>
+      mapping(K2 => V))` using Solidity's nested
+      keccak layout:
+        inner_slot   = keccak256(abi.encode(outerKey, S))
+        actual_slot  = keccak256(abi.encode(innerKey, inner_slot))
+      Argument types are explicit (`'address'` /
+      `'uint256'`) — future-proofs against bytes32 vs
+      smaller-uint encoding mismatches that pad
+      differently.
+    - `setErc1155Balance(rpcUrl, contract, holder,
+      tokenId, amount, slot=0)` — writes to ERC1155
+      `_balances` (`mapping(uint256 => mapping(address
+      => uint256))`); outerKey=tokenId, innerKey=holder
+      per the OpenZeppelin layout.
+    - `getErc1155Balance(rpcUrl, contract, holder,
+      tokenId)` — proper `eth_call` to
+      `balanceOf(address, uint256)` (note the TWO
+      args; ERC1155 selector `0x00fdd58e` distinct
+      from ERC20's `0x70a08231`), decoded to bigint.
+      Verification step for the storage write.
+    - New `ERC1155_BALANCE_OF_ABI` fragment
+      (alongside the existing ERC20 fragment).
+
+  * **Caveat (same as ERC20 sister)**: storage-write
+    funding doesn't emit `TransferSingle` events.
+    Most app code reads `balanceOf` directly so this
+    is rarely a problem; flag if a scenario asserts
+    on event subscriptions (then use
+    impersonate-and-mint via the contract's actual
+    `mint` function for that one).
+
+  * **Smoke test extensions**
+    (`tests/smoke-fork-state.test.mjs`) — 6 new
+    tests:
+    - nestedMappingStorageKey matches a deterministic
+      reference value (caught a regression that
+      reverses outer/inner encoding order)
+    - Different outerKey / innerKey / outerSlot all
+      produce different storage keys (parametric
+      independence checks)
+    - setErc1155Balance issues setStorageAt at the
+      computed nested key
+    - getErc1155Balance encodes the ERC1155
+      `balanceOf(address, uint256)` selector
+      (`0x00fdd58e`) — distinct from ERC20's
+      `0x70a08231`; a regression that reuses ERC20
+      selector here would silently call the wrong
+      function
+
+  * **What's NOT done this iteration**: actual
+    `mintConditionalPosition()` for the futarchy
+    probe market. That requires:
+    - identifying the ConditionalTokens contract
+      address on Gnosis (probably standard Gnosis
+      ConditionalTokens framework)
+    - deriving the position IDs (token IDs) for
+      YES + NO outcomes of the probe market — needs
+      `getCollectionId` / `getPositionId` from the
+      conditional-tokens framework, given
+      `parentCollectionId = 0x00...00`,
+      `conditionId = ?`, `partition = [1, 2]`,
+      `collateralToken = sDAI`
+    - VERIFYING the slot of the ConditionalTokens
+      contract's `_balances` mapping (likely 0,
+      OZ default; live-verify same as sDAI)
+
+    Lands in step 2.8 with the ERC1155 primitives
+    shipped here as the foundation.
+
+  * Total interface harness smoke tests: 43/43
+    (was 37, +6 new).
+
+  * **Multi-iteration plan progress**:
+    - ✓ Step 1: anvil in webServer
+    - ✓ Step 2: fork-state primitives + globalSetup
+    - ✓ Step 2.5: ERC20 storage-write + sDAI wrapper
+    - ✓ Step 2.6: wire sDAI into globalSetup +
+      live-verify slot
+    - ✓ Step 2.7 (this slice): ERC1155 storage-write
+      primitives
+    - ⏳ Step 2.8: `mintConditionalPosition()` —
+      identify ConditionalTokens contract + derive
+      probe-market position IDs + live-verify slot
+    - ⏳ Step 3: per-scenario fork-pin support
+    - ⏳ Step 4: positions scenario asserting real
+      on-chain ERC1155 balances
+    - ⏳ Step 5: liquidity scenario
+    - ⏳ Step 6: CI workflow Foundry install step
+
 - **slice fork-bootstrap-step-2.6 (Phase 7 fork wiring)**
   (this iteration, on the interface side) — fourth
   step of the multi-iteration fork bootstrap. Wires

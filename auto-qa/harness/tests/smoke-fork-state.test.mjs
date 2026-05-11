@@ -31,6 +31,9 @@ import {
     fundWalletWithSDAI,
     SDAI_TOKEN_GNOSIS_ADDRESS,
     SDAI_BALANCE_SLOT,
+    nestedMappingStorageKey,
+    setErc1155Balance,
+    getErc1155Balance,
 } from '../fixtures/fork-state.mjs';
 
 // ── Stub server fixture ──────────────────────────────────────────────
@@ -326,6 +329,83 @@ test('fundWalletWithSDAI — defaults amount to 1000 sDAI (1e21 wei)', async () 
         await fundWalletWithSDAI(url, '0xabcdef0000000000000000000000000000000000');
         // 1000e18 = 0x3635c9adc5dea00000
         assert.match(calls[0].params[2], /0+3635c9adc5dea00000$/);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+// ── Step 2.7: ERC1155 storage-write helpers ─────────────────────────
+
+test('nestedMappingStorageKey — matches deterministic reference value', () => {
+    // For mapping(uint256 => mapping(address => uint256)) at outer slot 0,
+    // accessing [tokenId=1][holder=0x...01]:
+    //   inner_slot   = keccak256(abi.encode(uint256(1), uint256(0)))
+    //   actual_slot  = keccak256(abi.encode(address(0x...01), uint256(inner_slot)))
+    const key = nestedMappingStorageKey(
+        1n, '0x0000000000000000000000000000000000000001', 0,
+    );
+    assert.equal(
+        key.toLowerCase(),
+        '0xe3be84349242383ed4b31bbb7ede08a8080ac9d5e828342f449d34bf731539e9',
+    );
+});
+
+test('nestedMappingStorageKey — different outerKey produces different storage key', () => {
+    const k1 = nestedMappingStorageKey(1n, '0x0000000000000000000000000000000000000001', 0);
+    const k2 = nestedMappingStorageKey(2n, '0x0000000000000000000000000000000000000001', 0);
+    assert.notEqual(k1, k2);
+});
+
+test('nestedMappingStorageKey — different innerKey produces different storage key', () => {
+    const k1 = nestedMappingStorageKey(1n, '0x0000000000000000000000000000000000000001', 0);
+    const k2 = nestedMappingStorageKey(1n, '0x0000000000000000000000000000000000000002', 0);
+    assert.notEqual(k1, k2);
+});
+
+test('nestedMappingStorageKey — different outerSlot produces different storage key', () => {
+    const k1 = nestedMappingStorageKey(1n, '0x0000000000000000000000000000000000000001', 0);
+    const k2 = nestedMappingStorageKey(1n, '0x0000000000000000000000000000000000000001', 5);
+    assert.notEqual(k1, k2);
+});
+
+test('setErc1155Balance — issues setStorageAt at the nested mapping slot', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: null };
+    });
+    try {
+        const holder = '0xabcdef0000000000000000000000000000000000';
+        const tokenId = 42n;
+        const expected = nestedMappingStorageKey(tokenId, holder, 0, 'uint256', 'address');
+        await setErc1155Balance(url, '0xtoken1155', holder, tokenId, 100n);
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].method, 'anvil_setStorageAt');
+        assert.equal(calls[0].params[0].toLowerCase(), '0xtoken1155');
+        assert.equal(calls[0].params[1].toLowerCase(), expected.toLowerCase());
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('getErc1155Balance — encodes balanceOf(address, uint256) + decodes uint256 result', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: '0x000000000000000000000000000000000000000000000000000000000000007b' };
+    });
+    try {
+        const balance = await getErc1155Balance(
+            url,
+            '0xtoken1155',
+            '0x0000000000000000000000000000000000000001',
+            42n,
+        );
+        assert.equal(balance, 123n); // 0x7b = 123
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].method, 'eth_call');
+        // ERC1155 balanceOf selector: keccak256("balanceOf(address,uint256)")[0:4] = 0x00fdd58e
+        assert.match(calls[0].params[0].data, /^0x00fdd58e/);
     } finally {
         await closeStub(server);
     }
