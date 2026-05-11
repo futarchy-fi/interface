@@ -24,8 +24,8 @@ test('scenarios-chaos-matrix CLI — prints per-page chaos coverage matrix', () 
     assert.match(r.stdout, /\d+ scenarios total · \d+ per-endpoint chaos scenarios across \d+ pages/);
 
     // At least one per-page matrix appears, with both registry +
-    // candles columns and all 6 canonical failure-mode rows.
-    assert.match(r.stdout, /## Page: \/\w+.*\d+\/12 cells filled/);
+    // candles columns and all canonical failure-mode rows.
+    assert.match(r.stdout, /## Page: \/\w+.*\d+\/\d+ cells filled/);
     assert.match(r.stdout, /\| failure mode\s+\| registry\s+\| candles\s+\|/);
     for (const mode of [
         'hard 502',
@@ -34,6 +34,7 @@ test('scenarios-chaos-matrix CLI — prints per-page chaos coverage matrix', () 
         'malformed body',
         'per-row corrupt',
         'slow valid resp',
+        'rate-limited 429',
     ]) {
         assert.match(r.stdout, new RegExp(`\\| ${mode}\\s+\\|`));
     }
@@ -54,15 +55,17 @@ test('scenarios-chaos-matrix CLI — prints per-page chaos coverage matrix', () 
     assert.match(r.stdout, /Total: \d+ scenarios — \d+ chaos .* \d+ non-chaos/);
 });
 
-test('scenarios-chaos-matrix CLI — both /companies and /markets matrices reach 12/12', () => {
-    // The current state of the harness is 12/12 cells filled on
-    // both pages. This assertion pins that state — if a new
-    // scenario shifts the count, the test surfaces it (so the
-    // author can update PROGRESS.md or the test deliberately).
-    // Loosen if the matrix legitimately grows beyond 12/12 per
-    // page (e.g., new failure-mode rows added).
+test('scenarios-chaos-matrix CLI — both pages have most chaos cells filled', () => {
+    // Pins current state of the harness. With 7 failure-mode
+    // rows × 2 endpoint columns = 14 cells per page. /companies
+    // has all 6 OG modes + rate-limited registry = 13/14;
+    // /markets/[address] has the 6 OG modes only = 12/14. As
+    // new chaos scenarios fill cells, bump the floor numerator
+    // here. The test EXISTS so a regression that DROPS a cell
+    // (e.g., deleting a scenario without renaming the file)
+    // surfaces immediately.
     const r = spawnSync('node', [SCRIPT], { encoding: 'utf8' });
     assert.equal(r.status, 0);
-    assert.match(r.stdout, /Page: \/companies — 12\/12 cells filled/);
-    assert.match(r.stdout, /Page: \/markets\/\[address\] — 12\/12 cells filled/);
+    assert.match(r.stdout, /Page: \/companies — (1[3-9]|[2-9]\d)\/14 cells filled/);
+    assert.match(r.stdout, /Page: \/markets\/\[address\] — (1[2-9]|[2-9]\d)\/14 cells filled/);
 });

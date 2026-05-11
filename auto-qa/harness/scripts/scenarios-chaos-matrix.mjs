@@ -53,6 +53,7 @@ const FAILURE_MODE_KEYWORDS = [
     ['per-row corrupt',   ['corrupt-org', 'corrupt-row', 'corrupt-pool']],
     ['partial response',  ['-partial']],
     ['slow valid resp',   ['-slow']],
+    ['rate-limited 429',  ['-rate-limited']],
 ];
 
 // Failure modes that count toward the chaos matrix. Listed in the
@@ -64,6 +65,7 @@ const CANONICAL_FAILURE_MODES = [
     'malformed body',
     'per-row corrupt',
     'slow valid resp',
+    'rate-limited 429',
 ];
 
 // Canonical endpoints (the columns of the chaos matrix).

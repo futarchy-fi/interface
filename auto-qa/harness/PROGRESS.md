@@ -2313,6 +2313,93 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 40-scenario-36-registry-rate-limited
+  (Phase 7 chaos library — NEW failure-mode row)**
+  (this iteration, on the interface side) — opens
+  a NEW row of the chaos matrix:
+  "rate-limited 429". Adds scenario #36
+  (registry-rate-limited) on /companies and wires
+  the failure-mode classifier in
+  `scenarios:chaos-matrix` to recognize it.
+  Distinct from #02 (hard 502) and #07 (malformed
+  body) because:
+  - 429 status semantically means "try again
+    soon" rather than "the request itself was
+    wrong" or "the server is broken"
+  - Clients with auto-retry-on-429 take a
+    DIFFERENT code path than they do for 5xx
+    errors
+  - The `Retry-After` header is actionable —
+    well-behaved clients should respect it; many
+    don't, leading to thundering-herd retry
+    storms when the rate limiter clears
+
+  * **The scenario** — `36-registry-rate-limited`
+    on /companies. Registry returns
+    `429 Too Many Requests` with
+    `Retry-After: 1` and a JSON-shape error body
+    (most production rate limiters return
+    `{"errors": [{"message": "rate limited"}]}`-
+    ish — keeping the body parseable isolates
+    the "status-code-only" handling from the
+    "body-parse-also-fails" handling that #07
+    covers).
+
+  * **Bug-shapes captured** (NEW vs #02/#05/#07):
+    - Page CRASHES on 429 — fetch's `.then`
+      branch fires (status 429 is "successful"
+      from a Promise standpoint) and the
+      consumer doesn't check `response.ok`
+    - Page treats 429 as IF the request
+      succeeded with empty data (silently
+      empties orgs list — no telemetry, no
+      retry, no user-visible signal)
+    - Page IMMEDIATELY RETRIES with no
+      Retry-After respect (thundering-herd
+      shape; invisible without infra
+      instrumentation)
+    - Page renders raw "rate limited" error
+      message in the org list (leaks infra
+      error to UX surface)
+    - Page hangs in loading state forever
+      (downstream consumer crashes on the
+      error envelope where it expected
+      `data.organizations`)
+
+  * **Chaos-matrix script + smoke test
+    update**: `scenarios:chaos-matrix` now
+    classifies `-rate-limited` filenames
+    under the new `rate-limited 429` failure
+    mode (added to FAILURE_MODE_KEYWORDS +
+    CANONICAL_FAILURE_MODES). Smoke test pin
+    relaxed from "12/12" to a regex range
+    (`(1[3-9]|[2-9]\d)/14` for /companies) so
+    the test surfaces drops without breaking
+    on legitimate growth.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no count change;
+      smoke test for chaos-matrix updated to
+      match the new row)
+    - Scenario #36 itself: passed in 8.7s on
+      first run
+    - Catalog regenerated: 36 scenarios
+      (was 35)
+    - Matrix script output: /companies now
+      13/14 cells filled (12 OG + 1 new),
+      /markets/[address] still 12/14
+
+  * **What's NEXT** (chaos-matrix at 25/28
+    cells filled — 89.3% coverage):
+    - #37 candles-rate-limited on /companies
+      (closes the registry/candles symmetry on
+      the new row)
+    - #38/#39 mirror to /markets/[address]
+    - That'd close out 4 more cells, bringing
+      the matrix to 29/28 (28 cells filled
+      across 28 cells with 4 cross-page
+      symmetric mirrors)
+
 - **slice 39-scenarios-chaos-matrix-script
   (Phase 7 ergonomics)** (this iteration, on the
   interface side) — adds
