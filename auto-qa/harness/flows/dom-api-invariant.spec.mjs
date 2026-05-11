@@ -459,6 +459,96 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row.locator('td').nth(3)).toHaveText('10');
     });
 
+    test('slice 4i — chain DEFAULT branch (no metadata.chain → chainId=100 default → "Gnosis")', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Completes the chain-formatter triplet alongside slice 4c v1
+        // (lookup-table branch) and slice 4c v2 (template-literal
+        // fallback branch). The three branches live in DIFFERENT
+        // places in the code:
+        //
+        //   - useAggregatorCompanies.js (chainId resolution):
+        //       const chainId = meta.chain
+        //           ? parseInt(meta.chain, 10) : 100;
+        //     ↑ default branch fires when meta.chain is absent/falsy
+        //
+        //   - ChainBadge.jsx (rendering):
+        //       const cfg = CHAIN_CONFIG[chainId] ?? FALLBACK;
+        //     ↑ lookup-table branch fires when chainId is in
+        //       CHAIN_CONFIG (4c v1: chainId=10 → "Optimism")
+        //     ↑ template-literal fallback fires when chainId is
+        //       absent (4c v2: chainId=999 → "Chain 999")
+        //     ↑ DEFAULT branch (this slice): chainId=100 → "Gnosis"
+        //
+        // The DEFAULT branch is structurally important because
+        // 100 (Gnosis) is the PRODUCTION chain for futarchy.fi. A
+        // regression that drops the `: 100` default would make all
+        // orgs with absent metadata.chain render through the
+        // fallback path as "Chain undefined" or similar — a
+        // visible product bug affecting every default-chain org.
+        //
+        // Test inputs:
+        //   - orgMetadata: null (the fixture's default, so we don't
+        //     even need to pass it explicitly — using the bare
+        //     fixture variant makes the test STRICTLY tighter:
+        //     anything that breaks the default-chain path AND
+        //     happens to override the fixture's defaults would
+        //     surface here)
+        //   - proposals: [] (irrelevant to chain; keeps the test
+        //     focused on the chain cell)
+        //   Expected: td[4] === "Gnosis"
+        //
+        // Bug classes caught (NEW vs 4c v1 and 4c v2):
+        //   - Regression that DROPS the `: 100` default in the
+        //     chainId resolution (`meta.chain ? parseInt(...) :
+        //     undefined`) — would render "Chain undefined" or
+        //     "Chain NaN" via the template-literal fallback
+        //   - Regression that changes the default chainId to a
+        //     different number (e.g., a refactor that flips the
+        //     default to mainnet `1`) — would render "ETH"
+        //     instead of "Gnosis" — silent product bug because
+        //     the chain badge is small and easy to overlook
+        //   - Regression that removes the Gnosis entry from
+        //     CHAIN_CONFIG (or renames its shortName) — would
+        //     render "Chain 100" or undefined
+        //   - Regression in the fixture that injects a stale
+        //     metadata.chain value as a SIDE EFFECT (e.g., a
+        //     helper that defaults to `JSON.stringify({chain: '1'})`
+        //     when null is passed) — would render the wrong
+        //     chain even when the test asks for default
+        //
+        // Why finishing the chain triplet now: the chain
+        // identifier appears in many places throughout the app
+        // (wallet stub, RainbowKit, RPC routing). A regression
+        // that breaks the DOM display would still let the underlying
+        // chain wiring work — silent visual bug. With v1, v2, and
+        // this i in the catalog, all three rendering paths have
+        // explicit probes; a future change that breaks any one
+        // surfaces with a clear failure log.
+
+        // Bare-minimum mock — no orgMetadata, no proposals.
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({}));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        // td[4] is the chain cell; ChainBadge renders shortName.
+        // Default chain (chainId=100) → CHAIN_CONFIG[100].shortName
+        // === "Gnosis" (per src/components/futarchyFi/companyList/
+        // components/ChainBadge.jsx).
+        await expect(row.locator('td').nth(4)).toHaveText('Gnosis');
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 

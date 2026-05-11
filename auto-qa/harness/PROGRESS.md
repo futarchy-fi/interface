@@ -2313,6 +2313,109 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 53-dom-api-invariant-chain-default-branch
+  (Phase 5 invariant catalog — 12th DOM↔API
+  invariant; completes the chain-formatter
+  triplet)** (this iteration, on the interface
+  side) — completes the chain-formatter triplet
+  alongside slice 4c v1 (chain=10 → "Optimism"
+  lookup) and slice 4c v2 (chain=999 → "Chain
+  999" template-literal fallback). The three
+  branches live in DIFFERENT places in the code:
+    - useAggregatorCompanies.js chainId
+      resolution:
+      `meta.chain ? parseInt(meta.chain, 10) : 100`
+      ← DEFAULT branch fires when meta.chain is
+      absent/falsy
+    - ChainBadge.jsx rendering:
+      `cfg = CHAIN_CONFIG[chainId] ?? FALLBACK`
+      ← lookup-table branch (v1: chain=10) vs
+        template-literal fallback (v2: chain=999)
+      ← DEFAULT branch (4i): chainId=100 →
+        "Gnosis"
+
+  * **The new invariant** —
+    `slice 4i — chain DEFAULT branch
+    (no metadata.chain → chainId=100 default →
+    "Gnosis")`. Mock with bare-minimum fixture
+    (no orgMetadata, no proposals). Expected:
+    `td[4]` renders `"Gnosis"` — proves the
+    default chain resolution + CHAIN_CONFIG[100]
+    lookup both work.
+
+  * **Why finishing the chain triplet now**:
+    100 (Gnosis) is the PRODUCTION chain for
+    futarchy.fi. A regression that drops the
+    `: 100` default would make all orgs with
+    absent `metadata.chain` render through the
+    fallback path as "Chain undefined" or
+    "Chain NaN" — visible product bug affecting
+    every default-chain org. With v1, v2, and
+    this 4i in the catalog, all three rendering
+    paths have isolated probes that point at
+    the exact branch when broken.
+
+  * **Code references pinned**:
+    - `src/hooks/useAggregatorCompanies.js`:
+      `const chainId = meta.chain ? parseInt(meta.chain, 10) : 100;`
+    - `src/components/futarchyFi/companyList/components/ChainBadge.jsx`:
+      `100: { shortName: "Gnosis", ... }`
+
+  * **Bug classes caught** (NEW vs 4c v1 and
+    4c v2):
+    - Regression that DROPS the `: 100` default
+      in chainId resolution — renders "Chain
+      undefined" or "Chain NaN" via the
+      template-literal fallback
+    - Regression that changes the default chainId
+      to a different number (e.g., mainnet `1`)
+      — renders "ETH" instead of "Gnosis";
+      silent product bug because the chain
+      badge is small and easy to overlook
+    - Regression that removes the Gnosis entry
+      from CHAIN_CONFIG or renames its shortName
+      — renders "Chain 100" via the fallback
+    - Regression in the fixture that injects a
+      stale `metadata.chain` value as a side
+      effect — renders the wrong chain even
+      when the test asks for default
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 12 DOM↔API invariant tests pass:
+      22.8s (was 11 in 21.6s); new slice 4i
+      alone: 1.6s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (12 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4i chain default ★   | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (toFixed precision)     |
+
+  * **What's next**:
+    - Price-formatter precision branch
+      (YES>=1 + NO<1 → "1.4200 SDAI" — proves
+      formatter handles values >=1)
+    - Proposal description field rendering
+    - Org-row count when ALL filter conditions
+      collide (archived + hidden + resolved in
+      one proposal — should be excluded by
+      archived, not double-counted)
+    - Image/logo path (cover image vs fallback
+      → `/assets/fallback-company.png`)
+
 - **slice 52-dom-api-invariant-resolution-outcome-branch
   (Phase 5 invariant catalog — 11th DOM↔API
   invariant; completes the resolved-OR coverage)**
