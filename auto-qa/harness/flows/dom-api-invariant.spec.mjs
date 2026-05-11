@@ -757,6 +757,94 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         );
     });
 
+    test('slice 4n — cover-image branch of fallback chain (metadata.coverImage wins over logo and fallback)', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Companion to slice 4m (fallback branch). The 3-tier image
+        // cascade in `useAggregatorCompanies.js:95` is:
+        //   image: meta.coverImage || meta.logo
+        //          || '/assets/fallback-company.png'
+        //
+        // Branches:
+        //   - coverImage set    → uses coverImage (this slice)
+        //   - coverImage unset, logo set → uses logo (future slice)
+        //   - both unset        → uses fallback (slice 4m)
+        //
+        // This slice pins the FIRST branch: when coverImage is set,
+        // it wins regardless of whether logo is also set. The
+        // test mocks only coverImage (no logo) to keep the probe
+        // narrow — a future iteration can add a mixed-flag test
+        // (both coverImage and logo set, coverImage still wins)
+        // to mirror the filter-chain stress test pattern of 4l.
+        //
+        // The probe path is a relative URL (`/test-probe-cover.png`)
+        // rather than an external URL because Next.js Image is
+        // strict about external domains — they must be whitelisted
+        // in next.config.js or the optimization endpoint refuses
+        // them. A relative path is always safe and renders the
+        // same code path.
+        //
+        // Bug classes caught (NEW vs slice 4m):
+        //   - Regression that DROPS the coverImage branch from
+        //     the cascade (uses only `meta.logo || fallback`) —
+        //     would render the fallback even when coverImage is
+        //     set, leak the cover-image asset entirely
+        //   - Regression that REORDERS the cascade (e.g.,
+        //     `logo || coverImage || fallback`) — if logo
+        //     happened to be set in production data, it would
+        //     win over coverImage, silently changing which
+        //     asset displays. This slice doesn't catch the
+        //     reorder directly (logo is undefined here) but
+        //     the symmetric future slice would.
+        //   - Regression that hard-codes the fallback ignoring
+        //     metadata entirely — also caught by slice 4m, but
+        //     this slice catches it from a DIFFERENT input
+        //     (coverImage set, expected to win) so the failure
+        //     log points at a more specific cause.
+        //   - Regression that strips the coverImage field from
+        //     the GraphQL selection — `meta.coverImage` would
+        //     be undefined, falling through to fallback. This
+        //     slice catches the symptom; a future iteration can
+        //     also verify the network request contains the
+        //     `coverImage` field selection.
+        //
+        // Substring match on `test-probe-cover` (omitting the
+        // `.png` suffix and any path prefix) tolerates Next.js's
+        // optimization endpoint wrapping (e.g.,
+        // `/_next/image?url=%2Ftest-probe-cover.png&w=64&q=75`)
+        // and ALSO any future change in how URLs are encoded
+        // (e.g., a switch from URL-encoded to base64-encoded
+        // query params).
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            orgMetadata: JSON.stringify({ coverImage: '/test-probe-cover.png' }),
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        // The img's src attribute should reference our cover-image
+        // probe path. Substring match tolerates the Next.js Image
+        // optimization endpoint wrapping. CRITICALLY, the assertion
+        // should NOT pass if the fallback was rendered instead —
+        // `test-probe-cover` is distinctive enough that it can't
+        // appear in `fallback-company.png` (which slice 4m catches).
+        await expect(row.locator('img').first()).toHaveAttribute(
+            'src',
+            /test-probe-cover/,
+        );
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 

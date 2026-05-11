@@ -2313,6 +2313,134 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 58-dom-api-invariant-cover-image-branch
+  (Phase 5 invariant catalog — 17th DOM↔API
+  invariant; attribute-level dimension growing)**
+  (this iteration, on the interface side) —
+  companion to slice 4m (fallback branch).
+  Pins the FIRST branch of the 3-tier image
+  cascade in `useAggregatorCompanies.js:95`:
+    image: meta.coverImage || meta.logo
+           || '/assets/fallback-company.png'
+
+  Branches:
+    - coverImage set    → uses coverImage (4n) ★
+    - coverImage unset, logo set → uses logo (future slice 4o)
+    - both unset        → uses fallback (4m)
+
+  * **The new invariant** —
+    `slice 4n — cover-image branch of fallback
+    chain`. Mock `orgMetadata: JSON.stringify({
+    coverImage: '/test-probe-cover.png' })`.
+    Assert `row.locator('img').first()` has
+    `src` matching `/test-probe-cover/` regex.
+
+  * **Why a RELATIVE path probe**: Next.js Image
+    is strict about external domains — they must
+    be whitelisted in `next.config.js` or the
+    optimization endpoint refuses them. A
+    relative path (`/test-probe-cover.png`) is
+    always safe and renders the same image
+    pipeline. Future iterations that want to
+    probe external-URL handling specifically
+    can configure the test environment to
+    whitelist a test domain.
+
+  * **Why `test-probe-cover` as the distinctive
+    token**: it's unmistakable in the rendered
+    src and CANNOT appear in `fallback-company.png`
+    (which slice 4m would render). So a
+    regression that returns the fallback when
+    coverImage is set lights up here with a
+    clear "expected substring not found" failure
+    log.
+
+  * **Bug classes caught** (NEW vs slice 4m):
+    - Regression that DROPS the coverImage
+      branch from the cascade (uses only
+      `meta.logo || fallback`) — would render
+      the fallback even when coverImage is set,
+      leak the cover-image asset entirely
+    - Regression that REORDERS the cascade
+      (e.g., `logo || coverImage || fallback`)
+      — if logo were also set, it would win
+      silently
+    - Regression that hard-codes the fallback
+      ignoring metadata entirely — caught by
+      4m, but the failure here points at a more
+      specific cause (coverImage was set but
+      ignored)
+    - Regression that strips the `coverImage`
+      field from the GraphQL query selection —
+      `meta.coverImage` undefined → falls
+      through. The symptom shows here; future
+      iteration can ALSO verify request-body
+      content for the field
+
+  * **Substring-match strategy pinned**: the
+    probe token is `test-probe-cover` (omitting
+    `.png` and any path prefix). This tolerates:
+    - URL-encoded forms via Next.js Image
+      optimization endpoint (e.g.,
+      `/_next/image?url=%2Ftest-probe-cover.png&w=64&q=75`)
+    - Any future change in URL encoding (e.g.,
+      a switch from URL-encoded to base64-encoded
+      query params)
+    - Path-prefix changes (e.g., a CDN prefix
+      added in production builds)
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 17 DOM↔API invariant tests pass:
+      27.2s (was 16 in 26.4s); new slice 4n
+      alone: 1.6s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (17 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4m logo fallback     | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4n cover-image ★     | coverImage='/test-probe-cover.png' → img.src       |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: 13 invariants
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: **2 invariants**
+      (was 1; 4m + 4n now)
+    The attribute-level dimension is now
+    pluralized — future iterations can extend
+    it to other attributes (href, aria-label,
+    data-testid, etc.).
+
+  * **What's next**:
+    - Logo-branch of the image cascade
+      (metadata.logo set, no coverImage —
+      completes the image triplet alongside
+      4m and 4n)
+    - href attribute on the org row's nav link
+      (clicking → /markets/{address} routing)
+    - aria-label on active/total cells (a11y
+      dimension)
+    - Cross-card-vs-row consistency
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers)
+
 - **slice 57-dom-api-invariant-logo-fallback-src
   (Phase 5 invariant catalog — 16th DOM↔API
   invariant; FIRST attribute-level assertion)**
