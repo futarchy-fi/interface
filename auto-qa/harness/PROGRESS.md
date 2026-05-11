@@ -2313,6 +2313,196 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 85-build-mode-runtime (Phase 6 — EIGHTH
+  NEW assertion-target KIND: post-minification
+  runtime regressions)** (this iteration, on the
+  interface side) — Adds the 8th distinct
+  assertion target in the capability matrix. The
+  previous 7 KINDs all ran against `next dev` —
+  unminified, with HMR-friendly module ordering
+  and React StrictMode masking. This slice runs
+  the existing page-error monitor (KIND 3) against
+  the actual production-minified bundle, catching
+  a class of regression that EVERY dev-mode
+  scenario mechanically cannot see.
+
+  * **The KIND**: post-minification runtime
+    regressions. Concrete shapes:
+    - **TDZ crashes** — `let`/`const` referenced
+      before declaration. Terser/SWC reorders
+      bindings during minification; dev mode keeps
+      source-order so the binding-before-declare
+      crash is hidden, prod mode surfaces it on
+      every load. This is the **PR #58 shape**.
+    - **Dead-code elimination breaking a side-
+      effecting import** — minifier drops a
+      module-level `if (process.env.NODE_ENV ===
+      'production') registerSomething()` block
+      because static analysis decides the branch
+      is unreachable.
+    - **Strict-mode-only behavior** — Next.js
+      strict mode double-renders in dev,
+      papering over effects that don't return a
+      cleanup. Prod renders once; if the missing
+      cleanup mattered, it shows up here.
+    - **`output: 'export'` static-mismatch** —
+      page-level data fetching that "worked" in
+      dev because `next dev` falls back to a
+      server render fails silently when emitted
+      as a static `companies.html`.
+
+    Each of these is INVISIBLE to dev-mode runs.
+    A KIND no prior assertion target catches.
+
+  * **Why this needs new infra**: Playwright's
+    default config (`playwright.config.mjs`) starts
+    `next dev` on port 3000 via the webServer
+    block. To assert against prod, we need a
+    separate webServer config that builds + serves
+    the production output. Two non-obvious
+    blockers solved:
+
+    1. **`next start` doesn't work with
+       `output: 'export'`**. The interface's
+       `next.config.mjs` sets `output: 'export'`
+       whenever `NODE_ENV !== 'development'`, so
+       `npm run build` emits a static export to
+       `out/` rather than a `.next/server/` SSR
+       bundle. `next start` expects the latter and
+       refuses to launch. Solved by serving via
+       `npx serve out/ -l 3001`.
+
+    2. **SPA fallback hides per-page bundles**.
+       `serve -s` (SPA mode) catches every path
+       with `index.html` BEFORE the per-page
+       static files get matched. Visiting
+       `/companies` rendered the landing page
+       ("Markets know better than experts...")
+       instead of the companies page. Solved by
+       dropping `-s` — plain `serve out/` does
+       `/companies` → `companies.html` rewrites
+       automatically (Next.js static export
+       convention).
+
+  * **The infra**:
+    - `playwright.prod.config.mjs` — sibling of
+      `playwright.config.mjs`. Same `testDir`,
+      same fixtures, same fork setup. webServer
+      block uses `npx serve ../../out -l ${PORT}
+      --no-clipboard --no-port-switching` on port
+      3001 (vs dev's 3000). Anvil block identical.
+    - `package.json` npm scripts: `ui:prod`,
+      `ui:prod:ui`, `ui:prod:report` — mirror the
+      existing `ui:full`, `ui:full:ui`, `ui:report`
+      triplet.
+    - Build command stays `npm run build` from
+      the repo root; the prod config simply serves
+      its output.
+
+  * **Mechanical verification — the catch
+    chain**:
+    1. Injected
+       `console.error('HARNESS-PROD-PROBE-85: …')`
+       at the top of
+       `CompaniesPage.jsx:25-28`.
+    2. Built (`npm run build`) — produced
+       `out/_next/static/chunks/pages/companies-
+       c7966e2aaebd24a1.js` containing the probe
+       text inside the minified bundle.
+    3. `npm run ui:prod -- --grep
+       "48-no-page-errors"` → **FAILED**:
+       ```
+       Scenario "48-no-page-errors-companies"
+       produced 3 unexpected page error(s):
+       [console.error] HARNESS-PROD-PROBE-85:
+       slice 85 prod-mode catch verification @
+       http://localhost:3001/_next/static/chunks/
+       pages/companies-c7966e2aaebd24a1.js
+       ```
+       The hashed minified filename in the error
+       trace PROVES the catch came from the
+       production bundle, not the dev server.
+    4. Restored CompaniesPage.jsx (probe deleted).
+    5. Rebuilt — new chunk hash
+       `companies-0cc90a8a7f89b7d4.js`. The hash
+       CHANGE confirms a fresh re-bundle (no
+       stale cache hit) and the new bundle
+       contains no probe text.
+    6. `npm run ui:prod -- --grep
+       "48-no-page-errors"` → **PASSED** (640ms).
+
+    Three layers of proof:
+    - probe text present → catch happens
+    - probe text absent → catch goes away
+    - the catch trace names the minified hashed
+      file, so we know we are exercising prod
+      bytes (not dev's transpiled source)
+
+  * **Why probe-not-real-PR is OK for this
+    slice**: PR #58 (the TDZ crash that motivated
+    this whole arc) is already fixed in main, and
+    re-introducing the exact regression would
+    require finding the precise line that
+    triggered the binding reorder under terser
+    settings of that release — a multi-day
+    archaeology task. The slice's catch power is
+    proven by the mechanical chain above: any
+    similar runtime regression that surfaces only
+    in the minified bundle will be caught by the
+    same page-error monitor when scenarios are
+    run with `ui:prod` instead of `ui:full`. The
+    NEXT slice can author a prod-specific
+    scenario that targets a current TDZ-shaped
+    surface.
+
+  * **Capability matrix now spans 8 KINDS**:
+    ```
+    KIND                 | First scenario | Catches
+    ---------------------|----------------|----------
+    DOM text/attributes  | many           | text regs
+    GraphQL query shape  | 47             | schema
+    Page errors/console  | 48             | silent JS
+    URL state evolution  | 49             | URL bugs
+    Network requests     | 50             | silent net
+    Visual / user-CSS    | 51             | CSS-blocked
+    A11y heuristics      | 52             | screen-reader
+    Build-mode runtime   | 48 (via prod)  | minif-only
+    ```
+
+    Build-mode runtime reuses scenario 48 against
+    a different webServer. Every existing
+    page-error scenario instantly gains the new
+    catch power by running under `ui:prod` —
+    zero scenario re-authoring needed. The
+    multiplier effect is the point: one infra
+    slice doubles the catch surface for an entire
+    KIND already in the catalog.
+
+  * **Trade-offs of running prod mode**:
+    - Slower (no HMR, fresh build per src change)
+      — kept `fullyParallel: false` and a single
+      worker; not designed to be the default suite.
+    - Source maps still emitted, so error traces
+      are usable (you see the `console.error`
+      origin not just a minified column).
+    - Same anvil + same fixtures as dev — no
+      duplication of chain-state setup.
+
+  * **Live re-validation**:
+    - Scenario 48 wall-clock prod-mode: ~3s warm
+      (vs ~3s dev — same order, despite static
+      serve).
+    - First-build cold: ~5 min `next build`,
+      subsequent rebuilds ~1 min (Next.js cache).
+    - src/ tree clean after verification mutation
+      restored.
+
+  * **Catalog state**: 52 scenarios, **10
+    mechanically verified** (44, 45, 46, 47, 48,
+    10, 49, 50, 51, 52), now spanning **8 KINDs
+    of assertion target** including build-mode
+    runtime via a separate Playwright config.
+
 - **slice 84-a11y-heuristics (Phase 6 — seventh
   NEW assertion-target KIND: accessibility DOM
   semantics)** (this iteration, on the interface

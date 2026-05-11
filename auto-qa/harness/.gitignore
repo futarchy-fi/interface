@@ -4,6 +4,7 @@ node_modules/
 # Playwright artifacts
 .playwright/
 playwright-report/
+playwright-prod-report/
 test-results/
 *.video
 *.trace.zip
