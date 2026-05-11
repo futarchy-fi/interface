@@ -2313,6 +2313,83 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 25-scenario-22-registry-partial
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (REGISTRY, partial-
+  response) cell. Symmetric to #04
+  (candles-partial) but on the registry side.
+  Distinct code path from #02 (hard 502), #05
+  (empty 200), and #09 (single-row UNPARSEABLE
+  corruption) — every row PARSES cleanly but ONE
+  is missing an optional sub-field
+  (`metadata.conditional_pools` absent).
+
+  * **The scenario** — `22-registry-partial` on
+    `/companies`. Two proposals returned:
+    - PRIMARY (`HARNESS-PROBE-EVENT-FULL`): full
+      metadata + priced via candles
+    - DEGRADED (`HARNESS-PROBE-EVENT-PARTIAL`):
+      metadata is parseable JSON but
+      `conditional_pools` is absent — exercises
+      the optional-field branch in the
+      address-extraction step
+    Three assertions: both cards mount, primary
+    card's price renders ("0.4200 SDAI") proving
+    the degraded sibling didn't poison the
+    prefetched-price flow for the well-formed
+    row.
+
+  * **Bug-shapes captured** (NEW vs prior):
+    - DEGRADED card vanishes (overzealous filter
+      drops rows with missing optional fields)
+    - DEGRADED card CRASHES the carousel
+      (unsafe `metadata.conditional_pools.yes
+      .address` access — TypeError on
+      `undefined.yes` leaks to render)
+    - PRIMARY card's price wrongly assigned to
+      DEGRADED card (cache-key bug where missing
+      pool-address falls back to first-pool-
+      address — PR #64-shape cache misuse)
+    - DEGRADED card renders "undefined" string
+      in title/body (missing `?? ''` somewhere
+      in the formatter chain)
+    - Both cards stuck on LoadingSpinner due to
+      shared-promise rejection regression — the
+      partial-row fetch races to error and
+      blocks the otherwise-fine row's fetch
+
+  * **Helper added inline**:
+    `fakeDegradedProposal()` constructs a row
+    that's PARSEABLE but missing
+    `conditional_pools`. Local to this scenario
+    rather than promoted to `api-mocks.mjs`
+    because no other scenario currently needs
+    "structurally-degraded but parseable" — if
+    one does, the helper is one copy/promote
+    away.
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #22 itself: passed in 10.2s on
+      first run
+    - Catalog regenerated: 22 scenarios (was 21)
+
+  * **Chaos coverage matrix on /companies after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #02      | #03     |
+    | partial response  | #22 ★    | #04     |
+    | empty 200         | #05      | #21     |
+    | malformed body    | #07      | #08     |
+    | per-row corrupt   | #09      |   —     |
+    | slow valid resp   | #19      | #20     |
+    11 of 12 cells filled. Last gap: (candles,
+    per-row corrupt) — a candles response with
+    one valid pool + one structurally-degraded
+    pool, mirroring #09's defensive-coding
+    regression test on the candles side.
+
 - **slice 24-scenario-21-candles-empty
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (CANDLES, empty-200)
