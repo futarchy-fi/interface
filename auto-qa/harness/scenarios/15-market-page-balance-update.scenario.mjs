@@ -75,7 +75,11 @@ import {
     makeGraphqlMockHandler,
     makeMarketCandlesMockHandler,
 } from '../fixtures/api-mocks.mjs';
-import { setErc20Balance, SDAI_TOKEN_GNOSIS_ADDRESS } from '../fixtures/fork-state.mjs';
+import {
+    setErc20Balance,
+    getErc20Balance,
+    SDAI_TOKEN_GNOSIS_ADDRESS,
+} from '../fixtures/fork-state.mjs';
 
 export default {
     name:        '15-market-page-balance-update',
@@ -117,14 +121,45 @@ export default {
         // stops new traffic; the 5s drain wait lets the existing
         // backlog at anvil clear before our mutation lands.
         async (_page, { wallet, anvilUrl, withProxyPaused }) => {
-            await withProxyPaused(async () => {
-                await setErc20Balance(
-                    anvilUrl,
-                    SDAI_TOKEN_GNOSIS_ADDRESS,
-                    wallet.address,
-                    500n * 10n ** 18n,
-                );
-            }, { drainMs: 5000 });
+            // Step 20: read-back probe. If setStorageAt times out
+            // (cold-anvil flake from steps 13-19), immediately read
+            // the slot via getErc20Balance and log the answer:
+            //   - balance === 500e18 → anvil DID write; the
+            //     setStorageAt response was lost in transit (network
+            //     / fetch / abort-controller path issue, NOT anvil)
+            //   - balance === 1000e18 (unchanged) → anvil never
+            //     wrote; the request itself never landed
+            // Either result is a definitive diagnostic — chooses
+            // between "fix the response path" vs "fix the request
+            // path" for step 21+. Probe is wrapped in its own
+            // try/catch so a failed probe doesn't mask the original
+            // error. Diagnostic-only: remove after step 20's
+            // observation lands in PROGRESS.
+            try {
+                await withProxyPaused(async () => {
+                    await setErc20Balance(
+                        anvilUrl,
+                        SDAI_TOKEN_GNOSIS_ADDRESS,
+                        wallet.address,
+                        500n * 10n ** 18n,
+                    );
+                }, { drainMs: 5000 });
+            } catch (err) {
+                console.log(`[step20] setStorageAt threw: ${err.message}`);
+                try {
+                    const probedBalance = await getErc20Balance(
+                        anvilUrl,
+                        SDAI_TOKEN_GNOSIS_ADDRESS,
+                        wallet.address,
+                    );
+                    console.log(`[step20] post-timeout sDAI balance: ${probedBalance} wei`);
+                    console.log(`[step20] expected if write landed: ${500n * 10n ** 18n} wei`);
+                    console.log(`[step20] expected if write failed:  ${1000n * 10n ** 18n} wei`);
+                } catch (probeErr) {
+                    console.log(`[step20] probe also failed: ${probeErr.message}`);
+                }
+                throw err;
+            }
         },
         // Step 4: assert the post-mutation state. Wallet sDAI = 500
         // means Available = 500 + min(YES 100, NO 100) = 600. The

@@ -2313,6 +2313,132 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-20-readback-probe
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — wraps scenario #15's mutation
+  in `try/catch` and, on `setStorageAt` timeout,
+  immediately reads the sDAI slot via
+  `getErc20Balance` and logs the value. **The
+  diagnostic answer is now definitive**: the
+  write did NOT land. `[step20] post-timeout sDAI
+  balance: 1000000000000000000000 wei` (unchanged
+  from globalSetup's funding) — anvil received
+  the `anvil_setStorageAt` (logged at line 146)
+  but never actually mutated state.
+
+  * **The probe** —
+    ```js
+    try {
+        await withProxyPaused(async () => {
+            await setErc20Balance(...);
+        }, { drainMs: 5000 });
+    } catch (err) {
+        console.log('[step20] setStorageAt threw:', err.message);
+        try {
+            const probedBalance = await getErc20Balance(...);
+            console.log('[step20] post-timeout balance:', probedBalance, 'wei');
+        } catch (probeErr) {
+            console.log('[step20] probe also failed:', probeErr.message);
+        }
+        throw err;
+    }
+    ```
+    Probe wrapped in its own try/catch so a failed
+    probe doesn't mask the original error. Probe
+    is diagnostic-only — to be removed once the
+    actual fix lands.
+
+  * **What the run showed**:
+    ```
+    [step20] setStorageAt threw: [fork-state] anvilRpc(anvil_setStorageAt) aborted after 60009ms
+    [step20] post-timeout sDAI balance: 1000000000000000000000 wei
+    [step20] expected if write landed: 500000000000000000000 wei
+    [step20] expected if write failed:  1000000000000000000000 wei
+    ```
+    AND the `getErc20Balance` probe SUCCEEDED
+    (returned a value in <1s) — so anvil is
+    responsive to READS at exactly the moment our
+    setStorageAt times out. It just refused to
+    apply the WRITE.
+
+  * **What this overturns**:
+    - Step 17 (queue-saturation hypothesis): wrong
+    - Step 18 (drain-wait hypothesis): wrong
+    - Step 19 (response-lost hypothesis): also
+      wrong. Anvil DID receive the request (per
+      its log line 146) — but the response
+      never came because the write itself never
+      executed. The "response was lost" inference
+      was a misread.
+    - The actual issue: **anvil silently drops
+      `anvil_setStorageAt` requests under some
+      condition we don't yet understand**, while
+      remaining responsive to reads.
+
+  * **What's special about the failing
+    setStorageAt vs the working ones in
+    globalSetup**: globalSetup's setStorageAts
+    (log lines 77, 84-94) all work; the read-back
+    after each is verified ✓. The only structural
+    difference is that the failing one happens
+    AFTER an `evm_revert` + `evm_snapshot` pair
+    (lines 111 + 112) and a burst of cold-cache
+    page eth_calls (lines 113-145).
+    - Hypothesis A: there's an interaction
+      between recent revert/re-snapshot and
+      subsequent setStorageAts (anvil bug)
+    - Hypothesis B: there's an interaction
+      between in-flight cold-cache upstream
+      fetches and setStorageAt (anvil bug under
+      concurrent IO)
+    - Hypothesis C: anvil's "test API" methods
+      (anvil_*) are deprioritized vs the chain
+      JSON-RPC methods (eth_*) under load
+    Without RUST_LOG=trace and reading anvil's
+    source we can't pick. But ANY of these mean
+    the fix is workaround-level (we don't get to
+    patch anvil).
+
+  * **What's NEXT** (step 21+):
+    - **Cheap workaround**: add read-back retry to
+      `setStorageAt` itself — write, read back,
+      if value mismatches retry up to N times
+      with exponential backoff. We have the
+      pattern from globalSetup; just generalize
+      it. This makes #15 + #17 pass on cold even
+      if anvil silently drops some writes.
+    - **Definitive root cause**: enable
+      `RUST_LOG=anvil=trace` (much more verbose
+      than INFO) and look for whether the failing
+      setStorageAt got far enough to compute a
+      slot key, write to the in-memory state, or
+      send a response. Probably needs a follow-up
+      iteration.
+    - **Sanity check on hypothesis A**: skip the
+      per-scenario evm_revert + evm_snapshot for
+      a one-off run and see if the setStorageAt
+      lands. If yes, the revert sequence is the
+      culprit.
+
+  * **Live re-validation**:
+    - Smoke tests: 76/76 (no test changes)
+    - Cold scenario #15 alone: still 0/1, with
+      the diagnostic output proving anvil didn't
+      write
+    - Warm path: unchanged
+
+  * **What this DOES give us going forward**:
+    - We finally know what the cold flake actually
+      IS: anvil silently drops some
+      `anvil_setStorageAt` calls, while staying
+      responsive to reads. Steps 21+ can target
+      this directly (workaround or trace-level
+      diagnostic).
+    - The probe pattern (`try { mutate } catch
+      { read-back; log }`) is a reusable template
+      for future "did this anvil write actually
+      land?" investigations.
+
 - **slice fork-bootstrap-step-19-anvil-log-capture
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — drops `--silent` from anvil's
