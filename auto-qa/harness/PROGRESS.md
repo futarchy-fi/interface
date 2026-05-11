@@ -2313,6 +2313,132 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice market-page-recon (Phase 7 pivot)**
+  (this iteration, on the interface side) — strategic
+  pivot. User capped /companies coverage at 9 scenarios
+  ("good enough") and directed market-page investment
+  next. Feature areas called out: trading, allowances,
+  positions, charts, liquidity. This iteration is recon
+  only — no fixture changes, no scenario shipped.
+
+  * **Canonical route**: `/markets/[address]` (Next.js
+    dynamic route, src/pages/markets/[address].js).
+    Legacy `?proposalId=` query params on /market are
+    normalized via redirect logic. Probe address:
+    `DEFAULT_PROPOSAL_ID = 0xDA36a35CA4Fe6214C37a452159C0C9EAd45D5919`
+    from `src/components/futarchyFi/marketPage/constants/contracts.js`.
+
+  * **Entry component**:
+    `src/components/futarchyFi/marketPage/MarketPageShowcase.jsx`
+    — 5756 lines, 92 fetch/graphql/supabase references.
+    Sister: `MarketPage.jsx`. Hooks under
+    `marketPage/hooks/`.
+
+  * **Data surfaces by feature area** (≥ 10 distinct
+    sources; happy-path render needs ~3 mocked):
+
+    Page-shell (must mock for render):
+    - `api.futarchy.fi/registry/graphql` → proposal
+      metadata via `useContractConfig` →
+      `fetchProposalMetadataFromRegistry` (TWAP settings,
+      snapshot_id, resolution status)
+    - `api.futarchy.fi/candles/graphql` → pool data via
+      `useYesNoPoolData` / `usePoolData` /
+      `SubgraphPoolFetcher` (liquidity, volume, tick,
+      token addresses)
+    - Supabase `market_event` table → initial hydration
+      via `getStaticProps` in [address].js
+
+    Trading:
+    - Supabase realtime (`recent_trades`) via
+      `RecentTradesDataLayer` → `DataLayer` →
+      `TradeHistoryCartridge` (swapper, amounts, outcome,
+      timestamp)
+    - CoW Swap API / CoW SDK — order placement +
+      execution
+
+    Allowances:
+    - sDAI rate provider contract call via `useSdaiRate`
+      → ethers eth_call (18-decimal exchange rate)
+
+    Positions:
+    - Gnosis Chain RPC (multi-endpoint fallback) via
+      `useBalanceManager` / `getERC1155Balance` (user
+      balances)
+
+    Charts:
+    - External spot price API (CoinGecko-style ticker)
+      via `useExternalSpotPrice` → `spotClient`
+      (historical candles + current price)
+    - Algebra pool TWAP via direct ethers contract read
+      (24h TWAP samples for countdown)
+
+    Page-shell extras (deferable for happy path):
+    - Snapshot GraphQL via `useSnapshotData` (governance
+      context — guarded by
+      `NEXT_PUBLIC_USE_MOCK_SNAPSHOT=true` env flag,
+      handy for fixture)
+
+  * **Component → feature mapping**:
+    - **Trading**: ShowcaseSwapComponent, BuySellPanel,
+      Buy{Pass,Fail}Modal, Sell{Pass,Fail}Modal
+    - **Allowances**: approveTokensModal/, collateralModal/,
+      SwapNativeToCurrencyModal
+    - **Positions**: PositionsTable, MarketBalancePanel,
+      ConditionalTokenBalance
+    - **Charts**: MarketCharts, ProbabilityChart,
+      SpotMarketChart, tripleChart/
+    - **Liquidity**: AddLiquidityModal, PoolDataDisplay,
+      CreatePoolModal
+
+  * **Environment vars hard-required for render**:
+    `NEXT_PUBLIC_SUPABASE_URL`,
+    `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+    `NEXT_PUBLIC_GNOSIS_RPC` /
+    `NEXT_PUBLIC_RPC_URL`,
+    `NEXT_PUBLIC_POOL_API_URL`. The Supabase ones have
+    inline defaults so blanks won't crash; the realtime
+    subscription will just fail gracefully.
+
+  * **No `data-testid` attributes** in the entry component
+    or major panels. Stable text-string assertion anchors
+    available: panel titles ("Approve", "Add Liquidity",
+    "Remaining Time", "Market Overview", "Positions",
+    "Recent Trades", "Pool Stats", "Probability"); button
+    labels ("Buy YES", "Buy NO", "Sell"); chart titles
+    ("Price", "Volume", "Liquidity"). Same constraint as
+    /companies — handled there with `getByText`.
+
+  * **Storybook stories as probe-data sources**:
+    - `MarketPageShowcase.stories.jsx` (Connected /
+      Disconnected variants)
+    - `BuySellPanel.stories.jsx`
+    - `approveTokensModal/ApproveTokensModal.stories.jsx`
+    - `collateralModal/CollateralModal.stories.jsx`
+    - `ConditionalMarketInfoPanel.stories.jsx`
+
+  * **Iteration plan for next /loop firings**:
+    1. **Fixture skeleton** (next iteration): extend
+       `fixtures/api-mocks.mjs` with market-page mocks —
+       `PROBE_PROPOSAL_ID`, mocked
+       `fetchProposalMetadataFromRegistry` shape, mocked
+       `useYesNoPoolData` shape. Plus a smoke test
+       loading the fixture without touching the page.
+    2. **Happy-path scenario**: `10-market-page-happy.scenario.mjs`
+       — navigate to `/markets/<probe>`, assert page
+       renders the proposal title + main panels. Validates
+       the fixture surface is sufficient.
+    3. **5 feature-area scenarios** in user's order:
+       trading → allowances → positions → charts →
+       liquidity. One scenario per /loop firing. Each
+       extends mocks for its area + asserts feature-
+       specific UI element.
+
+  * Recon dispatched to an Explore subagent (5756-line
+    component + 64 sibling components + ~10 hooks too
+    big to read sequentially in cron). Findings captured
+    above; full subagent transcript in conversation history.
+
 - **slice 4d-architecture-sync-ci (CI integration)**
   (this iteration, both sides) — cross-repo complement
   to the previous-iteration smoke test. Together they
