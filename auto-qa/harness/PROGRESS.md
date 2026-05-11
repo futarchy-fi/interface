@@ -2313,6 +2313,109 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-13-flake-diagnosis
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — diagnostic deep-dive into the
+  snapshot revert flake first observed in step 9.
+  Doesn't fix the flake but RULES OUT several
+  hypotheses and pins down where the flake
+  ACTUALLY originates. Ships 3 modest improvements
+  while the deeper work waits for an anvil-side
+  investigation.
+
+  * **Findings** (each backed by a measurement, not
+    a guess):
+    1. **The flake is NOT in beforeEach
+       snapshot/revert.** The runner now logs
+       per-scenario revert + snapshot timing; in
+       multiple full-suite runs, NEITHER printed
+       (every iteration ran in <500ms each, well
+       under the threshold). The "snapshot revert
+       FAILED" log from step 9 was the runner
+       BAILING on isolation after a different
+       failure earlier in the chain.
+    2. **The flake IS in mid-test mutation
+       primitives.** Scenario #15's
+       `setErc20Balance` and #17's
+       `setConditionalPosition` time out after 30s
+       (now 60s) on cold-anvil runs. anvil's log
+       shows it RECEIVED the calls but didn't
+       respond in time. Direct curl to anvil
+       between test runs returns in 0.5ms — anvil
+       is fast WHEN IDLE.
+    3. **The flake is concurrent-load-related.**
+       During scenario execution, the page hits
+       anvil through the proxy with hundreds of
+       eth_calls. The mid-test mutation lands in
+       the same anvil's queue and waits. With
+       cold-anvil cache misses requiring upstream
+       Gnosis RPC fetches, each request can take
+       seconds; queue length × per-request latency
+       compounds.
+    4. **Connection pool isn't the bottleneck.**
+       Tried `page.waitForLoadState('networkidle')`
+       before the mutation — should drain Node's
+       undici connection pool. Didn't fix the flake.
+       So the bottleneck is anvil-internal, not
+       Node-internal.
+
+  * **Three modest improvements shipped**:
+    1. **`MUTATION_TIMEOUT_MS = 60_000`** —
+       dedicated longer timeout for mid-test write
+       primitives (`setStorageAt` + everything
+       layered on it). The 30s default catches
+       beforeEach snapshot/revert (which has
+       Playwright's 120s test budget); 60s gives
+       2× headroom for the observed mutation
+       slowness. Doesn't catch the worst case
+       (cold-anvil + heavy proxy load can exceed
+       60s), but eliminates the medium-load flake.
+    2. **Structured abort errors** — `anvilRpc`
+       previously threw a bare `AbortError: This
+       operation was aborted` with no signal of
+       WHY. Now throws
+       `[fork-state] anvilRpc(<method>) aborted
+       after Nms (<reason>)` with the original
+       error chained as `cause`. Step 13's
+       debugging would have taken ~3× longer
+       without this — the error told us the call
+       was a `setStorageAt`, not a
+       `evm_snapshot`/`evm_revert`, which was the
+       key insight.
+    3. **Per-scenario revert + snapshot timing
+       log** in `flows/scenarios.spec.mjs`. Quiet
+       on the happy path (logs only when
+       revert/snapshot >500ms); fires loudly when
+       beforeEach IS slow. Future investigations
+       have this signal already wired up.
+
+  * **What this slice DIDN'T do**:
+    - Fix the cold-anvil mutation flake. Mitigation
+      remains step 9's bail-on-fail — the suite
+      degrades to "no isolation" rather than
+      hanging. Further work: rate-limit proxy
+      traffic, cache idempotent eth_calls in the
+      proxy, or open a separate anvil instance
+      for test-side mutations.
+    - Reduce wall-time on the cold path. A cold
+      anvil + flake-triggering load takes 3-5 min;
+      warm anvil takes 1.3 min. The cold path
+      hurts CI but local dev usually has warm
+      anvil.
+
+  * **Live re-validation** (warm anvil):
+    - 18/18 scenarios pass live in 1.3 min
+    - 65/65 smoke tests pass
+
+  * **Live re-validation** (cold anvil):
+    - 16/18 pass; #15 + #17 fail with
+      `setStorageAt` timeout (now reproduced
+      consistently — that's the diagnostic value).
+      Step 9's bail-on-fail keeps the rest of the
+      suite from hanging. After the cold-path
+      failure, anvil warms up and subsequent runs
+      pass cleanly.
+
 - **slice fork-bootstrap-step-12-position-mutation-and-canary
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — adds scenarios #17 + #18 as a

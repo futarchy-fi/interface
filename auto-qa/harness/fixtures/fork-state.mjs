@@ -43,6 +43,17 @@ import { dirname, join } from 'node:path';
 // snapshot/revert primitives.
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+// Step 13: dedicated longer timeout for mid-test mutation
+// primitives (`setStorageAt` + everything layered on it). When a
+// mutation happens during page polling, the page's eth_calls may
+// be queued ahead of our write at anvil. Step 13's diagnostic run
+// reproduced the abort: scenario #15/#17 mutation took >30s on
+// occasion. 60s gives ~2× headroom over the observed bound.
+// Beforehand-style calls (snapshot/revert) keep the 30s ceiling
+// because they run in beforeEach where Playwright's per-test
+// budget is tight.
+const MUTATION_TIMEOUT_MS = 60_000;
+
 // ── Token constants (Gnosis chain) ──
 //
 // sDAI ERC20 token on Gnosis (chain 100) — the Savings xDai vault.
@@ -325,7 +336,10 @@ export async function setStorageAt(rpcUrl, address, slot, value) {
     const valueHex = typeof value === 'string' && value.startsWith('0x')
         ? pad(value, { size: 32 })
         : pad(viemToHex(value), { size: 32 });
-    return anvilRpc(rpcUrl, 'anvil_setStorageAt', [address, slotHex, valueHex]);
+    // MUTATION_TIMEOUT_MS (60s, not the 30s default) — see step 13
+    // PROGRESS notes. Mid-test mutations queue behind the page's
+    // proxied eth_calls at anvil; 30s wasn't enough headroom.
+    return anvilRpc(rpcUrl, 'anvil_setStorageAt', [address, slotHex, valueHex], MUTATION_TIMEOUT_MS);
 }
 
 /**

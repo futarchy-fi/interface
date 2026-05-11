@@ -82,9 +82,23 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
         const anvilUrl = STUB_RPC_URL;
         try {
             const id = readFileSync(SNAPSHOT_ID_FILE, 'utf8').trim();
+            // Step 13 instrumentation: time the revert + snapshot
+            // pair to see when (and which scenarios) hit the slow
+            // path. Logged unconditionally so the timing pattern
+            // shows up in CI artifacts too.
+            const startedAt = Date.now();
             await evmRevert(anvilUrl, id);
+            const revertedAt = Date.now();
             const newId = await evmSnapshot(anvilUrl);
+            const snapshottedAt = Date.now();
             writeFileSync(SNAPSHOT_ID_FILE, newId, 'utf8');
+            const revertMs = revertedAt - startedAt;
+            const snapMs = snapshottedAt - revertedAt;
+            // Only log when slow enough to matter (>500ms) — keeps
+            // the test output quiet on the happy path.
+            if (revertMs > 500 || snapMs > 500) {
+                console.log(`[scenarios] beforeEach for "${testInfo.title}" — revert=${revertMs}ms snapshot=${snapMs}ms`);
+            }
         } catch (err) {
             // Step 9: bail on isolation for the rest of the run.
             // Once revert fails, the snapshot ID is consumed and the
