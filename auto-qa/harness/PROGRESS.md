@@ -2313,6 +2313,120 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 38-scenario-35-market-page-candles-corrupt-pool
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the LAST cell of the
+  market-page chaos matrix: (CANDLES, per-row
+  corrupt). Mirror of #23 (candles-corrupt-pool
+  on /companies) applied to the market page's
+  two-outcome contract. Distinct from #29
+  (entire candles response body non-JSON) and
+  #33 (one pool's latest-candle returns empty
+  array) because the candles response IS
+  structurally valid AND contains a row for
+  the NO pool — but the row is missing its
+  required `close` field. **Closes the market-
+  page chaos matrix to 12/12** (mirroring step
+  26's closure of the /companies matrix).
+
+  * **The scenario** — `35-market-page-candles-
+    corrupt-pool` on /markets/<MARKET_PROBE_
+    ADDRESS>. Custom handler delegates to
+    `makeMarketCandlesMockHandler` for every
+    query EXCEPT the latest-candle lookup for
+    the NO pool — which returns
+    `{ candles: [{}] }` (one row, structurally
+    valid, missing required `close` field).
+    Same page-shell assertions as prior market-
+    page chaos slices.
+
+  * **Why this is a NEW failure-mode branch
+    vs #29 and #33**:
+    - vs #29 malformed-body: #29 has the
+      entire response body as non-JSON; #35
+      has structurally-valid envelope where
+      one ROW within a valid array is missing
+      a required field
+    - vs #33 partial: #33 has
+      `candles: []` (no rows at all — tests
+      `candles.length > 0` guard); #35 has
+      `candles: [{}]` (one row exists but
+      `close` is undefined — tests
+      `candles[0]?.close` guard, distinct
+      defensive-coding pattern)
+
+  * **Bug-shapes captured** (NEW vs #29/#33):
+    - Per-pool spot-price formatter CRASHES
+      on null/undefined `close` field
+      (formatter assumes non-null after the
+      empty-array guard but doesn't check for
+      null fields within an array of length
+      > 0)
+    - YES price LEAKS into NO display via
+      cache-key collision or fallback-to-
+      last-seen
+    - NO display renders raw "null SDAI" /
+      "undefined SDAI" / "NaN SDAI" (formatter
+      coerces to string instead of falling
+      back to sentinel)
+    - Chart panel BLANK for both outcomes from
+      corrupt pool propagating up shared chart-
+      data hook
+    - Trading panel "preview price" CRASHES
+      on `null - 0.5 = NaN` math
+    - NO outcome tab VANISHES from defensive
+      filter dropping null-price outcomes
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #35 itself: passed in 10.2s on
+      first run
+    - Catalog regenerated: 35 scenarios (was 34)
+
+  * **Market-page chaos coverage matrix after
+    this slice (12/12 COMPLETE)**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  | #32      | #33     |
+    | empty 200         | #26      | #27     |
+    | malformed body    | #28      | #29     |
+    | per-row corrupt   | #34      | #35 ★   |
+    | slow valid resp   | #30      | #31     |
+    Each cell catches a DISTINCT class of bug
+    landing at different control-flow branches
+    in the page's data pipeline. 12 iterations
+    (#27-#38) of 1 cell each closes out the
+    market-page matrix, mirroring the
+    /companies matrix completion in step 26.
+
+    BOTH chaos coverage matrices on the
+    interface side are now complete:
+    - /companies: 12/12 (closed step 26)
+    - /markets/[address]: 12/12 (closed step 38)
+
+  * **What's NEXT** (now that both /companies
+    and /markets chaos matrices are complete):
+    - Apply the matrix discipline to additional
+      pages: /markets list, /milestones, /rpc-
+      diagnostics — none have any scenarios
+      yet. /markets list is highest value
+      because it's the second-most-trafficked
+      page after /markets/[address].
+    - Pivot back to fork-bootstrap: with the
+      chaos library substantially built out, a
+      trace-level investigation of the
+      cold-anvil flake (steps 17-21) might be
+      worth the time investment.
+    - Add cross-layer DOM↔API invariants — the
+      api side has 57 invariants; the interface
+      side has only the per-scenario
+      assertions. Adding a layer of broader
+      DOM↔API consistency checks (e.g., "every
+      visible price equals the API response
+      that produced it") would be high-value
+      at this stage.
+
 - **slice 37-scenario-34-market-page-registry-corrupt-row
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (REGISTRY, per-row
