@@ -2313,6 +2313,129 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 87-prod-mode-first-real-catch (Phase 6 —
+  scenario 54 is the first scenario that ACTUALLY
+  needs slice 85's prod-mode infra to catch a real
+  shipped PR)** (this iteration, on the interface
+  side) — Catches PR #55 (404 redirect for
+  `/market/<addr>` → `/market?proposalId=<addr>`).
+  Recent-PR coverage: 9/22 → 10/22 (45%).
+
+  * **The KIND already existed; the SHAPE is new**.
+    Scenario 49 (slice 81) already covers URL-
+    state-evolution in dev mode. PR #55's redirect
+    lives in `src/pages/404.js` — a useEffect that
+    only runs when the page is served from the
+    static `out/404.html` produced by `output:
+    'export'`. `next dev` serves its own built-in
+    404 page and never imports `src/pages/404.js`.
+    So the only way to mechanically catch a
+    regression to this redirect is to run the
+    scenario against the static export — exactly
+    the capability slice 85 set up.
+
+  * **Closes a loose end from slice 85**. The
+    slice-85 verification was a synthetic probe
+    (`console.error` injected into CompaniesPage)
+    — it proved the prod-mode catch wire works
+    but didn't catch a real shipped PR. Slice 87
+    flips that: scenario 54 reproduces a real PR
+    fix end-to-end and the prod-mode infra is the
+    only way it can do so. Validates the slice
+    85 investment with a concrete prod-only PR.
+
+  * **`prodModeOnly` opt-in flag**. Scenarios that
+    target behavior only present in the static
+    export declare `prodModeOnly: true`. The
+    `ui:prod` script now exports
+    `HARNESS_PROD_MODE=1`; `scenarios.spec.mjs`
+    skips any scenario with `prodModeOnly` when
+    that env var is unset. Verified:
+    - `npm run ui:full -- --grep "54-pr55"` →
+      `1 skipped` (correctly skipped in dev).
+    - `npm run ui:prod -- --grep "54-pr55"` →
+      runs; passes on current src, fails when
+      `src/pages/404.js`'s useEffect is reverted.
+
+  * **The scenario** (`scenarios/54-pr55-market-
+    singular-redirect.scenario.mjs`):
+    - Route: `/market/${MARKET_PROBE_ADDRESS}`
+      (singular `/market/<addr>` — always 404s
+      because `pages/market.js` only matches
+      bare `/market`).
+    - Mocks: same registry + candles mocks as
+      scenario 10 / 49 (the page lands on
+      `/market?proposalId=<addr>` after redirect
+      and queries normally).
+    - Assertion 1: `expect.poll(page.url())`
+      contains `proposalId=<addr>` within 15s.
+      Polling because the redirect is async
+      (404 mounts → useEffect fires
+      `window.location.replace` → browser
+      navigates).
+    - Assertion 2: URL no longer contains the
+      bare `/market/<addr>` path (catches a
+      regression where the proposalId is appended
+      without replacing the bare path).
+
+  * **Mechanical verification — the prod-mode
+    catch chain**:
+    1. Emptied `src/pages/404.js`'s useEffect
+       body (replaced the
+       `window.location.replace(...)` block
+       with a comment placeholder).
+    2. `npm run build` → produced new chunk
+       `pages/404-38e825061b428d89.js` (vs the
+       previous `404-6f99f382c7da2d44.js` — hash
+       changed, proving fresh re-bundle). Grep
+       for `location.replace` in the new chunk
+       returned 0 hits (revert confirmed in
+       static output).
+    3. `npm run ui:prod -- --grep "54-pr55"` →
+       **FAILED**: expected URL to contain
+       `proposalid=0x45e1...`; received
+       `http://localhost:3001/market/0x45e1...`
+       (page stuck on 404 view).
+    4. Restored the useEffect body.
+    5. `npm run build` → new chunk
+       `pages/404-c80bd54e3c4f86db.js` containing
+       `location.replace`. Grep verified.
+    6. `npm run ui:prod -- --grep "54-pr55"` →
+       **PASSED** (1.2s warm).
+
+    Three layers of proof, identical to slice 85's
+    discipline:
+    - Probe absent + prod build + scenario runs →
+      catch fires
+    - Probe restored + prod build + scenario runs
+      → catch goes away
+    - Bundle hash changes between revert and
+      restore (no stale cache hit)
+    - Scenario SKIPS in dev mode (so adding it
+      doesn't break `npm run ui:full`)
+
+  * **Catalog state**: 54 scenarios, **12
+    mechanically verified** (44, 45, 46, 47, 48,
+    10, 49, 50, 51, 52, 53, 54). Recent-PR
+    coverage: **10/22 = 45%**. Eight KINDs
+    unchanged. Slice 87 added the multiplier:
+    the prod-mode skip flag means future
+    scenarios for build-mode-only behavior
+    (PR #58 TDZ class, output-mode-specific bugs)
+    drop into the same ergonomic.
+
+  * **Live re-validation**:
+    - Scenario 54 dev mode: skipped in 1 line
+      via `prodModeOnly` flag.
+    - Scenario 54 prod mode (cold): 1.2s warm
+      (faster than dev! the static export
+      avoids HMR setup overhead).
+    - Build time: ~1 min subsequent (Next.js
+      cache), ~5 min cold first build of the
+      day.
+    - src/ tree clean after verification cycle
+      (404.js useEffect restored to PR-55 form).
+
 - **slice 86-strict-schema-extension (Phase 6 —
   three more verified PRs without a new KIND)**
   (this iteration, on the interface side) — Extends

@@ -122,8 +122,18 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
         // Playwright report is browseable by bug class.
         const title = `${scenario.name} — ${scenario.bugShape}`;
 
-        test(title, async ({ context, page }) => {
+        test(title, async ({ context, page }, testInfo) => {
             if (scenario.timeout) test.setTimeout(scenario.timeout);
+
+            // Slice 87: prod-mode opt-in. Scenarios that target
+            // behavior only present in the static export (e.g.
+            // src/pages/404.js's redirect useEffect, which `next
+            // dev` never serves — dev uses its built-in 404)
+            // declare `prodModeOnly: true`. ui:prod sets
+            // HARNESS_PROD_MODE=1; ui:full / ui:ui leave it unset.
+            if (scenario.prodModeOnly && !process.env.HARNESS_PROD_MODE) {
+                testInfo.skip(true, `scenario "${scenario.name}" is prod-mode-only — run via npm run ui:prod`);
+            }
 
             // Default wallet stub — every scenario gets a deterministic
             // dev-mnemonic wallet injected before navigation.
