@@ -384,6 +384,81 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row.locator('td').nth(3)).toHaveText('8');
     });
 
+    test('slice 4h — resolution_outcome-truthy branch of the resolved filter (7 normal + 3 outcome:"yes" → "7" / "10")', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Companion to slice 4g, exercises the OR-branch of the
+        // resolved filter. Per
+        // `src/hooks/useAggregatorCompanies.js:87`:
+        //   if (pm.resolution_status === 'resolved'
+        //       || pm.resolution_outcome) return false;
+        //
+        // 4g covers the LEFT branch:
+        //   `resolution_status === 'resolved'` with no outcome
+        //
+        // 4h (this slice) covers the RIGHT branch:
+        //   `resolution_outcome` truthy with no status
+        //   (e.g., a proposal that's been resolved via outcome-
+        //    assignment but the status field hasn't been backfilled,
+        //    OR a proposal that uses a different state machine where
+        //    `outcome` is set as soon as voting closes)
+        //
+        // The semantic distinction matters in production: some
+        // proposal lifecycle paths set `resolution_outcome`
+        // directly (e.g., admin-resolved proposals) without
+        // changing `resolution_status`. A regression that drops
+        // the OR's right side would silently leak those proposals
+        // back into the active count even though they're done.
+        //
+        // Test inputs:
+        //   - 7 proposals with no special metadata → all 7 active
+        //   - 3 proposals with `resolution_outcome: 'yes'` (status
+        //     omitted) → in nonArchived but excluded from active
+        //   Total raw: 10 proposals
+        //   Expected: active=7, nonArchived=10
+        //
+        // Bug classes caught (NEW vs 4g's left-branch coverage):
+        //   - Regression that drops the right side of the OR
+        //     (only checks status) — renders "10" / "10"
+        //     (outcome-resolved proposals leak into active)
+        //   - Regression that switches the OR to AND — only
+        //     proposals with BOTH fields set would be excluded;
+        //     these (with only outcome set) would leak into active
+        //   - Regression that hard-codes truthiness check to
+        //     specific string match (e.g., `outcome === 'resolved'`
+        //     instead of just truthy) — "yes" / "no" outcomes
+        //     would leak even though they ARE resolved
+        //   - Regression that omits `pm.resolution_outcome` from
+        //     the GraphQL query selection — `pm` lacks the field
+        //     entirely, undefined → falsy → leaks into active
+        //
+        // Distinct numeric signature from 4g (6/8): 4h uses 7/10
+        // so a failure log unambiguously identifies which branch
+        // broke.
+
+        const proposals = [];
+        for (let i = 0; i < 7; i++) proposals.push(fakeProposal(`n${i}`));
+        for (let i = 0; i < 3; i++) proposals.push(fakeProposal(`o${i}`, { resolution_outcome: 'yes' }));
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({ proposals }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        await expect(row.locator('td').nth(2)).toHaveText('7');
+        await expect(row.locator('td').nth(3)).toHaveText('10');
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 

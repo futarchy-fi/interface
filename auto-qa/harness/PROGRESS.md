@@ -2313,6 +2313,107 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 52-dom-api-invariant-resolution-outcome-branch
+  (Phase 5 invariant catalog — 11th DOM↔API
+  invariant; completes the resolved-OR coverage)**
+  (this iteration, on the interface side) —
+  companion to slice 4g (resolved-status branch).
+  Where 4g exercises the LEFT side of the
+  resolved filter's OR
+  (`resolution_status === 'resolved'`), this
+  slice exercises the RIGHT side
+  (`resolution_outcome` truthy with no status).
+
+  * **The new invariant** —
+    `slice 4h — resolution_outcome-truthy branch
+    of the resolved filter`. Mock 7 normal + 3
+    with `resolution_outcome: 'yes'` (NO status
+    field). Expected:
+      - nonArchived = 10 (not archived)
+      - active = 7 (outcome-truthy ones excluded)
+    DOM renders "7" in td[2] and "10" in td[3] —
+    distinct numeric signature from 4g (6/8) so
+    a failure log unambiguously identifies which
+    branch broke.
+
+  * **Semantic distinction (worth pinning)**:
+    some proposal lifecycle paths set
+    `resolution_outcome` directly (e.g.,
+    admin-resolved proposals) without changing
+    `resolution_status`. A regression that drops
+    the OR's right side would silently leak those
+    proposals back into the active count even
+    though they're done. This is a real
+    production bug-class because the two fields
+    have DIFFERENT update paths in the indexer.
+
+  * **Code reference** (the line tested by 4h):
+    `useAggregatorCompanies.js:87` —
+    `if (pm.resolution_status === 'resolved'
+        || pm.resolution_outcome) return false;`
+
+  * **Bug classes caught** (NEW vs 4g's left-
+    branch coverage):
+    - Regression that DROPS the right side of
+      the OR (only checks status) — renders
+      "10" / "10" (outcome-resolved proposals
+      leak into active)
+    - Regression that switches OR to AND — only
+      proposals with BOTH fields set would be
+      excluded; these (with only outcome set)
+      leak into active
+    - Regression that hard-codes truthiness check
+      to a specific string match (e.g.,
+      `outcome === 'resolved'` instead of just
+      truthy) — "yes" / "no" outcomes leak
+      even though they ARE resolved
+    - Regression that omits
+      `pm.resolution_outcome` from the GraphQL
+      selection — `pm` lacks the field entirely,
+      undefined → falsy → leaks into active
+
+  * **Resolved-OR coverage complete**: 4g and 4h
+    together prove BOTH branches of the
+    `'resolved' || resolution_outcome` OR work
+    in isolation. A regression that breaks the
+    OR (drops a side, flips OR↔AND, or swaps
+    sides) lights up exactly one of the two
+    tests with a clear failure log.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 11 DOM↔API invariant tests pass:
+      21.6s (was 10 in 19.6s); new slice 4h
+      alone: 1.5s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (11 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome ★| 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (toFixed precision)     |
+
+  * **What's next**:
+    - price-formatter precision branch
+      (YES>=1 + NO<1 → "1.4200 SDAI")
+    - proposal description field rendering
+    - ChainBadge DEFAULT branch (no
+      metadata.chain → chainId=100 → "Gnosis")
+    - org-row count when ALL filter conditions
+      collide (archived + hidden + resolved in
+      one proposal — should be excluded by
+      archived, not double-counted)
+
 - **slice 51-dom-api-invariant-resolved-filter-math
   (Phase 5 invariant catalog — 10th DOM↔API
   invariant; completes the filter-triplet
