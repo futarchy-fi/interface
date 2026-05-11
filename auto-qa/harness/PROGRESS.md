@@ -2313,6 +2313,113 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-21-setstorage-retry
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — adds write + read-back +
+  retry to the `setStorageAt` primitive itself.
+  Each call now: `anvil_setStorageAt` →
+  `eth_getStorageAt` (verify) → if mismatch, retry
+  up to 3 attempts with 1s/2s backoff. Per-attempt
+  timeout shortened from 60s → 30s so worst case
+  (3 fails) is 93s, fitting under Playwright's
+  120s test budget. **Honest result**: cold-anvil
+  is STILL 2/4 (#15 + #17 fail). The silent drop
+  diagnosed in step 20 is **persistent**, not
+  transient — once anvil is stuck, ALL 3 retries
+  also time out at 30s each. Retries help only
+  for transient drops; this isn't one.
+
+  * **The mechanism (works, just doesn't fix the
+    flake)**: see `setStorageAt` in
+    `fixtures/fork-state.mjs`. Smoke tests prove
+    behaviour:
+    - Happy path: 1 write + 1 read-back, returns
+      success
+    - Transient drop: write 1 silently fails,
+      read-back 1 mismatches, write 2 succeeds,
+      read-back 2 matches → returns success
+    - Persistent drop: 3× (write + read-back),
+      all mismatch → throws with the chained last
+      error
+    Smoke tests cover all three paths via stub
+    handler that simulates each failure mode.
+
+  * **What the cold run showed**:
+    ```
+    [fork-state] setStorageAt attempt 1/3 threw: aborted after 30007ms; retrying
+    [fork-state] setStorageAt attempt 2/3 threw: aborted after 30003ms; retrying
+    [fork-state] setStorageAt attempt 3/3 threw: aborted after 30002ms; retrying
+    Error: setStorageAt(0xaf20…) failed after 3 attempts
+    ```
+    Three consecutive timeouts. Total ~93s (30s
+    × 3 + ~3s backoff). All 3 attempts hit the
+    same stuck state.
+
+  * **What this overturns from step 20**:
+    Step 20's working hypothesis was "anvil
+    silently drops some setStorageAt calls" —
+    implying transient drops where retry would
+    help. Step 21 disproves the transient part:
+    drops are **persistent**. Once anvil is
+    wedged, it doesn't recover within at least
+    93s of retry attempts.
+
+  * **What's NEXT** (step 22+):
+    - **Try `anvil_impersonateAccount` +
+      `eth_sendTransaction`** as an alternative
+      mutation primitive. If the stuck state is
+      specific to anvil's "test API" (anvil_*
+      methods), the standard chain path
+      (eth_sendTransaction) might work. This is
+      the most promising new angle since reads
+      stay responsive during the stuck state.
+    - **Skip mutation scenarios on cold-anvil
+      runs**. Mark #15 + #17 as cold-skip via an
+      env-gated `test.skip(...)`. Pragmatic
+      escape hatch — warm CI is what production
+      reflects anyway.
+    - **Restart anvil between mutation
+      scenarios**. Drastic but conclusive: a
+      fresh anvil per mutation guarantees no
+      stuck state. Requires an `anvil_reset`-like
+      hook in beforeEach.
+    - **RUST_LOG=anvil=trace** during a stuck
+      run to find anvil's internal state when
+      the wedge happens. We can already capture
+      anvil's log via step 19's
+      `HARNESS_ANVIL_LOG=1`; just bump verbosity.
+
+  * **What this DOES give us going forward**:
+    - `setStorageAt` is now self-verifying. If
+      ANY future caller writes a slot via this
+      primitive, a silent drop is caught
+      automatically — no need for callers to
+      duplicate the read-back pattern that
+      globalSetup already had. Generalizes the
+      pattern.
+    - The retry primitive will help for
+      transient drops (when they happen) — those
+      may exist in other configurations or
+      versions of anvil. We're robust to them
+      now.
+    - Globalsetup's redundant explicit
+      verification could be removed in a future
+      cleanup (the primitive now does it). Left
+      in place for now since it's load-bearing
+      documentation.
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (was 76; +2 — retry on
+      mismatch + throw after MAX_ATTEMPTS)
+    - Cold scenarios (#15-#18): 2/4 unchanged
+      (#15 + #17 still fail with the same
+      pattern, just now after 93s of retries
+      instead of 60s of one attempt)
+    - Warm scenarios: not re-validated; primitive
+      change is non-architectural for the warm
+      path (1 extra read-back call per write,
+      negligible)
+
 - **slice fork-bootstrap-step-20-readback-probe
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — wraps scenario #15's mutation

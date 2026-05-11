@@ -213,25 +213,114 @@ test('impersonateAndSend — impersonates, sends tx, ALWAYS stops impersonating 
 
 // ── Step 2.5: ERC20 storage-write helpers ───────────────────────────
 
+// Step 21: setStorageAt now does write + read-back verification +
+// retry-on-mismatch. Stub helper returns the last-written value on
+// eth_getStorageAt so the happy path completes after one write +
+// one read-back. Tests that want to drive the retry path override
+// the stub.
+function makeSetStorageStub(calls) {
+    let lastValue = '0x' + '0'.repeat(64);
+    return (req) => {
+        calls.push(req);
+        if (req.method === 'anvil_setStorageAt') {
+            lastValue = req.params[2];
+            return { result: null };
+        }
+        if (req.method === 'eth_getStorageAt') {
+            return { result: lastValue };
+        }
+        return { result: null };
+    };
+}
+
 test('setStorageAt — calls anvil_setStorageAt with [addr, slotHex, paddedValue]', async () => {
     const calls = [];
-    const { url, server } = await startStub((req) => {
-        calls.push(req);
-        return { result: null };
-    });
+    const { url, server } = await startStub(makeSetStorageStub(calls));
     try {
         await setStorageAt(url, '0xabc', 5n, 42n);
-        assert.equal(calls.length, 1);
+        // Step 21: 1 write + 1 read-back verification.
+        assert.equal(calls.length, 2);
         assert.equal(calls[0].method, 'anvil_setStorageAt');
         assert.equal(calls[0].params[0], '0xabc');
         assert.equal(calls[0].params[1], '0x5');
         // Value pads to 32 bytes (64 hex chars + '0x' prefix).
         assert.equal(calls[0].params[2].length, 66);
         assert.match(calls[0].params[2], /0x0+2a$/); // 42 = 0x2a
+        assert.equal(calls[1].method, 'eth_getStorageAt');
+        assert.equal(calls[1].params[0], '0xabc');
+        assert.equal(calls[1].params[1], '0x5');
     } finally {
         await closeStub(server);
     }
 });
+
+test('setStorageAt — retries when read-back mismatches (anvil silent drop)', async () => {
+    // Step 20 diagnostic: anvil silently drops some
+    // anvil_setStorageAt requests under load — the request returns
+    // success but the slot isn't actually mutated. Step 21's
+    // workaround: read back the slot, retry on mismatch. Simulate
+    // by failing the FIRST write (returning a stale read-back),
+    // succeeding on the second.
+    const calls = [];
+    let writeCount = 0;
+    let lastWrittenValue = null;
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        if (req.method === 'anvil_setStorageAt') {
+            writeCount += 1;
+            // First write: pretend to succeed but DON'T update the
+            // shadow value (simulating anvil's silent drop).
+            // Second write: actually update.
+            if (writeCount >= 2) {
+                lastWrittenValue = req.params[2];
+            }
+            return { result: null };
+        }
+        if (req.method === 'eth_getStorageAt') {
+            return { result: lastWrittenValue ?? ('0x' + '0'.repeat(64)) };
+        }
+        return { result: null };
+    });
+    try {
+        await setStorageAt(url, '0xabc', 5n, 42n);
+        // 2 writes + 2 read-backs: write 1 + verify 1 (mismatch) +
+        // write 2 + verify 2 (match) = 4 calls
+        assert.equal(calls.length, 4);
+        assert.equal(calls[0].method, 'anvil_setStorageAt');
+        assert.equal(calls[1].method, 'eth_getStorageAt');
+        assert.equal(calls[2].method, 'anvil_setStorageAt');
+        assert.equal(calls[3].method, 'eth_getStorageAt');
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('setStorageAt — throws after MAX_ATTEMPTS silent drops', async () => {
+    // Defense-in-depth: if anvil drops EVERY write (catastrophic
+    // bug), we should fail loudly rather than infinite-loop. The
+    // throw includes the last error chain so debugging is
+    // tractable.
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        if (req.method === 'anvil_setStorageAt') return { result: null };
+        if (req.method === 'eth_getStorageAt') {
+            // Always return zeros — write never lands.
+            return { result: '0x' + '0'.repeat(64) };
+        }
+        return { result: null };
+    });
+    try {
+        await assert.rejects(
+            setStorageAt(url, '0xabc', 5n, 42n),
+            /failed after \d+ attempts/,
+        );
+        // 3 attempts × (write + read-back) = 6 calls.
+        assert.equal(calls.length, 6);
+    } finally {
+        await closeStub(server);
+    }
+}, { timeout: 10_000 }); // backoff: 1s + 2s = 3s minimum
 
 test('mappingStorageKey — Solidity mapping-slot hash matches known reference', () => {
     // Reference values from a deterministic ethers/web3 keccak run:
@@ -252,15 +341,13 @@ test('mappingStorageKey — Solidity mapping-slot hash matches known reference',
 
 test('setErc20Balance — issues setStorageAt at the mapping slot', async () => {
     const calls = [];
-    const { url, server } = await startStub((req) => {
-        calls.push(req);
-        return { result: null };
-    });
+    const { url, server } = await startStub(makeSetStorageStub(calls));
     try {
         const holder = '0xabcdef0000000000000000000000000000000000';
         const expected = mappingStorageKey(holder, 0);
         await setErc20Balance(url, '0xtoken', holder, 100n);
-        assert.equal(calls.length, 1);
+        // Step 21: 1 write + 1 read-back verification.
+        assert.equal(calls.length, 2);
         assert.equal(calls[0].method, 'anvil_setStorageAt');
         assert.equal(calls[0].params[0].toLowerCase(), '0xtoken');
         assert.equal(calls[0].params[1].toLowerCase(), expected.toLowerCase());
@@ -271,17 +358,19 @@ test('setErc20Balance — issues setStorageAt at the mapping slot', async () => 
 
 test('setErc20Balance — non-zero slot produces a DIFFERENT storage key', async () => {
     const calls = [];
-    const { url, server } = await startStub((req) => {
-        calls.push(req);
-        return { result: null };
-    });
+    const { url, server } = await startStub(makeSetStorageStub(calls));
     try {
         const holder = '0xabcdef0000000000000000000000000000000000';
         await setErc20Balance(url, '0xtoken', holder, 100n, 0);
         await setErc20Balance(url, '0xtoken', holder, 100n, 5);
+        // Step 21: 2 writes × (write + read-back) = 4 calls.
+        // Filter to setStorageAt calls so the slot comparison
+        // ignores the interleaved read-backs.
+        const writes = calls.filter((c) => c.method === 'anvil_setStorageAt');
+        assert.equal(writes.length, 2);
         // Different slots → different storage keys; catches a
         // regression that ignores the slot arg.
-        assert.notEqual(calls[0].params[1], calls[1].params[1]);
+        assert.notEqual(writes[0].params[1], writes[1].params[1]);
     } finally {
         await closeStub(server);
     }
@@ -312,14 +401,12 @@ test('getErc20Balance — encodes balanceOf(address) + decodes uint256 result', 
 
 test('fundWalletWithSDAI — targets sDAI on Gnosis at the configured slot', async () => {
     const calls = [];
-    const { url, server } = await startStub((req) => {
-        calls.push(req);
-        return { result: null };
-    });
+    const { url, server } = await startStub(makeSetStorageStub(calls));
     try {
         const holder = '0xabcdef0000000000000000000000000000000000';
         await fundWalletWithSDAI(url, holder);
-        assert.equal(calls.length, 1);
+        // Step 21: 1 write + 1 read-back = 2 calls.
+        assert.equal(calls.length, 2);
         assert.equal(calls[0].method, 'anvil_setStorageAt');
         assert.equal(calls[0].params[0].toLowerCase(), SDAI_TOKEN_GNOSIS_ADDRESS.toLowerCase());
         // Storage key matches mappingStorageKey at the configured
@@ -335,14 +422,13 @@ test('fundWalletWithSDAI — targets sDAI on Gnosis at the configured slot', asy
 
 test('fundWalletWithSDAI — defaults amount to 1000 sDAI (1e21 wei)', async () => {
     const calls = [];
-    const { url, server } = await startStub((req) => {
-        calls.push(req);
-        return { result: null };
-    });
+    const { url, server } = await startStub(makeSetStorageStub(calls));
     try {
         await fundWalletWithSDAI(url, '0xabcdef0000000000000000000000000000000000');
-        // 1000e18 = 0x3635c9adc5dea00000
-        assert.match(calls[0].params[2], /0+3635c9adc5dea00000$/);
+        // 1000e18 = 0x3635c9adc5dea00000. Filter to setStorageAt
+        // because step 21 added a read-back call after the write.
+        const writes = calls.filter((c) => c.method === 'anvil_setStorageAt');
+        assert.match(writes[0].params[2], /0+3635c9adc5dea00000$/);
     } finally {
         await closeStub(server);
     }
@@ -384,16 +470,14 @@ test('nestedMappingStorageKey — different outerSlot produces different storage
 
 test('setErc1155Balance — issues setStorageAt at the nested mapping slot', async () => {
     const calls = [];
-    const { url, server } = await startStub((req) => {
-        calls.push(req);
-        return { result: null };
-    });
+    const { url, server } = await startStub(makeSetStorageStub(calls));
     try {
         const holder = '0xabcdef0000000000000000000000000000000000';
         const tokenId = 42n;
         const expected = nestedMappingStorageKey(tokenId, holder, 0, 'uint256', 'address');
         await setErc1155Balance(url, '0xtoken1155', holder, tokenId, 100n);
-        assert.equal(calls.length, 1);
+        // Step 21: 1 write + 1 read-back = 2 calls.
+        assert.equal(calls.length, 2);
         assert.equal(calls[0].method, 'anvil_setStorageAt');
         assert.equal(calls[0].params[0].toLowerCase(), '0xtoken1155');
         assert.equal(calls[0].params[1].toLowerCase(), expected.toLowerCase());
@@ -519,15 +603,14 @@ test('ctDerivePositionId — chains getCollectionId → getPositionId in two eth
 
 test('setConditionalPosition — pins to CT contract + CT_BALANCE_SLOT', async () => {
     const calls = [];
-    const { url, server } = await startStub((req) => {
-        calls.push(req);
-        return { result: null };
-    });
+    const { url, server } = await startStub(makeSetStorageStub(calls));
     try {
         const holder = '0xabcdef0000000000000000000000000000000000';
         const positionId = 0x668e2de525bf95c1b7ecdc79bd47a46605f77cd472cef3707626bf76fb0a743dn;
         const expected = nestedMappingStorageKey(positionId, holder, CT_BALANCE_SLOT, 'uint256', 'address');
         await setConditionalPosition(url, holder, positionId, 100n);
+        // Step 21: assert against the WRITE call specifically (not
+        // calls[0]) because there's a read-back call after it.
         assert.equal(calls[0].method, 'anvil_setStorageAt');
         // Pinned to CT contract address
         assert.equal(calls[0].params[0].toLowerCase(), CT_GNOSIS_ADDRESS.toLowerCase());

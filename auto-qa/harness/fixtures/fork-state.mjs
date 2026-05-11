@@ -43,16 +43,13 @@ import { dirname, join } from 'node:path';
 // snapshot/revert primitives.
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-// Step 13: dedicated longer timeout for mid-test mutation
-// primitives (`setStorageAt` + everything layered on it). When a
-// mutation happens during page polling, the page's eth_calls may
-// be queued ahead of our write at anvil. Step 13's diagnostic run
-// reproduced the abort: scenario #15/#17 mutation took >30s on
-// occasion. 60s gives ~2× headroom over the observed bound.
-// Beforehand-style calls (snapshot/revert) keep the 30s ceiling
-// because they run in beforeEach where Playwright's per-test
-// budget is tight.
-const MUTATION_TIMEOUT_MS = 60_000;
+// Step 13 added MUTATION_TIMEOUT_MS = 60s for setStorageAt with
+// the queue-backlog hypothesis. Step 21 replaced that with
+// SETSTORAGE_PER_ATTEMPT_MS (30s) + retry, after step 20's probe
+// proved that anvil silently DROPS the request rather than queues
+// it — longer per-attempt waits don't help; multiple shorter
+// attempts with read-back verification do. Constant kept removed
+// to avoid future drift between the two timeout regimes.
 
 // ── Token constants (Gnosis chain) ──
 //
@@ -453,14 +450,31 @@ export async function getChainId(rpcUrl) {
  * via `anvil_setStorageAt`. Lowest-level state mutation; callers
  * compute the slot themselves (or use one of the helpers below).
  *
+ * **Step 21**: write-then-verify-then-retry. Step 20's read-back
+ * probe proved that anvil silently drops some `anvil_setStorageAt`
+ * requests under cold-cache load — request is logged but the slot
+ * isn't mutated, and our client times out waiting for a response
+ * that never comes. Reads remain responsive throughout. The fix:
+ * after each `anvil_setStorageAt` (or each timeout), read the slot
+ * back via `eth_getStorageAt` and confirm the value landed; if
+ * not, retry. Up to `SETSTORAGE_MAX_ATTEMPTS` total attempts with
+ * exponential backoff between them.
+ *
+ * Per-attempt timeout is shorter than `MUTATION_TIMEOUT_MS`
+ * (`SETSTORAGE_PER_ATTEMPT_MS`) so that 3 failing attempts fit
+ * comfortably under a single Playwright test's 120-180s budget.
+ * Failure mode is preserved (still throws if all attempts fail).
+ *
  * @param {string} rpcUrl
  * @param {`0x${string}`} address       contract address
  * @param {`0x${string}`|bigint|number} slot  storage slot index
  *                                            (passed through toHex)
  * @param {`0x${string}`|bigint} value  32-byte value (left-padded
  *                                      automatically if shorter)
- * @returns {Promise<unknown>}
+ * @returns {Promise<void>}
  */
+const SETSTORAGE_MAX_ATTEMPTS = 3;
+const SETSTORAGE_PER_ATTEMPT_MS = 30_000;
 export async function setStorageAt(rpcUrl, address, slot, value) {
     const slotHex = typeof slot === 'string' && slot.startsWith('0x')
         ? slot
@@ -468,10 +482,65 @@ export async function setStorageAt(rpcUrl, address, slot, value) {
     const valueHex = typeof value === 'string' && value.startsWith('0x')
         ? pad(value, { size: 32 })
         : pad(viemToHex(value), { size: 32 });
-    // MUTATION_TIMEOUT_MS (60s, not the 30s default) — see step 13
-    // PROGRESS notes. Mid-test mutations queue behind the page's
-    // proxied eth_calls at anvil; 30s wasn't enough headroom.
-    return anvilRpc(rpcUrl, 'anvil_setStorageAt', [address, slotHex, valueHex], MUTATION_TIMEOUT_MS);
+    // Normalize value to bigint for read-back equality. Accepts
+    // both `0x...` hex strings and bigints; viem's pad/toHex on a
+    // bigint round-trips through hex cleanly.
+    const expected = typeof value === 'bigint'
+        ? value
+        : BigInt(value);
+
+    let lastErr = null;
+    for (let attempt = 1; attempt <= SETSTORAGE_MAX_ATTEMPTS; attempt++) {
+        try {
+            await anvilRpc(
+                rpcUrl,
+                'anvil_setStorageAt',
+                [address, slotHex, valueHex],
+                SETSTORAGE_PER_ATTEMPT_MS,
+            );
+            // Read-back: anvil_setStorageAt returns success but
+            // (per step 20 diagnostic) the slot may not actually
+            // be mutated. Confirm by reading the slot.
+            const actualHex = await anvilRpc(
+                rpcUrl,
+                'eth_getStorageAt',
+                [address, slotHex, 'latest'],
+            );
+            const actual = BigInt(actualHex);
+            if (actual === expected) {
+                if (attempt > 1) {
+                    console.log(
+                        `[fork-state] setStorageAt(${address}, slot=${slotHex.slice(0, 10)}…) ` +
+                        `succeeded on attempt ${attempt}/${SETSTORAGE_MAX_ATTEMPTS}`,
+                    );
+                }
+                return;
+            }
+            console.warn(
+                `[fork-state] setStorageAt write didn't land on attempt ${attempt}/${SETSTORAGE_MAX_ATTEMPTS} ` +
+                `(wrote ${valueHex}, read 0x${actual.toString(16).padStart(64, '0')}); retrying`,
+            );
+            lastErr = new Error(
+                `setStorageAt silent drop on attempt ${attempt}: wrote ${valueHex} read 0x${actual.toString(16)}`,
+            );
+        } catch (err) {
+            console.warn(
+                `[fork-state] setStorageAt attempt ${attempt}/${SETSTORAGE_MAX_ATTEMPTS} ` +
+                `threw: ${err.message}; retrying`,
+            );
+            lastErr = err;
+        }
+        // Exponential backoff: attempt 1 → 1s, attempt 2 → 2s.
+        // Gives anvil's worker pool time to recover between hits.
+        if (attempt < SETSTORAGE_MAX_ATTEMPTS) {
+            await new Promise((r) => setTimeout(r, 1000 * attempt));
+        }
+    }
+    throw new Error(
+        `[fork-state] setStorageAt(${address}, slot=${slotHex}) failed after ${SETSTORAGE_MAX_ATTEMPTS} attempts. ` +
+        `Last error: ${lastErr?.message ?? 'unknown'}`,
+        { cause: lastErr },
+    );
 }
 
 /**
