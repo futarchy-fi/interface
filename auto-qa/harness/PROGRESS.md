@@ -2313,6 +2313,73 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 31-scenario-28-market-page-registry-malformed
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (REGISTRY, malformed-
+  body) cell on the market-page chaos matrix.
+  Mirror of #07 (registry-malformed-body on
+  /companies). Registry returns 200 + content-type
+  text/html + an HTML 503 page body — fetch
+  resolves but `response.json()` throws SyntaxError
+  before any `.then` chain runs.
+
+  * **The scenario** — `28-market-page-registry-
+    malformed` on /markets/<MARKET_PROBE_ADDRESS>.
+    Same HTML error page body as #07 (a 503-page
+    response with a 200 status). Candles happy.
+    Same page-shell assertions as #24/#25/#26/#27.
+
+  * **Why this is the THIRD distinct code branch
+    after 502 + empty-200**:
+    ```js
+    // Form 1 (catches the SyntaxError):
+    fetch(url).then(r => r.json()).catch(err => …);
+
+    // Form 2 (does NOT catch — unhandled rejection):
+    const r = await fetch(url);
+    const data = await r.json();   // throws
+    ```
+    Whether the registry adapter and its callers
+    use form 1 or 2 isn't inspectable from the
+    test side — but #28 will catch any form-2
+    caller (or any form-1 caller whose `.catch`
+    does something wrong, like swallowing
+    without clearing `loading=false`).
+
+  * **Bug-shapes captured** (NEW vs #24/#26):
+    - Market-page CRASHES on registry malformed-
+      body (SyntaxError bypasses outer `.catch`)
+    - HTML body content LEAKS into UI ("503
+      Service Unavailable" rendered as text in a
+      panel header or proposal title)
+    - Hung loading spinner from SyntaxError
+      outside the `.then` chain not triggering
+      `loading=false`
+    - "Market Not Found" false positive from
+      wrong-code-path collapse (third distinct
+      failure path collapsing into single UX
+      signal alongside #24/#26)
+    - WrongNetworkModal false positive from
+      chain-validation coupling regression
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #28 itself: passed in 10.6s on
+      first run
+    - Catalog regenerated: 28 scenarios (was 27)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  |   —      |   —     |
+    | empty 200         | #26      | #27     |
+    | malformed body    | #28 ★    |   —     |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   |   —      |   —     |
+    5 of 12 cells filled.
+
 - **slice 30-scenario-27-market-page-candles-empty
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (CANDLES, empty-200)
