@@ -296,6 +296,94 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row.locator('td').nth(3)).toHaveText('7');
     });
 
+    test('slice 4g — resolved filter excludes from active only, not nonArchived (6 normal + 2 resolved → "6" / "8")', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Completes the filter-triplet coverage alongside slice 4b
+        // (hidden) and slice 4f (archived). The three filters live in
+        // DIFFERENT places in the code:
+        //   - archived  → excludes from nonArchived (drops total)
+        //   - hidden    → excludes from active only (total unchanged)
+        //   - resolved  → excludes from active only (total unchanged)
+        //
+        // Per src/hooks/useAggregatorCompanies.js:83-89:
+        //   const nonArchived = proposalsForOrg.filter(p =>
+        //       parseMetadata(p.metadata).archived !== true
+        //   );
+        //   const active = nonArchived.filter(p => {
+        //       const pm = parseMetadata(p.metadata);
+        //       if (pm.visibility === 'hidden') return false;
+        //       if (pm.resolution_status === 'resolved'
+        //           || pm.resolution_outcome) return false;
+        //       return true;
+        //   });
+        //
+        // The `resolution_status === 'resolved'` branch is the
+        // "explicit-resolved" path; the `pm.resolution_outcome`
+        // truthy branch is the "implicit-resolved" path (any
+        // outcome set implies resolution happened). This slice
+        // exercises the EXPLICIT branch — `resolution_outcome`
+        // coverage is a future slice.
+        //
+        // Test inputs:
+        //   - 6 proposals with no special metadata → all 6 active
+        //   - 2 proposals with `resolution_status: 'resolved'` →
+        //     in nonArchived (NOT archived) but excluded from
+        //     active
+        //   Total raw: 8 proposals
+        //   Expected: active=6, nonArchived=8
+        //
+        // Bug classes caught (distinct from 4b and 4f):
+        //   - Regression that drops the resolved-status filter —
+        //     would render "8" / "8" (resolved leak into active
+        //     count alongside their nonArchived presence)
+        //   - Regression that maps `resolution_status === 'resolved'`
+        //     into the `archived` filter instead of the `active`
+        //     filter — would render "6" / "6" (resolved would
+        //     incorrectly drop from total)
+        //   - Regression that uses loose equality
+        //     (`pm.resolution_status == 'Resolved'` or similar) —
+        //     case-sensitive bug surfaces here
+        //   - Regression that switches the OR condition to AND
+        //     (`'resolved' AND resolution_outcome`) — proposals
+        //     with status='resolved' but outcome=undefined would
+        //     leak into active
+        //
+        // Why this completes the filter triplet: archive, hidden,
+        // resolved are the three states the dashboard
+        // distinguishes from "currently active". A regression that
+        // breaks ANY of them silently miscounts the org's true
+        // activity level — visible product bug. The triplet probes
+        // each filter branch in isolation so the failure log
+        // points to exactly which branch broke.
+
+        const proposals = [];
+        for (let i = 0; i < 6; i++) proposals.push(fakeProposal(`n${i}`));
+        for (let i = 0; i < 2; i++) proposals.push(fakeProposal(`r${i}`, { resolution_status: 'resolved' }));
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({ proposals }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        // Same column layout as 4b / 4d / 4f.
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        // The DISTINGUISHING assertion vs 4f (which used 5/7):
+        // active < total here, AND total is unchanged from the raw
+        // 8-proposal input (proves resolved didn't drop from total).
+        await expect(row.locator('td').nth(2)).toHaveText('6');
+        await expect(row.locator('td').nth(3)).toHaveText('8');
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 

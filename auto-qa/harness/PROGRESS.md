@@ -2313,6 +2313,117 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 51-dom-api-invariant-resolved-filter-math
+  (Phase 5 invariant catalog — 10th DOM↔API
+  invariant; completes the filter-triplet
+  coverage)** (this iteration, on the interface
+  side) — completes the filter-triplet alongside
+  slice 4b (hidden) and slice 4f (archived). The
+  three filters live in DIFFERENT places in the
+  code with DIFFERENT semantics:
+    - `archived` → excludes from nonArchived
+      (drops total AND active)
+    - `hidden`   → excludes from active only
+      (total unchanged)
+    - `resolved` → excludes from active only
+      (total unchanged) — same semantics as
+      hidden but DIFFERENT code branch
+
+  * **The new invariant** —
+    `slice 4g — resolved filter excludes from
+    active only, not nonArchived`. Mock 6 normal
+    + 2 with `resolution_status: 'resolved'` = 8
+    raw proposals. Expected:
+      - nonArchived = 8 (resolved are NOT archived)
+      - active = 6 (resolved excluded from active)
+    DOM renders "6" in td[2] and "8" in td[3] —
+    a distinct numeric signature that proves
+    resolved drops from active but NOT total.
+
+  * **Code reference pinned** (per
+    `src/hooks/useAggregatorCompanies.js:83-89`):
+    ```
+    const nonArchived = proposalsForOrg.filter(
+        p => parseMetadata(p.metadata).archived !== true
+    );
+    const active = nonArchived.filter(p => {
+        const pm = parseMetadata(p.metadata);
+        if (pm.visibility === 'hidden') return false;
+        if (pm.resolution_status === 'resolved'
+            || pm.resolution_outcome) return false;
+        return true;
+    });
+    ```
+    Note the OR: `'resolved' || resolution_outcome`.
+    This slice exercises the EXPLICIT branch
+    (`status === 'resolved'`); the
+    `resolution_outcome`-truthy branch is a
+    future-iteration target.
+
+  * **Bug classes caught** (distinct from 4b
+    and 4f):
+    - Regression that DROPS the resolved-status
+      filter — renders "8" / "8" (resolved leak
+      into active count)
+    - Regression that maps
+      `resolution_status === 'resolved'` into
+      the archived filter instead of the active
+      filter — would render "6" / "6"
+      (resolved incorrectly drops from total)
+    - Regression that uses case-sensitive
+      mismatch (`'Resolved'` or `'RESOLVED'`)
+      — silently misses
+    - Regression that switches the OR to AND
+      — proposals with status='resolved' but
+      outcome=undefined leak into active
+
+  * **Filter-triplet completeness**: with 4b
+    (hidden), 4f (archived), and 4g (resolved),
+    the catalog now probes ALL THREE filter
+    branches of the active/total math in
+    isolation. A future regression that breaks
+    any one branch surfaces with a clear failure
+    message pointing at the exact branch. The
+    `resolution_outcome`-truthy variant remains
+    as the natural fourth slice for full
+    coverage.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 10 DOM↔API invariant tests pass: 19.6s
+      (was 9 in 19.2s); new slice 4g alone:
+      1.5s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (10 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved filter ★ | 6/2 split → "6" / "8" — RESOLVED filter active     |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (toFixed precision)     |
+
+  * **What's next**:
+    - `resolution_outcome`-truthy variant (4th
+      filter slice; completes the resolved-OR
+      coverage)
+    - price-formatter precision branch
+      (YES>=1 + NO<1 → "1.4200 SDAI" — tests
+      values >=1 don't break the formatter)
+    - proposal description field rendering
+      (carousel card → "Harness probe event"
+      visible)
+    - ChainBadge DEFAULT branch (no
+      metadata.chain → chainId=100 default →
+      "Gnosis" badge)
+
 - **slice 50-dom-api-invariant-archived-filter-math
   (Phase 5 invariant catalog — 9th DOM↔API
   invariant)** (this iteration, on the interface
