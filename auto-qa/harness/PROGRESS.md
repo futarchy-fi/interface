@@ -2313,6 +2313,84 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 30-scenario-27-market-page-candles-empty
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (CANDLES, empty-200)
+  cell on the market-page chaos matrix. Mirror of
+  #21 (candles-empty on /companies) on the market
+  page with its richer 4-query-shape contract.
+  Distinct from #25 (candles hard-502, `.catch`
+  branch) — candles stays UP and HEALTHY but
+  returns empty data for every query shape,
+  firing the `.then([])` branches in
+  `usePoolData`, `useYesNoPoolData`, and the
+  chart-fetch chain.
+
+  * **The scenario** — `27-market-page-candles-
+    empty` on /markets/<MARKET_PROBE_ADDRESS>.
+    Registry happy + candles returns empty for
+    all 4 shapes:
+    - proposal+whitelistedtokens →
+      `{ proposal: null, whitelistedtokens: [] }`
+    - pools singular → `{ pools: [] }`
+    - candles latest → `{ candles: [] }`
+    - whitelistedtokens only →
+      `{ whitelistedtokens: [] }`
+    Inline dispatcher; no other scenario needs
+    "uniform empty across all 4 candles shapes"
+    yet. Same page-shell assertions as
+    #24/#25/#26.
+
+  * **Why this is a NEW failure-mode branch
+    vs #25** (despite same terminal UX):
+    - #25 candles hard-502: `.catch` fires →
+      consumers see `error !== null`
+    - #27 candles empty-200: `.then([])` fires
+      → consumers see `data.length === 0`
+    A chart-panel rewrite that pinned
+    `loading=false` in `.catch` only would
+    break #27 while #25 passes. Same shape as
+    #03/#21 distinction on /companies, applied
+    to the market page's 4-query candles
+    contract.
+
+  * **Bug-shapes captured** (NEW vs #25):
+    - `.then(empty)` hangs the chart panel in
+      forever-loading (loading flag only
+      cleared on `.catch`)
+    - Per-pool spot-price shows "undefined" or
+      "NaN" (formatter lacks null guard for the
+      empty-data case)
+    - `pools[0]` access crashes on empty array
+      (no `pools.length > 0` guard before
+      accessing `pools[0].liquidity` etc.)
+    - Trading panel preview goes BLANK from
+      empty candles-derived feed
+    - WrongNetworkModal false-positive from
+      chain-validation gated on non-empty
+      candles response (same coupling bug
+      class as #24/#26 but on candles axis)
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #27 itself: passed in 10.4s on
+      first run
+    - Catalog regenerated: 27 scenarios (was 26)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  |   —      |   —     |
+    | empty 200         | #26      | #27 ★   |
+    | malformed body    |   —      |   —     |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   |   —      |   —     |
+    4 of 12 cells filled. Top 2 rows complete
+    (hard-502 + empty-200 × both endpoints).
+    Next: malformed-body axis (mirror #07/#08).
+
 - **slice 29-scenario-26-market-page-registry-empty
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (REGISTRY, empty-200)
