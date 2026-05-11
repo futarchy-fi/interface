@@ -58,6 +58,31 @@ export const SDAI_TOKEN_GNOSIS_ADDRESS = '0xaf204776c7245bF4147c2612BF6e5972Ee48
 // does at runtime.
 export const SDAI_BALANCE_SLOT = 0; // PROVISIONAL — re-verifying live below
 
+// Gnosis ConditionalTokens framework — same address `contracts.js`
+// uses for `CONDITIONAL_TOKENS_ADDRESS`. This is the standard Gnosis
+// CT contract (CTF-1.x). Position IDs are derived from
+// (collateralToken, collectionId(parentCollectionId, conditionId,
+// indexSet)) — the helpers below call the contract directly rather
+// than reimplementing the formula in JS, since the formula's exact
+// encoding (packed vs encoded, ordering, parent-collection
+// arithmetic) is non-trivial and contract-version-sensitive.
+export const CT_GNOSIS_ADDRESS = '0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce';
+
+// Storage slot index for ConditionalTokens' `_balances` mapping
+// (`mapping(uint256 => mapping(address => uint256))`). Live-verified
+// in step 2.8: NOT slot 0 (Gnosis CT inherits a base that uses
+// slot 0 for something else); the actual `_balances` is at slot 1.
+// Re-derive when CT upgrades by running:
+//   anvil --fork-url <gnosis-rpc> --port 8546 &
+//   node -e "import('./fixtures/fork-state.mjs').then(m => /* probe loop */)"
+export const CT_BALANCE_SLOT = 1;
+
+// Empty parentCollectionId (top-level collection). Most futarchy
+// positions live at the top level; nested collections are for
+// multi-condition products which the harness doesn't currently
+// exercise.
+export const EMPTY_COLLECTION_ID = `0x${'00'.repeat(32)}`;
+
 // Standard ERC20 + ERC1155 ABI fragments — minimal surface for
 // read/write helpers. Keeping fragments inline avoids a separate
 // ABI file and makes the helpers self-contained.
@@ -76,6 +101,29 @@ const ERC1155_BALANCE_OF_ABI = [{
     inputs: [
         { name: 'account', type: 'address' },
         { name: 'id',      type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+}];
+
+const CT_GET_COLLECTION_ID_ABI = [{
+    type: 'function',
+    name: 'getCollectionId',
+    stateMutability: 'view',
+    inputs: [
+        { name: 'parentCollectionId', type: 'bytes32' },
+        { name: 'conditionId',        type: 'bytes32' },
+        { name: 'indexSet',           type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bytes32' }],
+}];
+
+const CT_GET_POSITION_ID_ABI = [{
+    type: 'function',
+    name: 'getPositionId',
+    stateMutability: 'pure',
+    inputs: [
+        { name: 'collateralToken', type: 'address' },
+        { name: 'collectionId',    type: 'bytes32' },
     ],
     outputs: [{ name: '', type: 'uint256' }],
 }];
@@ -445,4 +493,124 @@ export async function getErc1155Balance(rpcUrl, contract, holder, tokenId) {
         functionName: 'balanceOf',
         data:         result,
     });
+}
+
+// ── Step 2.8: ConditionalTokens position-ID helpers ──
+
+/**
+ * Call the live ConditionalTokens contract's `getCollectionId`
+ * function via eth_call. Returns a bytes32 collection id.
+ *
+ * **Why we don't reimplement the formula in JS**: the exact
+ * encoding (packed vs encoded, ordering, parent-collection
+ * arithmetic for nested collections) is non-trivial and
+ * contract-version-sensitive. The empirical verification
+ * (step 2.8 inline probe) showed that the obvious-looking
+ * pure-JS formulas (both `keccak256(encodePacked(...))` and
+ * `keccak256(abi.encode(...))`) DON'T match the constants
+ * shipped in `src/components/futarchyFi/marketPage/constants/
+ * contracts.js` — so trying to maintain the formula in JS
+ * is a maintenance liability. eth_call is one round trip and
+ * always correct.
+ *
+ * @param {string} rpcUrl
+ * @param {`0x${string}`} parentCollectionId  bytes32 (use
+ *                                            EMPTY_COLLECTION_ID
+ *                                            for top-level)
+ * @param {`0x${string}`} conditionId
+ * @param {bigint|number} indexSet  outcome bitmask
+ * @returns {Promise<`0x${string}`>}  collection id (bytes32 hex)
+ */
+export async function ctGetCollectionId(rpcUrl, parentCollectionId, conditionId, indexSet) {
+    const data = encodeFunctionData({
+        abi:          CT_GET_COLLECTION_ID_ABI,
+        functionName: 'getCollectionId',
+        args:         [parentCollectionId, conditionId, BigInt(indexSet)],
+    });
+    const result = await anvilRpc(rpcUrl, 'eth_call', [
+        { to: CT_GNOSIS_ADDRESS, data },
+        'latest',
+    ]);
+    return decodeFunctionResult({
+        abi:          CT_GET_COLLECTION_ID_ABI,
+        functionName: 'getCollectionId',
+        data:         result,
+    });
+}
+
+/**
+ * Call the live ConditionalTokens contract's `getPositionId`
+ * function via eth_call. Returns a uint256 position id (bigint).
+ *
+ * @param {string} rpcUrl
+ * @param {`0x${string}`} collateralToken
+ * @param {`0x${string}`} collectionId
+ * @returns {Promise<bigint>}
+ */
+export async function ctGetPositionId(rpcUrl, collateralToken, collectionId) {
+    const data = encodeFunctionData({
+        abi:          CT_GET_POSITION_ID_ABI,
+        functionName: 'getPositionId',
+        args:         [collateralToken, collectionId],
+    });
+    const result = await anvilRpc(rpcUrl, 'eth_call', [
+        { to: CT_GNOSIS_ADDRESS, data },
+        'latest',
+    ]);
+    return decodeFunctionResult({
+        abi:          CT_GET_POSITION_ID_ABI,
+        functionName: 'getPositionId',
+        data:         result,
+    });
+}
+
+/**
+ * Convenience helper: fully derive a position id given a
+ * collateral token + condition id + index set, with the standard
+ * empty parent collection. Two eth_calls (collectionId then
+ * positionId).
+ *
+ * Index-set convention for the standard 2-outcome (YES/NO)
+ * partition: indexSet=1 selects outcome 0, indexSet=2 selects
+ * outcome 1. Which is YES vs NO is convention-defined per
+ * proposal — the harness should derive both and let the consumer
+ * pick.
+ *
+ * @returns {Promise<bigint>}
+ */
+export async function ctDerivePositionId(rpcUrl, collateralToken, conditionId, indexSet) {
+    const collectionId = await ctGetCollectionId(
+        rpcUrl, EMPTY_COLLECTION_ID, conditionId, indexSet,
+    );
+    return ctGetPositionId(rpcUrl, collateralToken, collectionId);
+}
+
+/**
+ * Set a holder's balance for a specific ConditionalTokens position
+ * id by writing directly to the CT contract's `_balances` mapping
+ * storage. Wrapper around `setErc1155Balance` that pins the
+ * contract to `CT_GNOSIS_ADDRESS` and the slot to
+ * `CT_BALANCE_SLOT`.
+ *
+ * @param {string} rpcUrl
+ * @param {`0x${string}`} holder
+ * @param {bigint|number|string} positionId
+ * @param {bigint|number|string} amount
+ * @returns {Promise<unknown>}
+ */
+export async function setConditionalPosition(rpcUrl, holder, positionId, amount) {
+    return setErc1155Balance(
+        rpcUrl, CT_GNOSIS_ADDRESS, holder, positionId, amount, CT_BALANCE_SLOT,
+    );
+}
+
+/**
+ * Read a holder's balance for a specific position id via eth_call
+ * to the CT contract's `balanceOf(address, uint256)`. Verification
+ * step for `setConditionalPosition`.
+ *
+ * @returns {Promise<bigint>}
+ */
+export async function getConditionalPosition(rpcUrl, holder, positionId) {
+    return getErc1155Balance(rpcUrl, CT_GNOSIS_ADDRESS, holder, positionId);
 }

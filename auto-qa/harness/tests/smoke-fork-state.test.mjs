@@ -34,6 +34,14 @@ import {
     nestedMappingStorageKey,
     setErc1155Balance,
     getErc1155Balance,
+    CT_GNOSIS_ADDRESS,
+    CT_BALANCE_SLOT,
+    EMPTY_COLLECTION_ID,
+    ctGetCollectionId,
+    ctGetPositionId,
+    ctDerivePositionId,
+    setConditionalPosition,
+    getConditionalPosition,
 } from '../fixtures/fork-state.mjs';
 
 // ── Stub server fixture ──────────────────────────────────────────────
@@ -405,6 +413,143 @@ test('getErc1155Balance — encodes balanceOf(address, uint256) + decodes uint25
         assert.equal(calls.length, 1);
         assert.equal(calls[0].method, 'eth_call');
         // ERC1155 balanceOf selector: keccak256("balanceOf(address,uint256)")[0:4] = 0x00fdd58e
+        assert.match(calls[0].params[0].data, /^0x00fdd58e/);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+// ── Step 2.8: ConditionalTokens position-ID helpers ─────────────────
+
+test('CT constants — pinned to known Gnosis values', () => {
+    assert.equal(
+        CT_GNOSIS_ADDRESS,
+        '0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce',
+        'CT_GNOSIS_ADDRESS must match the constant in src/components/futarchyFi/marketPage/constants/contracts.js',
+    );
+    assert.equal(
+        CT_BALANCE_SLOT, 1,
+        'CT_BALANCE_SLOT live-verified at slot 1 in step 2.8 (NOT slot 0 — Gnosis CT inherits a base that uses slot 0 for something else)',
+    );
+    assert.equal(EMPTY_COLLECTION_ID, '0x' + '00'.repeat(32));
+});
+
+test('ctGetCollectionId — eth_call to CT contract with bytes32+bytes32+uint256 args', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: '0x6259f0343995a15d8536eb787d54fc267cb9b6d9a58ce3f9023e74c7547f2c59' };
+    });
+    try {
+        const condId = '0x9c89eb71b3b54134a6099fdced88df75254606b9a08d0c9b5f96fa3905e2db3d';
+        const result = await ctGetCollectionId(url, EMPTY_COLLECTION_ID, condId, 1n);
+        assert.equal(
+            result.toLowerCase(),
+            '0x6259f0343995a15d8536eb787d54fc267cb9b6d9a58ce3f9023e74c7547f2c59',
+        );
+        assert.equal(calls[0].method, 'eth_call');
+        assert.equal(calls[0].params[0].to.toLowerCase(), CT_GNOSIS_ADDRESS.toLowerCase());
+        // getCollectionId(bytes32,bytes32,uint256) selector:
+        // keccak256("getCollectionId(bytes32,bytes32,uint256)")[0:4] = 0x856296f7
+        assert.match(calls[0].params[0].data, /^0x856296f7/);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('ctGetPositionId — eth_call to CT contract with address+bytes32 args', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        // Result: 0x668e2de525bf95c1b7ecdc79bd47a46605f77cd472cef3707626bf76fb0a743d
+        return { result: '0x668e2de525bf95c1b7ecdc79bd47a46605f77cd472cef3707626bf76fb0a743d' };
+    });
+    try {
+        const result = await ctGetPositionId(
+            url,
+            '0xaf204776c7245bF4147c2612BF6e5972Ee483701',
+            '0x6259f0343995a15d8536eb787d54fc267cb9b6d9a58ce3f9023e74c7547f2c59',
+        );
+        assert.equal(typeof result, 'bigint');
+        assert.equal(
+            '0x' + result.toString(16).padStart(64, '0'),
+            '0x668e2de525bf95c1b7ecdc79bd47a46605f77cd472cef3707626bf76fb0a743d',
+        );
+        // getPositionId(address,bytes32) selector:
+        // keccak256("getPositionId(address,bytes32)")[0:4] = 0x39dd7530
+        assert.match(calls[0].params[0].data, /^0x39dd7530/);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('ctDerivePositionId — chains getCollectionId → getPositionId in two eth_calls', async () => {
+    const methods = [];
+    let callIdx = 0;
+    const { url, server } = await startStub((req) => {
+        methods.push(req.method);
+        const responses = [
+            // First call: getCollectionId
+            { result: '0x6259f0343995a15d8536eb787d54fc267cb9b6d9a58ce3f9023e74c7547f2c59' },
+            // Second call: getPositionId
+            { result: '0x668e2de525bf95c1b7ecdc79bd47a46605f77cd472cef3707626bf76fb0a743d' },
+        ];
+        return responses[callIdx++];
+    });
+    try {
+        const positionId = await ctDerivePositionId(
+            url,
+            '0xaf204776c7245bF4147c2612BF6e5972Ee483701',
+            '0x9c89eb71b3b54134a6099fdced88df75254606b9a08d0c9b5f96fa3905e2db3d',
+            1n,
+        );
+        assert.equal(typeof positionId, 'bigint');
+        assert.equal(callIdx, 2, 'must issue exactly 2 eth_calls');
+        assert.deepEqual(methods, ['eth_call', 'eth_call']);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('setConditionalPosition — pins to CT contract + CT_BALANCE_SLOT', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: null };
+    });
+    try {
+        const holder = '0xabcdef0000000000000000000000000000000000';
+        const positionId = 0x668e2de525bf95c1b7ecdc79bd47a46605f77cd472cef3707626bf76fb0a743dn;
+        const expected = nestedMappingStorageKey(positionId, holder, CT_BALANCE_SLOT, 'uint256', 'address');
+        await setConditionalPosition(url, holder, positionId, 100n);
+        assert.equal(calls[0].method, 'anvil_setStorageAt');
+        // Pinned to CT contract address
+        assert.equal(calls[0].params[0].toLowerCase(), CT_GNOSIS_ADDRESS.toLowerCase());
+        // Storage key uses CT_BALANCE_SLOT (1, NOT 0); a regression that
+        // ignored the slot constant would silently write to slot 0 and
+        // be invisible until end-to-end runs against the live fork.
+        assert.equal(calls[0].params[1].toLowerCase(), expected.toLowerCase());
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('getConditionalPosition — eth_call balanceOf on CT contract', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: '0x000000000000000000000000000000000000000000000000000000000000000a' };
+    });
+    try {
+        const balance = await getConditionalPosition(
+            url,
+            '0xabcdef0000000000000000000000000000000000',
+            42n,
+        );
+        assert.equal(balance, 10n);
+        assert.equal(calls[0].method, 'eth_call');
+        assert.equal(calls[0].params[0].to.toLowerCase(), CT_GNOSIS_ADDRESS.toLowerCase());
+        // ERC1155 balanceOf selector
         assert.match(calls[0].params[0].data, /^0x00fdd58e/);
     } finally {
         await closeStub(server);

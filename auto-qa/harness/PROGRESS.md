@@ -2313,6 +2313,123 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-2.8 (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — sixth step
+  of the multi-iteration fork bootstrap. Adds the
+  ConditionalTokens position-ID derivation helpers +
+  `setConditionalPosition` wrapper. **Caught two real
+  things along the way**.
+
+  * **Empirical findings (live anvil)**:
+
+    1. **Pure-JS keccak formulas don't match the Gnosis
+       CT framework's `getPositionId`.** Tried both
+       `keccak256(encodePacked(...))` and
+       `keccak256(abi.encode(...))` against the known
+       constants in `src/components/futarchyFi/marketPage/
+       constants/contracts.js` — neither matched. This
+       killed the "reimplement the formula in JS"
+       approach. Switched to calling the live CT
+       contract via eth_call instead — one round trip,
+       always correct, no formula maintenance burden.
+
+    2. **`CT_BALANCE_SLOT` is 1, not 0.** Gnosis
+       ConditionalTokens inherits from a base contract
+       that uses slot 0 for something else; the actual
+       `_balances` mapping is at slot 1. Bug in the
+       provisional value ("PROVISIONAL — re-verifying
+       live in step 2.9") caught and fixed THIS slice.
+       Probe loop discovered it via parametric write +
+       balanceOf comparison using a fresh holder per
+       slot (the FIRST probe was buggy — it didn't reset
+       between slots so positive results cascaded).
+
+  * **`fixtures/fork-state.mjs` extensions**:
+    - `CT_GNOSIS_ADDRESS` — same address as the
+      `CONDITIONAL_TOKENS_ADDRESS` constant in
+      contracts.js
+    - `CT_BALANCE_SLOT = 1` (live-verified)
+    - `EMPTY_COLLECTION_ID` — bytes32(0); top-level
+      collection
+    - `ctGetCollectionId(rpcUrl, parentColId, condId,
+      indexSet)` — eth_call to CT
+    - `ctGetPositionId(rpcUrl, collateralToken,
+      collectionId)` — eth_call to CT
+    - `ctDerivePositionId(rpcUrl, collateralToken,
+      conditionId, indexSet)` — chains both calls
+      with `EMPTY_COLLECTION_ID` parent
+    - `setConditionalPosition(rpcUrl, holder,
+      positionId, amount)` — wrapper around
+      `setErc1155Balance` pinning the contract +
+      slot
+    - `getConditionalPosition(rpcUrl, holder,
+      positionId)` — verification read
+
+  * **Why call the contract instead of pure JS**:
+    The exact CT formula encoding (packed vs encoded,
+    parent-collection ECC arithmetic for nested
+    collections, version-specific quirks) is non-
+    trivial. eth_call is ONE round trip and always
+    correct. The harness only needs position IDs at
+    setup time so the round-trip cost is negligible.
+
+  * **End-to-end live verified**:
+    ```
+    YES position before: 0n
+    YES position after : 777n
+    ★ END-TO-END OK at CT_BALANCE_SLOT=1
+    ```
+
+  * **Smoke test extensions** — 6 new tests
+    (49 total in the file now):
+    - CT constants pinned to known Gnosis values
+      (regression-traps for accidental edits)
+    - ctGetCollectionId issues eth_call to CT with
+      selector `0x856296f7` (live-derived; assertion
+      catches a regression that uses the wrong
+      selector)
+    - ctGetPositionId selector `0x39dd7530`
+      (similarly pinned)
+    - ctDerivePositionId chains BOTH calls (asserted
+      via call sequence)
+    - setConditionalPosition pins to CT contract +
+      CT_BALANCE_SLOT=1 (regression that ignores the
+      slot constant would silently write to slot 0)
+    - getConditionalPosition uses ERC1155 selector
+      `0x00fdd58e` against CT contract
+
+  * **Selector-pinning surprise**: my first guess at
+    selectors (`0x84edc7a5` for getCollectionId,
+    `0x9d1bb466` for getPositionId) was WRONG —
+    actual values from `keccak256(toBytes(sig))[0:4]`
+    are `0x856296f7` and `0x39dd7530`. The smoke
+    tests caught this immediately. Same lesson as the
+    CT_BALANCE_SLOT discovery: live-verify, don't
+    guess.
+
+  * Total interface harness smoke tests: 49/49
+    (was 43, +6 new).
+
+  * **Multi-iteration plan progress**:
+    - ✓ Step 1: anvil in webServer
+    - ✓ Step 2: fork-state primitives + globalSetup
+    - ✓ Step 2.5: ERC20 storage-write + sDAI wrapper
+    - ✓ Step 2.6: wire sDAI into globalSetup +
+      live-verify slot
+    - ✓ Step 2.7: ERC1155 storage-write primitives
+    - ✓ Step 2.8 (this slice): CT position-ID
+      helpers + setConditionalPosition wrapper +
+      live-verified CT_BALANCE_SLOT
+    - ⏳ Step 2.9: derive probe-market conditionId
+      (call FutarchyMarket at MARKET_PROBE_ADDRESS),
+      compute YES + NO position IDs, fund both,
+      verify via getConditionalPosition
+    - ⏳ Step 3: per-scenario fork-pin support
+    - ⏳ Step 4: positions scenario asserting real
+      on-chain ERC1155 balances
+    - ⏳ Step 5: liquidity scenario
+    - ⏳ Step 6: CI workflow Foundry install step
+
 - **slice fork-bootstrap-step-2.7 (Phase 7 fork wiring)**
   (this iteration, on the interface side) — fifth step
   of the multi-iteration fork bootstrap. Adds ERC1155
