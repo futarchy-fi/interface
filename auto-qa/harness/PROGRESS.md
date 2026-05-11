@@ -2313,6 +2313,82 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 13-market-page-charts (Phase 7 pivot iteration 5, REORDERED)**
+  (this iteration, on the interface side) — third
+  market-page feature-area scenario. **Shipped before
+  positions** (originally planned for slot #13) because
+  positions hinges on the still-open chain-fork decision
+  the user raised: do we (A) wire anvil bootstrap into
+  scenarios:run, or (B) extend the wallet stub with
+  eth_call mocking. Charts is pure-structural — no
+  on-chain reads required for the assertion to be
+  meaningful — so it can ship without that decision.
+
+  * **What the charts surface is**: `MarketPageShowcase`
+    renders `<TripleChart>` (the unified yes/no/spot
+    price chart) wrapped by `<ChartParameters>` (the
+    parameter strip with "Spot Price", "Yes Price",
+    "No Price", "Event Probability", "Impact" labels).
+    All five labels are React-rendered constants —
+    don't depend on dynamic chart data — so their
+    presence proves the chart shell mounted.
+
+  * Adds `scenarios/13-market-page-charts.scenario.mjs`.
+    Identical mocks to #10-#12. Three assertions:
+    - "Yes Price" parameter-card label visible
+    - "No Price" sister card visible (catches single-
+      card-rendered regression)
+    - "Event Probability" — second chart-strip label,
+      distinct from the price cards
+
+  * **Bug-shapes guarded** (foundation regressions for
+    the charts feature):
+    - chart panels never mount when propBaseData is
+      empty (TripleChart hard-requires non-empty data
+      regression)
+    - ChartParameters strip hidden behind a flag/gate
+    - Yes/No labels transposed (a refactor that swaps
+      slot order)
+    - sister panel takes the chart slot
+
+  * **Deliberately not covered** (deferred):
+    - chart-line SVG rendering (fragile across library
+      versions)
+    - TWAP countdown value (Algebra TWAP via direct
+      eth_call — needs the chain-fork decision)
+    - currency selection state-machine
+
+  * **Fork-decision reminder**: per the conversation
+    just before this iteration, the user asked
+    "aren't we doing a chain fork?" The honest answer:
+    /companies + market-page scenarios so far have been
+    Phase-6 pure-mock — they intercept GraphQL at the
+    network layer and run Playwright against a wallet
+    stub that CAN point at anvil but doesn't require
+    it. Scenarios #10-#13 only need the GraphQL mocks;
+    none assert on-chain values. Positions (#14, the
+    NEXT scenario after this one in the new order) is
+    where the fork decision actually matters — balances
+    are ERC1155 reads via RPC, and without anvil
+    they'd be silently null. Awaiting the user's
+    (A)/(B) call before shipping #14.
+
+  * Catalog regenerated: SCENARIOS.md now lists 13
+    scenarios. Smoke totals: 20/20 pass.
+
+  * **Iteration plan progress**: 6 of 7 done (in a
+    new order).
+    - ✓ Recon
+    - ✓ Fixture skeleton
+    - ✓ Happy-path scenario (#10)
+    - ✓ Trading scenario (#11)
+    - ✓ Allowances scenario (#12)
+    - ✓ Charts scenario (#13, this iteration —
+      shipped early)
+    - ⏳ Liquidity scenario (next, also pure-structural)
+    - ⏳ Positions scenario (gated on (A)/(B) fork
+      decision)
+
 - **slice 12-market-page-allowances (Phase 7 pivot iteration 4)**
   (this iteration, on the interface side) — second
   market-page feature-area scenario. Allowances is the
