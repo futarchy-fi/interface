@@ -2313,6 +2313,88 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 91-live-anvil-time-control (Phase 6 —
+  validates slice 90 primitives against real
+  anvil)** (this iteration, on the interface
+  side) — Adds 5 live-anvil tests that exercise
+  the time-control primitives end-to-end against
+  a running anvil instance, not just the stub.
+  Recent-PR coverage unchanged at 12/22; this is
+  validation work that surfaced a real anvil
+  behavior worth documenting. 52 smoke tests
+  green (47 stub + 5 live).
+
+  * **What stub-based tests CAN'T catch**: the
+    smoke tests in slice 90 use an in-process
+    JSON-RPC stub. That verifies the consumer-
+    side wire (method name, hex encoding,
+    arg order) but says NOTHING about anvil's
+    actual behavior. A future anvil release
+    that:
+    - renames `evm_setNextBlockTimestamp` →
+      `anvil_setNextBlockTimestamp`
+    - changes timestamp validation semantics
+    - drops legacy method aliases
+    ...would slip through the stub tests
+    silently. The live tests in this slice
+    surface those breakages immediately.
+
+  * **The 5 live tests**:
+    1. `getBlockTimestamp` returns a plausible
+       unix seconds value (between 2020 and
+       2100) — catches parser-direction bugs
+       like reading block.number as
+       block.timestamp.
+    2. `advanceTime` advances by EXACTLY the
+       requested seconds (no wall-clock slop;
+       anvil applies setNextBlockTimestamp
+       exactly).
+    3. `setNextBlockTimestamp` + `mineBlock`
+       pinning works exactly.
+    4. `setNextBlockTimestamp(past)` is
+       rejected with a clear timestamp-related
+       error — the loud-failure property
+       scenarios depend on.
+    5. `snapshot + advanceTime + revert`
+       restores the original timestamp —
+       critical for scenario isolation.
+
+  * **Documented finding**: anvil 1.5.0 ACCEPTS
+    `setNextBlockTimestamp(current)` — equal-to-
+    current is fine, only STRICTLY past
+    timestamps are rejected. The test was
+    rewritten from `current` to `current - 100`
+    to match anvil's actual semantics. (Earlier
+    tests assumed `>=` semantics which would
+    have silently passed against any version
+    that didn't reject equality.)
+
+  * **Opt-in execution**: tests skip when
+    `HARNESS_ANVIL_URL` is unreachable. So
+    `npm test` from CI stays green without an
+    anvil, but a developer running `anvil
+    --fork-url ... --port 8546 &` followed by
+    `node --test tests/live-time-control.test.mjs`
+    gets the full validation. Add to docker
+    compose smoke-stack in a future slice.
+
+  * **What this slice DOES NOT yet do**:
+    - No scenario uses the primitives yet (still
+      open from slice 90's "next slice" hook).
+    - No live test for the FULL primitive
+      composition through a fork operation
+      (e.g., funding wallet, deploying mock
+      pool, advancing time, asserting on
+      contract read). That's slice 92+.
+
+  * **Catalog state**: 56 scenarios (unchanged),
+    14 mechanically verified (unchanged).
+    Smoke tests: 47 stub + 5 live = 52 total.
+    Eight assertion KINDs; 9th
+    (TIME-EVOLUTION) still scaffolded only —
+    next slice must author a scenario that
+    USES the primitives.
+
 - **slice 90-time-control-foundation (Phase 6 —
   TIME-EVOLUTION KIND scaffolding)** (this
   iteration, on the interface side) — Adds the
