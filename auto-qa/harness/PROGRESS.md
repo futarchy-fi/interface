@@ -2313,6 +2313,80 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-1 (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — user
+  answered the **(A)** option from last iteration:
+  "wire chain fork into scenarios" rather than
+  extending wallet-stub eth_call mocking. This
+  iteration ships the FIRST step of the multi-iteration
+  bootstrap.
+
+  * **What ships**: `playwright.config.mjs` `webServer`
+    converted from a single object to an ARRAY with two
+    entries:
+    - Next.js dev server (unchanged)
+    - **NEW**: anvil at port 8546, forking Gnosis at
+      latest, 10 pre-funded accounts × 10000 ETH each,
+      `--silent` to keep stdout quiet
+  * Opt-out via `HARNESS_NO_ANVIL=1` for cases where:
+    - Anvil is already running locally on the same port
+    - The scenario doesn't need on-chain reads
+    - CI doesn't have Foundry installed yet (the staged
+      scenarios CI workflow needs a Foundry install
+      step before this can fully run there — that's a
+      follow-up slice)
+  * Fork URL defaults to `https://rpc.gnosis.gateway.fm`
+    overridable via `FORK_URL` env.
+
+  * **What this enables**: scenarios can now safely
+    assert on-chain values. The wallet stub's
+    `setupSigningTunnel` already routes RPC to
+    localhost:8546 — adding anvil at that port closes
+    the loop. `useSdaiRate`, `useBalanceManager`,
+    `useChainValidation`, allowance lookups all hit
+    real Gnosis-fork state instead of erroring or
+    returning null.
+
+  * **Validation**: `playwright.config.mjs` re-imports
+    cleanly via `node -e`; both webServer entries
+    register correctly (port 3000 + port 8546).
+    `anvil` confirmed on local PATH (Foundry 1.5.0).
+    Live Playwright validation deferred (cold Next.js
+    + cold anvil bootstrap exceeds cron budget).
+
+  * **Multi-iteration plan for fork wiring**:
+    - ✓ Step 1 (this iteration): anvil in webServer
+    - ⏳ Step 2: state-setup hook — pre-fund the
+      synthetic wallet's address with sDAI, mint
+      ERC1155 conditional-token positions on the fork.
+      Adds a `fixtures/fork-state.mjs` helper.
+    - ⏳ Step 3: per-scenario fork-pin support —
+      scenarios that need a deterministic block (e.g.,
+      "TWAP at exactly 24h before resolution") get a
+      `forkBlock` field; scenario-runner.spec.mjs
+      sends `anvil_reset` before assertions.
+    - ⏳ Step 4: positions scenario (#14, gated on
+      this work) — asserts real on-chain ERC1155
+      balances flow into MarketBalancePanel.
+    - ⏳ Step 5: liquidity scenario — pure-structural,
+      doesn't strictly need the fork but happy to ship
+      after the fork stack is in place.
+    - ⏳ Step 6: CI workflow — staged scenarios YAML
+      gets a `actions-rs/foundry-toolchain@v1`
+      install step before `npm run ui:full`.
+
+  * **Fork-decision tradeoff captured for the record**:
+    chose (A) over (B) because the harness vision per
+    ARCHITECTURE.md is end-to-end forked replay. (B)
+    would be faster per-iteration but downgrade the
+    coverage to "UI-rendering-given-state" — same
+    semantic class as the existing pure-mock scenarios,
+    just with a different mock layer. (A) catches a
+    bug class no other test in the repo can: real-
+    world contract interaction at the chain layer
+    (decimals, allowance edge cases, swap router
+    quirks).
+
 - **slice 13-market-page-charts (Phase 7 pivot iteration 5, REORDERED)**
   (this iteration, on the interface side) — third
   market-page feature-area scenario. **Shipped before
