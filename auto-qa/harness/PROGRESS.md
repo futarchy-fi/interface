@@ -2313,6 +2313,96 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 81-url-state-evolution-catch (Phase 6 —
+  third NEW assertion-target KIND: URL string state
+  changes after mount)** (this iteration, on the
+  interface side) — Catches PR #52 (extract proposalId
+  from milestones URL hash). New KIND of assertion:
+  not DOM text, not GraphQL shape, not console errors
+  — but URL evolution after a mount useEffect runs.
+
+  * **The PR in one paragraph**: `/milestones?company_id=
+    …#milestone:0x…` route was the legacy entry into
+    MarketPageShowcase. Pre-PR-52 the page detected the
+    hash to conditionally show the market view, but
+    NEVER extracted `0x…` from the hash into
+    `?proposalId=0x…`. MarketPageShowcase only reads
+    proposalId from path/query, so it got null →
+    useContractConfig returned null → swap quoter fell
+    to Uniswap V3 fallback → revert → "Insufficient
+    liquidity". One-line user-visible symptom; ~20
+    lines of code path between cause and effect.
+
+  * **What makes this KIND distinct**: every previous
+    catch operates on output state visible IN the DOM
+    or in API call shape. PR #52's bug is **URL-state-
+    evolution**: a useEffect fires, mutates
+    `window.location.search` via `history.replaceState`,
+    and the OUTPUT we care about is `page.url()`. The
+    DOM might render anything; the URL is the proof.
+
+  * **The scenario** (`scenarios/49-pr52-url-hash-rewrite.scenario.mjs`):
+    - Route:
+      `/milestones?company_id=gnosis#milestone:${MARKET_PROBE_ADDRESS}`
+    - Standard market-page mocks (same as #10–#13) so
+      MarketPageShowcase can mount past its
+      configuration gate, but the URL-rewrite useEffect
+      runs INDEPENDENT of MarketPageShowcase render.
+    - Two `expect.poll(() => page.url())` assertions:
+      one for `proposalId=…` substring (the rewrite
+      happened), one for `#milestone:…` retention (the
+      rewrite preserved the hash per the source's
+      `pathname + '?' + urlParams + currentHash`
+      concat order).
+
+  * **Mechanical verification** (slice 74-80 pattern):
+    Mutated `src/pages/milestones.js` lines 51-60
+    (removed the `hashAddrMatch + urlParams.set +
+    history.replaceState` block) → scenario 49 FAILED:
+    ```
+    Expected substring: "proposalId=0x45e10..."
+    Received string: "http://localhost:3000/milestones?
+      company_id=gnosis#milestone:0x45e10..."
+    ```
+    The URL was never rewritten. Restored → passes.
+
+  * **Why `expect.poll`** : the URL rewrite is async
+    (runs after `router.isReady` flips, post-mount).
+    Single `expect(page.url())` could miss the rewrite
+    window. Polling waits up to 15s for the rewrite to
+    appear; in practice it lands within ~200ms.
+
+  * **Catalog state**: 49 scenarios; **7 mechanically
+    verified** (44, 45, 46, 47, 48, 10, 49).
+    Mechanically-verified PR coverage: 8 → **9**
+    (added #52).
+
+  * **Capability inventory**: this completes the trio
+    of distinct assertion-target KINDS:
+    - DOM text/attributes (existing)
+    - GraphQL query shape (slice 78)
+    - Page errors / console (slice 79)
+    - URL state evolution (slice 81)
+
+    Each catches a different class of regressions; a
+    scenario can opt into one or many. Future
+    capability targets:
+    - Network request count/pattern (catch retry
+      storms, dead-URL hits)
+    - Visual state (CSS interaction — PR #59 class)
+    - Time-based / clock-control (PR #54 class —
+      infrastructure exists in fork-state.mjs, just
+      needs scenario wiring)
+    - Build-mode runtime (PR #58 class — TDZ post-
+      minification)
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `scenarios:catalog` clean (49)
+    - Scenario 49 wall-clock: ~3s warm
+    - src/ tree clean after both verification
+      mutations restored
+
 - **slice 80-page-error-monitor-spread-to-market-page
   (Phase 6 — apply slice 79 capability beyond /companies;
   surfaces real bug)** (this iteration, on the interface
