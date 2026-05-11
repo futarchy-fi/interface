@@ -2313,6 +2313,89 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 14-market-page-positions (Phase 7 fork-bootstrap step 4)**
+  (this iteration, on the interface side) — **first
+  fork-backed scenario**. The payoff for steps 1 → 2 →
+  2.5 → 2.6 → 2.7 → 2.8 → 2.9: a scenario whose
+  assertion targets a value flowing from real on-chain
+  state through the entire stack into the DOM.
+
+  * Adds `scenarios/14-market-page-positions.scenario.mjs`.
+    Same registry + candles mocks as #10-#13, but the
+    canonical assertion targets **the balance value
+    funded in globalSetup**:
+    - YES = 100, NO = 100 funded via storage write
+    - `MarketBalancePanel.jsx:245` computes
+      `sdiPositionBalance = min(YES, NO) = 100`
+    - `formatWith(100, 'balance')` (precision=4 per
+      `PRECISION_CONFIG`) renders as "100.0000"
+    - Asserts `page.getByText('100.0000')` is visible
+      (symbol-agnostic — see scenario header for why
+      not pinning the "SDAI" suffix)
+
+  * **Two assertions**: page-shell anchor ("Balance")
+    first for a fast-fail signal if the page never
+    mounts; then the value assertion. 30s timeout on
+    the value assertion accounts for the full balance
+    fetch chain (mount → wallet connect →
+    chain-validation → useContractConfig fetch →
+    balanceOfBatch RPC → render).
+
+  * **Bug-shapes guarded** (the FIRST scenario that
+    catches contract-interaction bugs, not just UI
+    rendering bugs):
+    - useBalanceManager doesn't issue balanceOfBatch
+    - balanceOfBatch result mis-decoded (wrong order
+      or wrong decimals)
+    - sdiPositionBalance picks one outcome's balance
+      instead of `min(YES, NO)`
+    - `formatWith(100, 'balance')` precision drops
+      from 4 (would show "100.00" or "100")
+    - per-market position-ID derivation desyncs from
+      the CT framework formula
+    - balance display swallows a slow RPC response
+
+  * **What "first fork-backed" means**: every prior
+    scenario was pure-mock — on-chain reads either
+    weren't asserted on or fell back to null/zero
+    gracefully. THIS scenario will FAIL if anvil
+    isn't running OR globalSetup didn't fund the
+    wallet. That's expected — surfaces fork-stack
+    regressions loudly at the right layer.
+
+  * **Why no fork-pin (snapshot/revert)**: this is
+    the first fork-backed scenario; no other scenario
+    mutates state YET, so isolation isn't an issue.
+    Step 3 lands when scenarios actually mutate state
+    (e.g., a buy-flow scenario submitting a tx).
+
+  * Catalog regenerated: SCENARIOS.md now lists 14
+    scenarios. Smoke totals: 51/51 pass.
+
+  * **Live Playwright validation deferred** (same
+    reason as prior scenarios — Next.js + anvil cold
+    start exceeds the 5-min cron budget). The
+    scenario will get exercised next time
+    `npm run ui:full` runs locally; if the assertion
+    needs adjustment after live run that's a quick
+    follow-up iteration.
+
+  * **Multi-iteration plan progress**:
+    - ✓ Step 1: anvil in webServer
+    - ✓ Step 2: fork-state primitives + globalSetup
+    - ✓ Step 2.5-2.9: ERC20+ERC1155 storage-write +
+      probe-market position-ID derivation
+    - ✓ Step 4 (this slice): positions scenario
+      asserting real on-chain ERC1155 balances
+    - ⏳ Step 3: per-scenario fork-pin support
+      (snapshot/revert — defer until first state-
+      mutating scenario)
+    - ⏳ Step 5: liquidity scenario (originally
+      planned as pure-structural; now could
+      optionally assert on-chain pool data via the
+      fork)
+    - ⏳ Step 6: CI workflow Foundry install step
+
 - **slice fork-bootstrap-step-2.9 (Phase 7 fork wiring)**
   (this iteration, on the interface side) — seventh
   step of the multi-iteration fork bootstrap. Closes
