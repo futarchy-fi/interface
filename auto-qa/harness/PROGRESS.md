@@ -2313,6 +2313,88 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 37-scenario-34-market-page-registry-corrupt-row
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (REGISTRY, per-row
+  corrupt) cell on the market-page chaos matrix.
+  Mirror of #09 (registry-corrupt-org on
+  /companies) applied to the market page's
+  single-row lookup contract. Distinct from #28
+  (registry malformed-body — entire response
+  non-JSON) and #32 (registry partial — parseable
+  with degraded fields) because the GraphQL
+  envelope IS valid and the row IS present, but
+  the row's `metadata` field is UNPARSEABLE JSON
+  ("{not valid json").
+
+  * **The scenario** — `34-market-page-registry-
+    corrupt-row` on /markets/<MARKET_PROBE_ADDRESS>.
+    One row with all required fields well-formed
+    EXCEPT `metadata` which is `'{not valid json'`.
+    Any consumer that calls `JSON.parse(metadata)`
+    throws SyntaxError. Same page-shell assertions
+    as prior market-page chaos slices.
+
+  * **Why this is a NEW failure-mode branch
+    vs #28 and #32**:
+    - vs #28 malformed-body: #28 has the entire
+      response body as non-JSON; #34 has a
+      structurally-valid envelope where ONE
+      FIELD WITHIN A ROW is the unparseable
+      JSON string. Different layers of the
+      parsing stack.
+    - vs #32 partial: #32 has parseable
+      metadata with optional sub-fields
+      missing (tests `?.` chains and `??`
+      defaults); #34 has metadata that fails
+      parse OUTRIGHT (tests `try/catch` around
+      `JSON.parse`).
+
+  * **Bug-shapes captured** (NEW vs #28/#32):
+    - Page CRASHES on `JSON.parse(metadata)`
+      SyntaxError (the parse call lacks a
+      try/catch wrapper)
+    - Page renders raw "{not valid json" string
+      in proposal title or chart placeholder
+      (someone decided to fall back to the
+      unparsed string when parse fails — leaks
+      corrupt data to UI)
+    - "Market Not Found" FALSE-POSITIVE (parse
+      error trips the same gate intended for
+      missing-from-MARKETS_CONFIG; same
+      wrong-code-path collapse class as
+      #24/#26/#28)
+    - Chart panel goes BLANK because the
+      metadata-parse error propagates up the
+      chart-config-derivation chain (chart
+      needs to read pool addresses from parsed
+      metadata)
+    - Page hangs in loading state forever
+      (parse error thrown synchronously inside
+      an async hook bypasses the loading=false
+      setter)
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #34 itself: passed in 10.7s on
+      first run
+    - Catalog regenerated: 34 scenarios (was 33)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  | #32      | #33     |
+    | empty 200         | #26      | #27     |
+    | malformed body    | #28      | #29     |
+    | per-row corrupt   | #34 ★    |   —     |
+    | slow valid resp   | #30      | #31     |
+    11 of 12 cells filled. ONE cell remaining:
+    (candles, per-row corrupt) — would close
+    the matrix to 12/12, mirroring the
+    /companies completion in step 26.
+
 - **slice 36-scenario-33-market-page-candles-partial
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (CANDLES, partial-
