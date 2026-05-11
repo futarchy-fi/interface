@@ -759,6 +759,92 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         ).toBeVisible({ timeout: 15_000 });
     });
 
+    test('slice 4k — precision=2 branch: BOTH prices ≥1 drops precision to 2 (1.42 / 1.58 → "1.42 SDAI")', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Completes the price-precision triplet alongside slice
+        // 4c v3b and slice 4j. Truth table for the
+        // shouldUseHighPrecision OR:
+        //   - both <1   (4c v3b: 0.42, 0.58)  → precision=4
+        //   - one <1    (4j: 1.42, 0.58)      → precision=4
+        //   - none <1   (4k: 1.42, 1.58) ★    → precision=2
+        //
+        // Per `EventHighlightCard.jsx:298-301`:
+        //   const shouldUseHighPrecision =
+        //       (prices.no !== null && prices.no < 1) ||
+        //       (prices.yes !== null && prices.yes < 1);
+        //   const precision = shouldUseHighPrecision ? 4 : 2;
+        //
+        // When BOTH prices >=1, BOTH legs of the OR return false,
+        // shouldUseHighPrecision is false, precision drops to 2,
+        // and toFixed(2) emits "1.42" — NOT "1.4200".
+        //
+        // Why test this branch: it's the ONLY case where the OR
+        // returns false. A regression that hard-codes precision=4
+        // (never drops to 2) would pass v3b and 4j but fail here.
+        // A regression that inverts the comparison from `< 1` to
+        // `>= 1` would pass v3b and 4j only by accident; here it
+        // would still fail because (1.42 >= 1) || (1.58 >= 1) is
+        // true → precision=4 stuck → "1.4200 SDAI" appears
+        // instead of "1.42 SDAI".
+        //
+        // Note on realism: in futarchy, conditional-token prices
+        // typically sum to ~1, so the (both >=1) case is rare in
+        // production. But it's a legal state under low-liquidity
+        // or non-arbitraged conditions, and the formatter logic
+        // exists to handle it. The test pins that logic so a
+        // future "simplify the formatter" refactor that loses the
+        // precision=2 branch surfaces here.
+        //
+        // Bug classes caught (NEW vs 4c v3b and 4j):
+        //   - Hard-coded precision=4 (never drops) — passes v3b
+        //     and 4j, fails here ("1.4200 SDAI" instead of "1.42")
+        //   - Inverted comparison `>= 1` instead of `< 1` — passes
+        //     v3b and 4j only by accident, fails here
+        //   - shouldUseHighPrecision permanently true (a refactor
+        //     that always returns true "to be safe") — would
+        //     pass v3b and 4j, fail here
+        //   - precision=2 hard-coded instead of conditional — would
+        //     pass this test but FAIL v3b and 4j (those want 4
+        //     decimals); cross-coverage protects the whole table
+
+        const richProposal = fakePoolBearingProposal({});
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        await context.route(CANDLES_GRAPHQL_URL, makeCandlesMockHandler({
+            prices: {
+                [PROBE_POOL_YES]: 1.42,
+                [PROBE_POOL_NO]:  1.58,
+            },
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        await expect(
+            page.getByText('HARNESS-PROBE-EVENT-001').first(),
+        ).toBeVisible({ timeout: 30_000 });
+
+        // The canonical assertion: precision=2 — "1.42 SDAI" not
+        // "1.4200 SDAI". The 2-decimal format is the SIGNATURE
+        // that proves the precision-drop branch engaged.
+        // page.getByText defaults to substring matching; we want
+        // EXACT here because "1.42 SDAI" is a substring of
+        // "1.4200 SDAI" and the wrong-precision case would
+        // spuriously pass under substring matching.
+        await expect(
+            page.getByText('1.42 SDAI', { exact: true }).first(),
+        ).toBeVisible({ timeout: 15_000 });
+    });
+
     test('slice 4c v3a — candles GraphQL endpoint is hit with the proposal\'s pool addresses', async ({ context, page }) => {
         test.setTimeout(180_000);
 

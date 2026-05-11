@@ -2313,6 +2313,118 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 55-dom-api-invariant-precision-drop-branch
+  (Phase 5 invariant catalog — 14th DOM↔API
+  invariant; completes the price-precision triplet)**
+  (this iteration, on the interface side) —
+  completes the price-precision triplet alongside
+  slice 4c v3b (both prices <1) and slice 4j
+  (one each). Truth table for the
+  `shouldUseHighPrecision` OR is now fully
+  covered:
+    | YES   | NO    | OR result | precision | slice |
+    |-------|-------|-----------|-----------|-------|
+    | 0.42  | 0.58  | true      | 4         | 4c v3b|
+    | 1.42  | 0.58  | true      | 4         | 4j    |
+    | 1.42  | 1.58  | false     | 2 ★       | 4k    |
+  The (yes<1, no>=1) case isn't covered yet but
+  collapses to the same precision=4 outcome as 4j
+  by symmetry; the THREE distinct outcomes (both
+  precision=4 from either leg, vs precision=2
+  from neither) are all probed.
+
+  * **The new invariant** —
+    `slice 4k — precision=2 branch: BOTH prices
+    ≥1 drops precision to 2`. Mock YES=1.42,
+    NO=1.58. Expected: `"1.42 SDAI"` rendered
+    EXACTLY (`{ exact: true }` to avoid the
+    substring-match trap where "1.42 SDAI"
+    would also appear inside "1.4200 SDAI"
+    and falsely pass).
+
+  * **Why test this branch**: it's the ONLY
+    case where `shouldUseHighPrecision` returns
+    false. A regression that hard-codes
+    precision=4 would pass v3b and 4j but fail
+    here. A regression that inverts the
+    comparison from `< 1` to `>= 1` would pass
+    v3b and 4j only by accident; here it would
+    still fail because (1.42 >= 1) || (1.58 >= 1)
+    is true → precision=4 stuck.
+
+  * **Realism note**: in futarchy, conditional-
+    token prices typically sum to ~1, so the
+    (both >=1) case is rare in production. But
+    it's a legal state under low-liquidity or
+    non-arbitraged conditions, and the formatter
+    logic exists to handle it. The test pins
+    that logic so a future "simplify the
+    formatter" refactor that drops the
+    precision=2 branch surfaces here.
+
+  * **Substring-match trap (worth pinning)**:
+    Playwright's `page.getByText('1.42 SDAI')`
+    defaults to SUBSTRING matching. Without
+    `{ exact: true }`, the assertion would
+    spuriously pass when "1.4200 SDAI" is in
+    the DOM (because "1.42 SDAI" is a prefix
+    substring of it once you strip the trailing
+    "00"). For precision tests this is a real
+    false-positive risk; future precision
+    invariants should also use `{ exact: true }`
+    on the expected string.
+
+  * **Bug classes caught** (NEW vs v3b and 4j):
+    - Hard-coded `precision = 4` (never drops)
+      — passes v3b and 4j, fails here
+    - Inverted comparison `>= 1` instead of
+      `< 1` — passes v3b and 4j only by
+      accident, fails here
+    - `shouldUseHighPrecision` permanently true
+      (refactor that always returns true "to
+      be safe") — passes v3b and 4j, fails here
+    - Hard-coded `precision = 2` instead of
+      conditional — would pass this test but
+      FAIL v3b and 4j; cross-coverage protects
+      the whole table
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 14 DOM↔API invariant tests pass:
+      24.1s (was 13 in 24.0s); new slice 4k
+      alone: 1.7s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (14 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop ★  | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **What's next**:
+    - Proposal description field rendering
+    - Org-row count when filter conditions
+      collide (archived + hidden + resolved in
+      one proposal — should be excluded by
+      archived, not double-counted)
+    - Image/logo path (cover image vs fallback
+      → `/assets/fallback-company.png`)
+    - org `description` field flows through
+      (analogous to slice 4 v1's `name` field)
+
 - **slice 54-dom-api-invariant-price-precision-sticky
   (Phase 5 invariant catalog — 13th DOM↔API
   invariant)** (this iteration, on the interface
