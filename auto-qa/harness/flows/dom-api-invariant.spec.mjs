@@ -152,6 +152,75 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         await expect(row.locator('td').nth(3)).toHaveText('11');
     });
 
+    test('slice 4d — zero-proposal edge case: OrgRow active/total cells render "0" / "0" when proposals=[]', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Edge-case companion to slice 4b. Where 4b mocks 8 active +
+        // 3 hidden = 11 total nonArchived (which proves the formatter
+        // RENDERS counts and the FILTER MATH is structurally correct
+        // for nonzero inputs), this slice mocks an EMPTY proposals
+        // array and proves the formatter degrades to literal "0" /
+        // "0" — NOT an empty cell, NOT "—", NOT "N/A", NOT "NaN".
+        //
+        // Bug classes caught (distinct from 4b):
+        //   - Formatter that calls `.toString()` on undefined/null
+        //     when proposals[] is empty (renders "undefined" or
+        //     blank cell)
+        //   - Formatter that uses `||` fallback to a non-zero
+        //     placeholder ("—", "N/A", "?") when count is 0 (treats
+        //     0 as falsy — classic JS edge-case bug)
+        //   - Formatter that does division/percentage and emits
+        //     "NaN" or "Infinity" when the denominator is 0
+        //   - useAggregatorCompanies::transformOrgToCard that
+        //     short-circuits and returns null when proposals=[],
+        //     hiding the org row entirely (reverse of the desired
+        //     behavior — empty org should still appear with 0/0)
+        //   - Reducer pattern that initialises accumulator to a
+        //     non-array value (e.g., `null`) and crashes on `.length`
+        //     access for an empty list
+        //
+        // Why valuable now: the matrix-axis chaos work has hardened
+        // the page against API-level failures (28 → 32 cells of
+        // chaos coverage); this is the FIRST invariant-axis probe
+        // that hardens the formatter against DATA-level edge cases
+        // (empty inputs that pass type checks but trigger
+        // arithmetic/falsy-coercion bugs in downstream code).
+        //
+        // Note on the org existence: useAggregatorCompanies still
+        // returns the org row even when proposals=[] because the
+        // org metadata comes from a SEPARATE GraphQL query
+        // (`organizations`) than the proposal-list query
+        // (`proposalentities`). Mocking proposals=[] only zeroes
+        // the count fields; the row should still render with the
+        // probe org name.
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [],
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Probe org name still renders (proves the org-level data
+        // path is independent of the proposal-list data path).
+        await expect(page.getByText(PROBE_ORG_NAME).first()).toBeVisible({ timeout: 30_000 });
+
+        // The OrganizationsTable column layout (per slice 4b's
+        // pinning of OrganizationsTable.jsx + OrgRow.jsx):
+        //   td[0]=logo, td[1]=name+badges, td[2]=active, td[3]=total, td[4]=chain
+        const row = page.getByRole('row').filter({ hasText: PROBE_ORG_NAME });
+        await expect(row).toHaveCount(1);
+        // The CRITICAL pair of edge-case assertions: both cells
+        // render literal "0", NOT empty, NOT dash, NOT "NaN".
+        await expect(row.locator('td').nth(2)).toHaveText('0');
+        await expect(row.locator('td').nth(3)).toHaveText('0');
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 

@@ -2313,6 +2313,102 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 48-dom-api-invariant-zero-proposal-edge-case
+  (Phase 5 invariant catalog — first PIVOT to
+  invariant-axis after 8 chaos-row slices)**
+  (this iteration, on the interface side) — adds
+  the 7th cross-layer DOM↔API invariant test in
+  `flows/dom-api-invariant.spec.mjs`. Where the
+  previous 8 slices (#40 → #47) hardened the
+  page against API-LEVEL failures (chaos matrix
+  expanded from 28 to 32 cells), this slice opens
+  the first DATA-LEVEL edge-case probe — proves
+  the OrgRow's active/total formatter degrades
+  gracefully when proposals[] is empty.
+
+  * **The new invariant** — `slice 4d — zero-
+    proposal edge case`. Mocks the registry
+    response with `proposals: []` (empty array
+    that still passes type checks). Asserts:
+      - The probe org name still renders (proves
+        the org-level data path is independent
+        of the proposal-list path — the
+        `organizations` GraphQL query is
+        separate from `proposalentities`)
+      - The active cell (`td[2]`) renders the
+        literal string `"0"` — NOT empty,
+        NOT "—", NOT "N/A", NOT "NaN"
+      - The total cell (`td[3]`) likewise
+        renders `"0"`
+
+  * **Bug-shapes captured** (distinct from the
+    existing slice 4b which probes 8/3 → 8/11):
+    - Formatter that calls `.toString()` on
+      `undefined`/`null` when the array is empty
+      (renders "undefined" or a blank cell)
+    - Formatter that uses `||` fallback to a
+      non-zero placeholder ("—", "N/A", "?")
+      when the count is 0 — classic JS-falsy
+      bug where 0 is treated as missing data
+    - Formatter that does division/percentage
+      and emits "NaN" or "Infinity" when the
+      denominator is 0
+    - `useAggregatorCompanies::transformOrgToCard`
+      that short-circuits and returns null when
+      proposals=[], hiding the org row entirely
+      (reverse of desired behavior — empty org
+      should still appear with 0/0)
+    - Reducer pattern that initialises
+      accumulator to a non-array value (e.g.,
+      `null`) and crashes on `.length` access
+      for an empty list
+
+  * **Why this slice now**: the matrix-axis chaos
+    work has plateaued at 32/32 cells of "API
+    failures" coverage. The interface-side
+    invariant catalog has only 6 entries
+    (vs api side's 57 — large structural gap).
+    The natural next dimension is INVARIANT-axis:
+    each new probe asserts a specific data-flow
+    or rendering contract that no chaos test
+    catches because the chaos tests assert
+    PAGE-LEVEL degradation while invariants
+    assert FORMATTER-LEVEL precision. This slice
+    is the first such probe in the new wave.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no test infra changes;
+      the new test only adds an invariant entry
+      in a Playwright spec, not a smoke target)
+    - All 7 DOM↔API invariant tests pass: 16.9s
+      (was 6 tests in ~14s); new slice 4d alone:
+      1.6s on first run
+    - All 32 chaos scenarios still pass (no
+      regression to the 32-cell matrix)
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (7 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total cells| nonzero counts (8/11) → render exactly             |
+    | slice 4d zero counts ★     | empty array → both cells render "0"               |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a candles call  | request mentions PROBE_POOL_YES address            |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (toFixed precision)     |
+
+  * **What's next**: invariant-axis expansion
+    has many small clean targets — proposal
+    description rendering, proposal counts under
+    `archived` filtering, NO-pool address ALSO
+    queried (catches "drop NO leg" optimization
+    regression), price-formatter edge cases
+    (price>=1 → precision=2 branch, both prices
+    >=1, both prices missing). Each is a small
+    additive slice analogous to this one.
+
 - **slice 47-scenario-43-market-page-candles-504-gateway-timeout
   (Phase 7 chaos library — 8-ROW MATRIX PARITY
   MILESTONE)** (this iteration, on the interface
