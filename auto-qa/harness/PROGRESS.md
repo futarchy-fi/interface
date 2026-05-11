@@ -2313,6 +2313,82 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 29-scenario-26-market-page-registry-empty
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (REGISTRY, empty-200)
+  cell on the market-page chaos matrix. Mirror of
+  #05 (registry-empty-orgs on /companies) but on
+  the market page. Distinct from #24 (registry
+  hard-502, .catch branch) — registry stays UP
+  and HEALTHY but returns zero matching
+  proposalentities, firing the `.then(empty)`
+  branch in `registryAdapter.fetchProposalMetadata
+  FromRegistry`.
+
+  * **The scenario** — `26-market-page-registry-
+    empty` on /markets/<MARKET_PROBE_ADDRESS>.
+    Registry returns 200 with `{ proposalentities:
+    [] }` (also `{ aggregator: null }` and
+    `{ organizations: [] }` for completeness on
+    every query branch) + candles happy. Same
+    page-shell assertions as #24/#25.
+
+  * **Why this is a NEW failure-mode branch
+    vs #24** (despite same terminal UX):
+    - #24 hard-502: `fetch(...)` throws →
+      `.catch` → `setError(message)` →
+      consumers see `error !== null`
+    - #26 empty-200: `fetch(...)` resolves →
+      `.then([])` → `setData([])` → consumers
+      see `data.length === 0`
+    A regression that only handled `.catch`
+    correctly (e.g., refactor that moved
+    `loading=false` into `.catch` only) would
+    break #26 while #24 passes. Same shape as
+    the #02/#05 distinction on /companies,
+    applied to the market page.
+
+  * **Bug-shapes captured** (NEW vs #24):
+    - `.then(empty)` silently hangs in
+      forever-loading on market-page (loading
+      flag never clears on empty-success)
+    - "Market Not Found" FALSE POSITIVE on
+      empty registry response — gate intended
+      for missing-from-MARKETS_CONFIG also fires
+      on empty-registry-success (two distinct
+      failure modes collapsing into one signal
+      makes user-side debugging impossible)
+    - `proposalentities[0]` crashes (no guard
+      against empty array — "Cannot read
+      property 'metadata' of undefined")
+    - Divergent fallback UX from #24 — same
+      dead-data shape via different control
+      flow; user can't tell whether to retry
+      or whether the proposal genuinely has
+      no metadata
+    - Chain-validation incorrectly gated on
+      registry having returned non-empty rows
+      (WrongNetworkModal false-positive same
+      class as #24's bug shape)
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #26 itself: passed in 12.1s on
+      first run
+    - Catalog regenerated: 26 scenarios (was 25)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  |   —      |   —     |
+    | empty 200         | #26 ★    |   —     |
+    | malformed body    |   —      |   —     |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   |   —      |   —     |
+    3 of 12 cells filled.
+
 - **slice 28-scenario-25-market-page-candles-down
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (CANDLES, hard-502)
