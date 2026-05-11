@@ -2313,6 +2313,95 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 93-time-evolution-integration (Phase 6
+  — first scenario exercising the slice 90
+  primitives)** (this iteration, on the interface
+  side) — Adds `requiresAnvil` opt-in flag +
+  scenario 58 (time-evolution-smoke). Closes the
+  loop from slice 90 (stub-tested primitives) →
+  slice 91 (live-anvil-tested primitives) →
+  slice 93 (primitives exercised inside the
+  Playwright scenario harness). Recent-PR
+  coverage unchanged at 13/22 (59%) — this is
+  the foundation slice for the PR #54 catch
+  (slice 94+).
+
+  * **The `requiresAnvil` flag**: scenarios that
+    exercise chain mutations (advanceTime,
+    setEthBalance, etc.) need real anvil at
+    `STUB_RPC_URL`. The flag lets the test
+    skip cleanly under `HARNESS_NO_ANVIL=1`
+    (the `ui` script) instead of failing on
+    the first RPC. Mirrors slice 87's
+    `prodModeOnly` flag pattern.
+    Default-off so existing scenarios are
+    unaffected. Skip message tells the user
+    which command to run.
+
+  * **The scenario** (`scenarios/58-time-
+    evolution-smoke.scenario.mjs`):
+    - Route: `/companies` (incidental — the
+      DOM isn't involved in the time
+      assertion)
+    - `requiresAnvil: true`
+    - Empty mocks
+    - Assertion 1: read getBlockTimestamp →
+      advanceTime(86400) → read again →
+      assert delta == 86400 EXACTLY (anvil
+      pins; no wall-clock slop)
+    - Assertion 2: page-mount sanity check
+      (Organizations / Active Milestones
+      heading visible)
+
+  * **Why "smoke" not "PR catch"**: the
+    canonical TIME-EVOLUTION PR is #54 (TWAP
+    window for ended proposals). Catching that
+    requires:
+    1. A market page mount with hasEnded =
+       true (achievable via metadata —
+       `hasEnded` reads from `Date.now()`,
+       not chain time)
+    2. Intercepting the `getTimepoints
+       ([aStart, aEnd])` eth_call on the
+       YES/NO pool contracts
+    3. Asserting aEnd > 0 (the post-fix
+       shape; pre-fix sends `[secondsWindow,
+       0]`)
+    Step 2 needs an eth_call interceptor +
+    selector decoder + ABI helper — separate
+    infra slice. Scenario 58 lays the
+    integration foundation for that work.
+
+  * **Per-scenario isolation verified**: the
+    `+86400` advance applied by scenario 58
+    is rolled back by the
+    `evmRevert`-after-each `beforeEach` in
+    `flows/scenarios.spec.mjs`. Later
+    scenarios in the same suite run see the
+    original fork timestamp. (The existing
+    cross-scenario isolation infra carries
+    time mutations the same way it carries
+    state mutations.)
+
+  * **Live re-validation**:
+    - `HARNESS_NO_ANVIL=1 npx playwright test --grep "58-time-evolution"` → 1 skipped
+    - `npx playwright test --grep "58-time-evolution"` (anvil running) → 1 passed (15.9s)
+    - 57 + 58 both still pass in clean state
+    - src/ tree clean after verification
+
+  * **Catalog state**: 58 scenarios, **15
+    mechanically verified PR catches** (44, 45,
+    46, 47, 48, 10, 49, 50, 51, 52, 53, 54, 55,
+    56, 57). Recent-PR coverage: 13/22 (59%) —
+    scenario 58 is an infra-validation
+    scenario, not a PR catch. 8 KINDs unchanged;
+    TIME-EVOLUTION (9th) is now INTEGRATED
+    into the scenario harness (slice 90
+    primitives + slice 91 live-anvil tests +
+    slice 93 in-scenario use). Next slice
+    builds the eth_call interceptor + decoder
+    on top to land PR #54.
+
 - **slice 92-no-supabase-snapshot-lookup (Phase 6
   — catches PR #48 via negative network
   assertion)** (this iteration, on the interface

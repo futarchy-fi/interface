@@ -135,6 +135,16 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
                 testInfo.skip(true, `scenario "${scenario.name}" is prod-mode-only — run via npm run ui:prod`);
             }
 
+            // Slice 93: anvil-required opt-in. Scenarios that exercise
+            // chain mutation primitives (advanceTime, setEthBalance,
+            // etc.) need a real anvil running at STUB_RPC_URL. When
+            // the dev runs with HARNESS_NO_ANVIL=1 (the `ui` script),
+            // these scenarios skip cleanly instead of failing on the
+            // first RPC call.
+            if (scenario.requiresAnvil && process.env.HARNESS_NO_ANVIL) {
+                testInfo.skip(true, `scenario "${scenario.name}" requires anvil — run via npm run ui:full (without HARNESS_NO_ANVIL=1)`);
+            }
+
             // Default wallet stub — every scenario gets a deterministic
             // dev-mnemonic wallet injected before navigation.
             const wallet = nStubWallets(1)[0];
