@@ -670,6 +670,95 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         ).toBeVisible({ timeout: 15_000 });
     });
 
+    test('slice 4j — precision=4 stays sticky when YES≥1 but NO<1 (1.42 / 0.58 → "1.4200 SDAI")', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Strict tightening of slice 4c v3b. Where v3b mocks BOTH
+        // prices < 1 (yes=0.42, no=0.58) and verifies precision=4,
+        // this slice exercises the OR-branch of the precision logic.
+        //
+        // Per `src/components/futarchyFi/companyList/cards/
+        // highlightCards/EventHighlightCard.jsx:298-301`:
+        //   const shouldUseHighPrecision =
+        //       (prices.no !== null && prices.no < 1) ||
+        //       (prices.yes !== null && prices.yes < 1);
+        //   const precision = shouldUseHighPrecision ? 4 : 2;
+        //
+        // The conditional uses `||` to require EITHER price < 1 to
+        // engage high-precision. So:
+        //   - yes=0.42 + no=0.58 (both <1) → precision=4 (v3b)
+        //   - yes=1.42 + no=0.58 (NO<1)    → precision=4 (this slice)
+        //   - yes=1.42 + no=1.58 (neither) → precision=2 (future)
+        //
+        // The case under test (yes=1.42 + no=0.58) is the one that
+        // catches a SUBTLE regression: if someone refactored
+        // `shouldUseHighPrecision` to only check `prices.yes < 1`
+        // (forgetting the NO leg), v3b would still pass (YES<1
+        // there), but this slice would fail because YES≥1 → the
+        // YES-only check would return false → precision=2 → DOM
+        // shows "1.42 SDAI" instead of "1.4200 SDAI".
+        //
+        // Why this matters: precision regressions are visually
+        // subtle (2-decimal vs 4-decimal). For an arbitrage user
+        // who needs to see the 3rd/4th decimal to spot price
+        // drift across YES/NO, dropping precision is a real
+        // product bug. The shouldUseHighPrecision logic is the
+        // mechanism that keeps precision sticky in mixed cases —
+        // this test pins that mechanism in isolation.
+        //
+        // Bug classes caught (NEW vs 4c v3b):
+        //   - Refactor that drops the NO leg from
+        //     `shouldUseHighPrecision` (only checks YES) — passes
+        //     v3b, fails here
+        //   - Refactor that swaps `||` to `&&` (would require
+        //     BOTH to be <1) — passes v3b (both ARE <1), fails
+        //     here (only NO is <1, so combined && would be false
+        //     → precision=2 → "1.42 SDAI")
+        //   - Hard-code of `precision = 2` (assumes "%" display
+        //     never needs >2 decimals) — passes 4c v3b only by
+        //     accident (the 0.4200 vs 0.42 distinction would have
+        //     surfaced); definitely fails here
+        //   - Regression that flips the comparison operator from
+        //     `< 1` to `>= 1` — passes v3b (both <1, so the
+        //     flipped check returns false for both → precision=2
+        //     incorrect; should fail v3b too if v3b's assertion
+        //     is tight). The cross-coverage here strengthens v3b.
+
+        const richProposal = fakePoolBearingProposal({});
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        await context.route(CANDLES_GRAPHQL_URL, makeCandlesMockHandler({
+            prices: {
+                [PROBE_POOL_YES]: 1.42,
+                [PROBE_POOL_NO]:  0.58,
+            },
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Pre-flight: the carousel mounts our event card.
+        await expect(
+            page.getByText('HARNESS-PROBE-EVENT-001').first(),
+        ).toBeVisible({ timeout: 30_000 });
+
+        // The canonical assertion: precision=4 stays sticky.
+        // "1.4200 SDAI" not "1.42 SDAI". The 4-decimal format is
+        // the SIGNATURE that proves both legs of the OR engaged
+        // in the precision decision.
+        await expect(
+            page.getByText('1.4200 SDAI').first(),
+        ).toBeVisible({ timeout: 15_000 });
+    });
+
     test('slice 4c v3a — candles GraphQL endpoint is hit with the proposal\'s pool addresses', async ({ context, page }) => {
         test.setTimeout(180_000);
 

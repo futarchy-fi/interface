@@ -2313,6 +2313,109 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 54-dom-api-invariant-price-precision-sticky
+  (Phase 5 invariant catalog — 13th DOM↔API
+  invariant)** (this iteration, on the interface
+  side) — strict tightening of slice 4c v3b.
+  Where v3b mocks BOTH prices < 1 and verifies
+  precision=4, this slice exercises the
+  OR-branch of the precision-stickiness logic:
+  YES≥1 + NO<1 should STILL trigger precision=4
+  because the formatter ORs the two checks.
+
+  * **The new invariant** —
+    `slice 4j — precision=4 stays sticky when
+    YES≥1 but NO<1`. Mock YES=1.42, NO=0.58.
+    Expected: `"1.4200 SDAI"` (NOT `"1.42 SDAI"`).
+    The 4-decimal format is the SIGNATURE that
+    proves BOTH legs of the OR engaged in the
+    precision decision — if only YES were
+    checked, YES=1.42 → false → precision=2 →
+    "1.42 SDAI" would appear instead.
+
+  * **Code reference pinned** (per
+    `src/components/futarchyFi/companyList/cards/
+    highlightCards/EventHighlightCard.jsx:298-301`):
+    ```
+    const shouldUseHighPrecision =
+        (prices.no !== null && prices.no < 1) ||
+        (prices.yes !== null && prices.yes < 1);
+    const precision = shouldUseHighPrecision ? 4 : 2;
+    ```
+    The OR is load-bearing — neither leg alone
+    is sufficient when only one price is <1.
+
+  * **Why this matters**: precision regressions
+    are visually subtle (2-decimal vs 4-decimal).
+    For an arbitrage user who needs the 3rd/4th
+    decimal to spot price drift across YES/NO,
+    dropping precision is a real product bug.
+    The `shouldUseHighPrecision` OR is the
+    mechanism that keeps precision sticky in
+    mixed cases (one>=1, one<1); this test
+    pins that mechanism in isolation.
+
+  * **Bug classes caught** (NEW vs slice 4c v3b):
+    - Refactor that drops the NO leg from
+      `shouldUseHighPrecision` (only checks
+      YES<1) — passes v3b (yes=0.42 there<1),
+      fails here (yes=1.42≥1 → would return
+      false → precision=2 → "1.42 SDAI")
+    - Refactor that swaps `||` to `&&` (requires
+      BOTH to be <1) — passes v3b (both ARE <1)
+      but fails here (only NO is <1)
+    - Hard-coded `precision = 2` (assumes the
+      app never needs >2 decimals) — would have
+      to be caught by v3b's exact "0.4200 SDAI"
+      assertion; this test reinforces that
+      coverage by demonstrating precision=4
+      in a HARDER case
+    - Regression that flips the comparison
+      operator from `< 1` to `>= 1` — would
+      pass v3b's 0.42 (now treated as ≥1 by
+      the flipped check, so high-precision off
+      → "0.42 SDAI") only by coincidence; this
+      slice's 1.42 + 0.58 case ALSO breaks
+      under the flip → cross-coverage
+      strengthens v3b
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 13 DOM↔API invariant tests pass:
+      24.0s (was 12 in 22.8s); new slice 4j
+      alone: 1.6s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (13 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky ★| YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+
+  * **What's next**:
+    - Proposal description field rendering
+    - Org-row count when filter conditions
+      collide (archived + hidden + resolved in
+      one proposal — should be excluded by
+      archived, not double-counted)
+    - Image/logo path (cover image vs fallback
+      → `/assets/fallback-company.png`)
+    - precision=2 branch (both prices >=1 →
+      "1.42 SDAI" — completes the precision
+      triplet alongside 4c v3b and 4j)
+
 - **slice 53-dom-api-invariant-chain-default-branch
   (Phase 5 invariant catalog — 12th DOM↔API
   invariant; completes the chain-formatter
