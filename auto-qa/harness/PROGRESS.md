@@ -2313,6 +2313,152 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 66-dom-api-invariant-title-preferred-branch
+  (Phase 5 invariant catalog — 25th DOM↔API
+  invariant; CLOSES title-cascade lattice)**
+  (this iteration, on the interface side) —
+  fills the FOURTH corner of the title-cascade
+  truth table, completing the lattice formally.
+
+  * **The new invariant** —
+    `slice 4r — title PREFERRED branch:
+    displayNameEvent set, displayNameQuestion
+    null → event renders alone`. Mock
+    `displayNameEvent='HARNESS-PROBE-PREFERRED-EVENT'`
+    + `displayNameQuestion=null`. Assert
+    `PREFERRED-EVENT` token appears.
+
+  * **Title-cascade lattice COMPLETE** (4-way
+    truth-table coverage):
+    | event | question | render path           | slice |
+    |-------|----------|-----------------------|-------|
+    | set   | null     | single-line event     | 4r ★  |
+    | null  | set      | single-line question  | 4s    |
+    | null  | null     | 'Unknown Proposal'    | 4t    |
+    | set   | set      | split-display (BOTH)  | 4u    |
+    Every cell of the (event-set, question-set)
+    × (display) matrix is now probed.
+
+  * **Why this slice matters even though it's
+    "trivially covered"**: many existing
+    carousel tests (4c v3a/b, 4e, 4j, 4k, 4p)
+    use the fixture default where BOTH fields
+    are set to the same value
+    (`HARNESS-PROBE-EVENT-001`). That setup
+    exercises the SPLIT-DISPLAY corner — NOT
+    the isolated preferred-branch path where
+    displayNameEvent flows through alone. A
+    regression that breaks the cascade for the
+    event-only case while keeping the both-set
+    (split-display) case intact would slip
+    through all existing carousel tests. This
+    slice catches that specific bug-class.
+
+  * **Bug classes caught** (NEW vs 4s, 4t, 4u,
+    and prior carousel tests):
+    - Regression that ONLY engages the
+      split-display branch (requires BOTH
+      fields set) — when only event is set,
+      the card renders nothing (or 'Unknown
+      Proposal') because the cascade is
+      broken. Existing tests don't catch this
+      because they always set both fields.
+    - Regression where useAggregatorProposals'
+      `metadata.display_title_1 =
+      proposal.displayNameEvent || null`
+      becomes
+      `metadata.display_title_1 =
+      proposal.displayNameEvent ||
+      proposal.title` — would still pass 4u
+      (both fields set, both appear) but fail
+      here if the alternate path produces a
+      different token
+    - Regression that breaks the single-line
+      render (e.g., `shouldUseSplitTitles`
+      evaluates true even when only one field
+      is set) — the card would render the
+      preferred event token PLUS an empty
+      subtitle line, a UI regression with
+      layout debt
+
+  * **Distinctive probe-token strategy**: using
+    `PREFERRED-EVENT` rather than the fixture
+    default `HARNESS-PROBE-EVENT-001` keeps
+    failure logs precise — `PREFERRED-EVENT`
+    cannot appear in any other test's tokens,
+    so a failure log here points directly at
+    the preferred-branch regression rather
+    than at some shared-fixture problem.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 25 DOM↔API invariant tests pass:
+      53.9s (was 24 in 50.9s); new slice 4r
+      alone: 4.8s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (25 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4v unknown org       | org.name=null → "Unknown Organization" appears     |
+    | slice 4m logo fallback     | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4n cover-image       | coverImage='/test-probe-cover.png' → img.src       |
+    | slice 4o logo-only         | logo='/test-probe-logo.png' → img.src              |
+    | slice 4p img precedence    | both set → coverImage wins; logo NOT in src        |
+    | slice 4q href on card      | event card anchor → /market?proposalId=<addr>      |
+    | slice 4r title preferred ★ | event='X' + question=null → "X" appears            |
+    | slice 4s title fallback    | event=null + question='X' → "X" appears            |
+    | slice 4t title final FB    | both=null → "Unknown Proposal" appears             |
+    | slice 4u split-title       | both set → BOTH render (event AND question)        |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: **18 invariants**
+      (was 17)
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: 5 invariants
+
+  * **Lattice completions to date**:
+    - Filter triplet (hidden/archived/resolved):
+      4b + 4f + 4g + 4h + 4l (stress)
+    - Chain triplet (lookup/fallback/default):
+      4c v1 + 4c v2 + 4i
+    - Precision triplet (both<1/one<1/none<1):
+      4c v3b + 4j + 4k
+    - Image cascade (coverImage/logo/fallback +
+      precedence): 4m + 4n + 4o + 4p
+    - Title cascade (preferred/fallback/final/
+      split-display): 4r + 4s + 4t + 4u ★
+    Five complete lattices in the catalog —
+    structural milestone.
+
+  * **What's next**:
+    - aria-label on counts cells (a11y
+      dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers)
+    - Pool address rendering in card subtext
+    - 'Unknown Aggregator' fallback (if
+      applicable)
+    - Empty-state inverse invariant ("No
+      organizations found" when no
+      organizations return at all)
+
 - **slice 65-dom-api-invariant-unknown-organization-fallback
   (Phase 5 invariant catalog — 24th DOM↔API
   invariant; org-level fallback parallel to

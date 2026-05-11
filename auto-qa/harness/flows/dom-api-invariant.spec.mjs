@@ -1495,6 +1495,89 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         ).toBeVisible({ timeout: 30_000 });
     });
 
+    test('slice 4r — title PREFERRED branch: displayNameEvent set, displayNameQuestion null → event renders alone (closes title-cascade lattice)', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Closes the title-cascade lattice alongside slices 4s,
+        // 4t, and 4u. The four-branch coverage is now complete:
+        //
+        //   | displayNameEvent | displayNameQuestion | render path           | slice |
+        //   |------------------|---------------------|-----------------------|-------|
+        //   | set              | null/undefined      | single-line event     | 4r ★  |
+        //   | null/undefined   | set                 | single-line question  | 4s    |
+        //   | null/undefined   | null/undefined      | 'Unknown Proposal'    | 4t    |
+        //   | set              | set                 | split-display (BOTH)  | 4u    |
+        //
+        // Why this slice matters even though it's "trivially
+        // covered" by other tests:
+        // Many existing carousel tests (4c v3a, 4c v3b, 4e, 4j,
+        // 4k, 4p) use the fixture default where BOTH fields are
+        // set to the same value (`HARNESS-PROBE-EVENT-001`).
+        // That setup exercises a CO-RENDERING corner of the
+        // truth table — not the isolated preferred-branch path
+        // where displayNameEvent flows through alone. A
+        // regression that breaks the cascade for the
+        // event-only case while keeping the both-set
+        // (split-display) case intact would slip through all
+        // existing carousel tests. This slice catches that
+        // specific bug-class.
+        //
+        // Bug classes caught (NEW vs 4s, 4t, 4u, and prior
+        // carousel tests):
+        //   - Regression that ONLY engages the split-display
+        //     branch (requires BOTH fields set) — when only
+        //     event is set, the card renders nothing (or
+        //     'Unknown Proposal') because the cascade is
+        //     broken. Existing tests don't catch this because
+        //     they always set both fields.
+        //   - Regression where useAggregatorProposals'
+        //     `metadata.display_title_1 =
+        //     proposal.displayNameEvent || null` becomes
+        //     `metadata.display_title_1 =
+        //     proposal.displayNameEvent || proposal.title` —
+        //     would still pass 4u (both fields set, both
+        //     appear) but fail here if the alternate path
+        //     produces a different token
+        //   - Regression that breaks the single-line render
+        //     (e.g., `shouldUseSplitTitles` evaluates true
+        //     even when only one field is set) — the card
+        //     would render the preferred event token PLUS an
+        //     empty subtitle line, an UI regression that
+        //     might not visually break but adds layout debt
+        //
+        // Why use a distinctive token ('PREFERRED-EVENT')
+        // rather than the fixture default
+        // ('HARNESS-PROBE-EVENT-001'): the assertion is then
+        // unambiguous — `PREFERRED-EVENT` cannot appear in
+        // any of the other tests' tokens, so a failure log
+        // here points directly at the preferred-branch
+        // regression rather than at some shared-fixture
+        // problem.
+
+        const richProposal = {
+            ...fakePoolBearingProposal({}),
+            displayNameEvent:    'HARNESS-PROBE-PREFERRED-EVENT',
+            displayNameQuestion: null,
+        };
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Assert the preferred event text appears.
+        await expect(
+            page.getByText('HARNESS-PROBE-PREFERRED-EVENT').first(),
+        ).toBeVisible({ timeout: 30_000 });
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 
