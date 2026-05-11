@@ -2313,6 +2313,73 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 75-pr64-prefixed-shape-sister
+  (Phase 6 scenario library — pin BOTH branches
+  of the PR #64 guard)** (this iteration, on the
+  interface side) — sister scenario to 44.
+  Completes the prefix-shape pair: 44 mocks
+  `pool.proposal: "0x..."` (plain — the
+  PROXY-stripped shape), 45 mocks `pool.proposal:
+  "100-0x..."` (the DIRECT-upstream shape).
+  Together they pin both branches of
+  `useAggregatorProposals.js:319`'s guard
+  (`raw.includes('-') ? raw.split('-').slice(1).join('-') : raw`).
+
+  * **The marginal value over slice 44**: slice
+    44 alone misses regressions where the guard
+    is REMOVED IN THE OTHER DIRECTION — e.g., a
+    refactor that becomes plain `propAddr = raw`
+    (no stripping at all). Slice 44 would PASS
+    that mutation (plain `"0x..."` matches the
+    expected lookup key directly); slice 45
+    FAILS (prefixed `"100-0x..."` doesn't match,
+    poolMap stays empty, no prices). Sister
+    scenarios catch DIFFERENT failure modes.
+
+  * **Empirical verification matrix** (line 319
+    mutated in-place, both scenarios run, fix
+    restored):
+
+    | line 319 form                              | 44   | 45   |
+    |--------------------------------------------|------|------|
+    | `raw.includes('-') ? ... : raw` (fix)      | PASS | PASS |
+    | `raw.split('-').slice(1).join('-')`        | FAIL | PASS |
+    | `raw` (no stripping — empirically tested)  | PASS | FAIL |
+    | `raw.includes('-') ? raw : ... slice ...`  | FAIL | FAIL | (predicted)
+    | `raw.replace(/^\d+-/, '')` (equivalent)    | PASS | PASS | (predicted)
+
+    Only the "no stripping" mutation was run
+    this iteration (the highest-value
+    demonstration: slice 45 catches what slice
+    44 cannot). The inversion + equivalent-
+    rewrite rows are predictions based on the
+    code path; not separately exercised because
+    "no stripping" alone proves the marginal-
+    coverage claim.
+
+  * **Pattern (worth pinning)**: when a fix
+    guards a branch, the SISTER scenario for the
+    other branch catches a non-overlapping set
+    of regressions. Single-branch tests
+    over-permit. Two-branch sister pairs pin
+    the guard symmetrically. Generalizes to any
+    `cond ? A : B` fix.
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `npm run scenarios:catalog` → 45
+      scenarios (was 44)
+    - scenarios 44 + 45 wall-clock: ~5s warm
+    - src/ tree clean post-validation (no
+      mutation leaked)
+
+  * **Discipline reinforcement**: this is the
+    second mechanically-verified scenario in
+    the catalog. Pattern from slice 74 holds:
+    revert-the-fix → expect FAIL → restore.
+    Two scenarios down; 43 untested catalog
+    entries to go.
+
 - **slice 74-pr64-real-catcher (Phase 6
   scenario library — first MECHANICALLY-VERIFIED
   bug-shape claim)** (this iteration, on the
