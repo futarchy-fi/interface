@@ -699,9 +699,11 @@ export async function evmSnapshot(rpcUrl) {
     // 30s timeout (default is 5s): a snapshot under load — e.g.,
     // taken right after the page made a burst of eth_call requests
     // through the proxy that anvil is still draining — has been
-    // observed to take longer than 5s to acknowledge. The cost of
-    // failing here is high (the suite continues without isolation
-    // for the rest of the run) so the timeout is generous.
+    // observed to take longer than 5s to acknowledge. Don't push
+    // higher than 30s: Playwright's per-test timeout is 120s by
+    // default, and the beforeEach calls evmRevert + evmSnapshot
+    // back-to-back, so two 60s timeouts here would blow the test
+    // budget. 30s is a comfortable middle.
     const id = await anvilRpc(rpcUrl, 'evm_snapshot', [], 30_000);
     if (typeof id !== 'string' || !id.startsWith('0x')) {
         throw new Error(`[fork-state] evm_snapshot returned non-hex ID: ${JSON.stringify(id)}`);
@@ -726,10 +728,11 @@ export async function evmRevert(rpcUrl, snapshotId) {
     if (typeof snapshotId !== 'string' || !snapshotId.startsWith('0x')) {
         throw new Error(`[fork-state] evmRevert requires a 0x-prefixed snapshot ID, got: ${JSON.stringify(snapshotId)}`);
     }
-    // 30s timeout: same reasoning as evmSnapshot above. Reverting
-    // through dirtied state (hundreds of cached storage slots from
-    // the previous scenario's RPC reads) takes longer than the
-    // 5s default.
+    // 30s timeout: same reasoning as evmSnapshot above. Bounded to
+    // 30s to keep the beforeEach budget under Playwright's 120s
+    // per-test default. If revert genuinely takes longer than 30s,
+    // soft-fail in the runner picks up the slack — the suite
+    // proceeds without isolation for the affected iteration.
     const result = await anvilRpc(rpcUrl, 'evm_revert', [snapshotId], 30_000);
     if (result !== true) {
         throw new Error(

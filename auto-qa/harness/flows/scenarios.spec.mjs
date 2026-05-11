@@ -23,7 +23,7 @@
  */
 
 import { test } from '@playwright/test';
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -86,11 +86,20 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
             const newId = await evmSnapshot(anvilUrl);
             writeFileSync(SNAPSHOT_ID_FILE, newId, 'utf8');
         } catch (err) {
-            // Don't crash the suite on snapshot infrastructure failure
-            // — log it so the cause is visible, then proceed without
-            // isolation (scenarios that don't mutate state still pass).
+            // Step 9: bail on isolation for the rest of the run.
+            // Once revert fails, the snapshot ID is consumed and the
+            // file points at a dead ID — every subsequent beforeEach
+            // would then time out the same way (30s × N scenarios =
+            // multi-minute overhead for nothing). Deleting the file
+            // makes the existsSync() check above short-circuit on
+            // every later scenario, returning immediately. Scenarios
+            // that don't mutate state still pass — they just lose
+            // the cross-scenario isolation guarantee. The first
+            // failure logs the actual cause; subsequent scenarios
+            // run silently, no warning spam.
             console.warn(`[scenarios] snapshot revert FAILED: ${err.message}`);
-            console.warn('[scenarios] proceeding without per-scenario state isolation for this run');
+            console.warn('[scenarios] disabling per-scenario state isolation for the rest of this run (deleting snapshot file)');
+            try { unlinkSync(SNAPSHOT_ID_FILE); } catch { /* file may already be gone */ }
         }
     });
 

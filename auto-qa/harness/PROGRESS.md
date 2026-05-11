@@ -2313,6 +2313,89 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-9-isolation-recovery
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — partial mitigation of the
+  snapshot-revert flakiness step 8 carried into step
+  9. Doesn't fix the root cause; bounds the cost so
+  the flake doesn't dominate test wall-time.
+
+  * **What's flaky** — anvil's `evm_revert` and the
+    immediately-following `evm_snapshot` occasionally
+    take longer than the configured RPC timeout (now
+    capped at 30s, see step 8). Confirmed via
+    `/tmp/anvil.log`: anvil RECEIVES every call (14
+    reverts for a 14-scenario run) but our client
+    aborts before getting the response. When that
+    happens, the file holds a now-CONSUMED snapshot
+    ID. The next scenario's revert against that ID
+    returns false (anvil's "bad/consumed ID" signal),
+    and the wrapper throws.
+
+    Suspected cause (unverified): proxy traffic from
+    the previous scenario is still in-flight when
+    the next beforeEach fires. anvil serializes RPC
+    calls, so `evm_revert` waits behind the queued
+    `eth_call` backlog. Playwright's context-close
+    aborts page-side work but Node-side `fetch()` in
+    the proxy handler can keep running. A future fix:
+    drain the proxy queue before issuing revert.
+
+  * **What this slice changes** — when revert (or
+    its post-revert snapshot) fails, the runner now
+    DELETES the snapshot file. That makes
+    `existsSync(SNAPSHOT_ID_FILE)` short-circuit on
+    every subsequent `beforeEach`, so they return
+    immediately without paying the 30s timeout each.
+    The first failure logs the cause; later
+    scenarios run silently with no isolation.
+
+    Effect on wall-time:
+    - All-isolation success path: ~48s (14 scenarios)
+    - Old soft-fail (before this slice): ~3.6 min
+      (every later beforeEach paid 30s × 2 timeouts
+      then took a recovery snapshot that ALSO timed
+      out)
+    - New bail-on-fail (this slice): ~1.1 min
+      (one 30s timeout, then file gone, rest of suite
+      fast)
+
+  * **Why bail instead of try-harder** — an alternative
+    "take a fresh snapshot of whatever state we're
+    in" recovery was tried first; it kept failing
+    too (anvil was still busy from the same backlog
+    that caused the revert timeout). With recovery
+    failing, every later scenario paid the doubled
+    timeout cost. Bailing is uglier semantically
+    (the rest of the suite runs without isolation)
+    but faster and more honest about the failure
+    mode.
+
+  * **Why not just disable isolation entirely** —
+    when isolation works (most of the time, in the
+    common path), it's a real safety net for the
+    next phase (mutating scenarios). Step 7's
+    primitives are still net positive even if
+    they're not 100% reliable.
+
+  * **Live re-validation**:
+    - 14/14 scenarios pass live in ~1.1 min when
+      revert fails; ~48s when it succeeds end-to-end
+    - 65/65 smoke tests pass (no new fixture surface)
+
+  * **Next-iteration candidates** for step 10+:
+    - Diagnose anvil's actual processing time for
+      revert calls (profile vs. log timestamps).
+      Maybe the issue isn't a queue at all, just
+      anvil being slow on certain operations.
+    - Drain proxy in-flight requests before issuing
+      revert — track `outstanding-fetch-count` in
+      `installAnvilRpcProxy`, await it before letting
+      beforeEach proceed.
+    - Or: switch from snapshot/revert to `anvil_reset
+      ` (which forks fresh from upstream every time
+      — slower per-scenario but more reliable).
+
 - **slice fork-bootstrap-step-8-extend-trading
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — first second-scenario value-flow
