@@ -2313,6 +2313,110 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 68-dom-api-invariant-logo-alt-attribute
+  (Phase 5 invariant catalog — 27th DOM↔API
+  invariant; opens A11Y/`alt` attribute
+  sub-dimension)** (this iteration, on the
+  interface side) — opens a NEW attribute
+  sub-dimension: `alt` (accessibility-related)
+  alongside the existing `src` (image cascade,
+  4m/4n/4o/4p) and `href` (navigation, 4q).
+  Each attribute class carries different
+  bug-shape risks.
+
+  * **The new invariant** —
+    `slice 4x — logo img ALT attribute flows
+    from org.name`. Mock
+    `orgName: 'HARNESS-PROBE-ORG-ALT'`. Assert
+    `row.locator('img').first()` has
+    `alt='HARNESS-PROBE-ORG-ALT'` (exact match).
+
+  * **Code reference pinned** — per
+    `src/components/futarchyFi/companyList/
+    table/OrgRow.jsx:28-33`:
+    ```
+    <Image
+        src={image || '/assets/fallback-company.png'}
+        alt={title}
+        layout="fill"
+        objectFit="cover"
+    />
+    ```
+    The `alt` is fed directly from `title`,
+    which is `transformOrgToCard(org).title`.
+    Per `useAggregatorCompanies.js:93`:
+    `title: org.name || 'Unknown Organization'`.
+
+  * **Why accessibility tests matter**: alt
+    text is the ONLY mechanism screen readers
+    have for image content. A regression that
+    drops or breaks alt text would make the
+    page UNREADABLE for users relying on
+    assistive tech — a real product bug that's
+    invisible to sighted developers. Auto-QA
+    at this layer is one of the few mechanisms
+    that catches a11y regressions pre-merge.
+
+  * **Bug classes caught** (NEW vs prior
+    attribute tests):
+    - Regression that DROPS the alt prop from
+      `<Image>` — Next.js throws a console
+      warning but renders an unlabeled img;
+      this test catches it directly
+    - Regression that hardcodes alt to a
+      static string (`alt="Organization logo"`)
+      — visually fine but loses per-org
+      context for screen-reader users
+    - Regression that uses the WRONG field
+      for alt (e.g., `alt={org.description}`
+      or `alt={org.id}`) — produces alt text
+      but with wrong semantic content; exact-
+      string match catches it
+    - Regression that wraps title in an unsafe
+      transformation (e.g.,
+      `alt={title.toUpperCase()}`) — casing
+      mismatch caught
+
+  * **Attribute sub-dimensions in the
+    catalog now**:
+    - `src` (image cascade): 4m + 4n + 4o + 4p
+    - `href` (navigation): 4q
+    - `alt` (accessibility): 4x ★
+
+  * **Distinctive probe token strategy**:
+    'HARNESS-PROBE-ORG-ALT' (vs the existing
+    'HARNESS-PROBE-ORG-001' default in
+    PROBE_ORG_NAME) keeps the failure log
+    unambiguous — the alt token can only
+    originate from this test's mock.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 27 DOM↔API invariant tests pass:
+      56.8s (was 26 in 58.1s — minor variance);
+      new slice 4x alone: 1.6s on first run
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: 19 invariants
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: **6 invariants**
+      (was 5; alt-attribute test joins the
+      family — now 3 sub-dimensions)
+
+  * **What's next**:
+    - Empty-string `alt=""` edge case (does
+      Image fall back to a non-empty alt?)
+    - `aria-label` on counts cells (further
+      a11y dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers in carousel card)
+    - Inverse test for candles (empty pools
+      array — already covered by chaos #21,
+      so a state-transition variant might be
+      more valuable)
+    - href on table row (currently uses
+      onClick; would require click + url check)
+
 - **slice 67-dom-api-invariant-empty-state-inverse
   (Phase 5 invariant catalog — 26th DOM↔API
   invariant; FIRST happy-path empty-state probe)**

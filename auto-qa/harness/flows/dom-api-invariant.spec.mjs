@@ -1659,6 +1659,94 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         ).toBeVisible({ timeout: 30_000 });
     });
 
+    test('slice 4x — logo img ALT attribute flows from org.name (a11y bug-class)', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Opens a new attribute SUB-DIMENSION: `alt` attributes
+        // (accessibility-related), alongside `src` (images, 4m/4n
+        // /4o/4p) and `href` (navigation links, 4q). Each attribute
+        // class carries different bug-shape risks.
+        //
+        // Per `src/components/futarchyFi/companyList/table/
+        // OrgRow.jsx:28-33`:
+        //   <Image
+        //       src={image || '/assets/fallback-company.png'}
+        //       alt={title}
+        //       layout="fill"
+        //       objectFit="cover"
+        //   />
+        //
+        // The alt attribute is fed directly from the `title`
+        // prop, which is `transformOrgToCard(org).title`. Per
+        // `useAggregatorCompanies.js:93`:
+        //   title: org.name || 'Unknown Organization'
+        //
+        // So when `org.name` is set, the rendered <img> should
+        // carry the same string as its `alt`.
+        //
+        // Why accessibility tests matter: alt text is the
+        // ONLY mechanism screen readers have for image content.
+        // A regression that drops or breaks alt text would make
+        // the page UNREADABLE for users relying on assistive
+        // tech — a real product bug that's invisible to
+        // sighted developers. Auto-QA at this layer is one of
+        // the few mechanisms that catches a11y regressions
+        // pre-merge.
+        //
+        // Bug classes caught (NEW vs prior attribute tests):
+        //   - Regression that DROPS the alt prop from <Image>
+        //     — Next.js Image throws a console warning but
+        //     renders an unlabeled img; this test catches the
+        //     missing-alt state directly
+        //   - Regression that hardcodes alt to a static
+        //     string (e.g., `alt="Organization logo"`) —
+        //     visually fine but loses per-org context for
+        //     screen-reader users
+        //   - Regression that uses the WRONG field for alt
+        //     (e.g., `alt={org.description}` or
+        //     `alt={org.id}`) — would still produce alt text
+        //     but with the wrong semantic content; this slice
+        //     catches it via the exact-string match
+        //   - Regression that wraps title in an unsafe
+        //     transformation (e.g.,
+        //     `alt={title.toUpperCase()}`) — the assertion
+        //     would catch the casing mismatch
+        //
+        // Distinctive probe token 'HARNESS-PROBE-ORG-ALT'
+        // (vs the existing 'HARNESS-PROBE-ORG-001' default)
+        // keeps the failure log unambiguous — the alt token
+        // can only originate from this test's mock.
+
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            orgName: 'HARNESS-PROBE-ORG-ALT',
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Pre-flight: prove the row mounted with the probe
+        // org name visible somewhere.
+        await expect(
+            page.getByText('HARNESS-PROBE-ORG-ALT').first(),
+        ).toBeVisible({ timeout: 30_000 });
+
+        // Locate the row, then its logo image, then assert alt.
+        const row = page.getByRole('row').filter({ hasText: 'HARNESS-PROBE-ORG-ALT' });
+        await expect(row).toHaveCount(1);
+        // toHaveAttribute with a string literal does exact-match
+        // by default. The alt MUST equal the org name exactly.
+        await expect(row.locator('img').first()).toHaveAttribute(
+            'alt',
+            'HARNESS-PROBE-ORG-ALT',
+        );
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 
