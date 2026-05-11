@@ -2313,6 +2313,96 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 49-dom-api-invariant-both-pool-legs-queried
+  (Phase 5 invariant catalog — 8th DOM↔API
+  invariant)** (this iteration, on the interface
+  side) — strict tightening of slice 4c v3a.
+  Where v3a only asserts the YES leg appears in
+  candles requests, this slice asserts BOTH legs
+  (YES + NO) end up in candles requests across
+  the bulk-prefetch + per-pool-fallback paths
+  combined. Catches the "drop NO leg"
+  optimization-regression class — a real
+  production bug-shape pattern that the existing
+  v3a wouldn't catch.
+
+  * **The new invariant** —
+    `slice 4e — candles requests cover BOTH legs`.
+    Same fixture setup as v3a (registry happy,
+    candles tracks request body). Tighter
+    assertion: `await expect.poll(...).toBe(true)`
+    on `flat.includes(YES) && flat.includes(NO)`,
+    then explicit `.toContain(YES)` +
+    `.toContain(NO)` for failure-message clarity.
+
+  * **Bug-shapes captured** (NEW vs slice 4c v3a):
+    - Fetch optimizer that DROPS the NO leg
+      under the assumption "the prices sum to 1,
+      so we can compute NO from YES" — false
+      economy because:
+      * Conditional-token AMMs don't strictly
+        enforce yes+no=1 at every block (drift
+        from fees, rounding, async oracle
+        updates)
+      * NO pool's separate state can diverge
+        from YES under low-liquidity conditions
+      * Computing NO from (1 - YES) loses
+        precision and hides real arbitrage
+        opportunities the user wants to see
+    - Indexer-side change that renames the NO
+      pool address — the request goes out but
+      references a stale ID. This catches the
+      STALE-ID-IN-REQUEST shape because the
+      assertion operates on the REQUEST body,
+      not the response.
+    - Carousel render path that mounts a YES-only
+      card (loses the NO display) — request side
+      wouldn't fail, but a downstream regression
+      that drops the NO mount path would skip
+      emitting the NO query entirely.
+
+  * **Why valuable**: the YES/NO symmetry is a
+    load-bearing assumption throughout the
+    futarchy app — if it breaks silently in the
+    request layer, the broken assumption
+    propagates without a clean failure signal
+    until a user notices a stuck "NO: --" cell.
+    This invariant catches it at the network
+    boundary BEFORE any downstream consumer
+    sees missing data — strictly stronger than
+    v3a's YES-only check.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 8 DOM↔API invariant tests pass: 16.5s
+      (was 7 in 16.9s; new test ~1.5s); slice 4e
+      alone: 1.9s on first run
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (8 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total cells| nonzero counts (8/11) → render exactly             |
+    | slice 4d zero counts       | empty array → both cells render "0"               |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query ★| request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (toFixed precision)     |
+
+  * **What's next**: invariant-axis growth has
+    many small clean targets remaining —
+    proposal description rendering, archived/
+    hidden filtering shape (proposals=[8 active,
+    3 hidden, 2 archived] → 8/11), price-formatter
+    precision branch (>=1 → no decimals padding),
+    NO price renders alongside YES price (DOM-
+    side companion to this network-side check).
+    Each is small, additive, and orthogonal to
+    the chaos-axis work.
+
 - **slice 48-dom-api-invariant-zero-proposal-edge-case
   (Phase 5 invariant catalog — first PIVOT to
   invariant-axis after 8 chaos-row slices)**

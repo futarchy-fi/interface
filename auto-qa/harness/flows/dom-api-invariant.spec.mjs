@@ -404,4 +404,94 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         const flat = candlesCalls.flat();
         expect(flat).toContain(PROBE_POOL_YES);
     });
+
+    test('slice 4e — candles requests cover BOTH legs (PROBE_POOL_YES AND PROBE_POOL_NO) — catches "drop NO leg" optimization regression', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Strict tightening of slice 4c v3a. Where v3a only asserts
+        // the YES leg appears in candles requests, this slice asserts
+        // BOTH legs (YES + NO) end up in candles requests across the
+        // bulk-prefetch + per-pool-fallback paths combined.
+        //
+        // Bug class caught (NEW vs v3a):
+        //   - Fetch optimizer that DROPS the NO leg under the
+        //     assumption "the prices sum to 1, so we can compute
+        //     NO from YES" — false economy, because:
+        //       * Conditional-token AMMs don't strictly enforce
+        //         yes+no=1 at every block (tiny drift from fees,
+        //         rounding, async oracle updates)
+        //       * The NO pool's separate state can diverge from
+        //         the YES pool under low-liquidity conditions
+        //       * Computing NO from (1 - YES) loses precision and
+        //         hides real arbitrage opportunities the user
+        //         would want to see
+        //     A regression that lands such an optimization would
+        //     pass slice 4c v3a (YES still queried) but fail this
+        //     test (NO no longer queried).
+        //   - Indexer-side change that renames the NO pool address
+        //     in the response — the request itself goes out but
+        //     references a stale ID. This test catches the
+        //     STALE-ID-IN-REQUEST shape because the assertion
+        //     operates on the request body, not the response.
+        //   - Carousel render path that mounts a YES-only card
+        //     (loses the NO display) — the request side wouldn't
+        //     fail, but a downstream regression that drops the NO
+        //     mount path would skip emitting the NO query entirely.
+        //
+        // Why valuable: the YES/NO symmetry is a load-bearing
+        // assumption throughout the futarchy app — if it breaks
+        // silently in the request layer, the broken assumption
+        // propagates without a clean failure signal until a user
+        // notices a stuck "NO: --" cell. This invariant catches it
+        // at the network boundary, before any downstream consumer
+        // sees missing data.
+
+        const candlesCalls = [];
+
+        const richProposal = fakePoolBearingProposal({});
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        await context.route(CANDLES_GRAPHQL_URL, makeCandlesMockHandler({
+            prices: {
+                [PROBE_POOL_YES]: 0.42,
+                [PROBE_POOL_NO]:  0.58,
+            },
+            onCall: (q) => {
+                const ids = [...q.matchAll(/"(0x[a-fA-F0-9]{40})"/g)].map(m => m[1].toLowerCase());
+                candlesCalls.push(ids);
+            },
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Tighter poll than v3a: wait until BOTH addresses appear
+        // across the union of all candles requests. Either leg can
+        // arrive in any order (bulk vs per-pool fallback have
+        // different timing) so the assertion is set-membership, not
+        // request-ordering.
+        await expect.poll(
+            () => {
+                const flat = candlesCalls.flat();
+                return flat.includes(PROBE_POOL_YES) && flat.includes(PROBE_POOL_NO);
+            },
+            { timeout: 30_000 },
+        ).toBe(true);
+
+        const flat = candlesCalls.flat();
+        // Explicit assertions for failure-message clarity. v3a's
+        // single `.toContain(YES)` produces a vague failure if the
+        // pipeline broke entirely; these split out so the failure
+        // log says exactly which leg is missing.
+        expect(flat).toContain(PROBE_POOL_YES);
+        expect(flat).toContain(PROBE_POOL_NO);
+    });
 });
