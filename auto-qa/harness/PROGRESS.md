@@ -2313,6 +2313,95 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 92-no-supabase-snapshot-lookup (Phase 6
+  — catches PR #48 via negative network
+  assertion)** (this iteration, on the interface
+  side) — Catches PR #48 (Read Snapshot
+  proposal ID from on-chain metadata only).
+  First scenario using NEGATIVE network shape:
+  "no request to URL X." Recent-PR coverage:
+  12/22 → 13/22 (59%).
+
+  * **The KIND**: pre-fix code path that the PR
+    deleted re-appearing. Pre-PR-48,
+    useSnapshotData queried Supabase
+    `market_event_proposal_links` every market
+    page mount, even when Registry metadata had
+    `snapshot_id`. PR #48 deleted
+    `src/utils/supabaseSnapshot.js` entirely.
+    The DOM behavior is identical pre/post — the
+    "Snapshot Vote" badge renders either way
+    because the Registry fallback always
+    resolved. Only the NETWORK shape differs:
+    pre-fix issues
+    `GET ${SUPABASE_URL}/rest/v1/market_event_proposal_links?select=*`
+    on every market page; post-fix issues zero.
+
+  * **Distinct from scenario 50** (network-shape-
+    companies): that one asserts /companies HITS
+    the subgraph endpoints (positive shape).
+    This one asserts /markets does NOT hit a
+    deprecated Supabase endpoint (negative
+    shape). Together they pin both halves of the
+    Supabase→subgraph migration arc.
+
+  * **The scenario** (`scenarios/57-pr48-no-
+    supabase-snapshot-lookup.scenario.mjs`):
+    - Route: `/markets/${MARKET_PROBE_ADDRESS}`
+    - Registry mock returns proposal with
+      `snapshot_id` in metadata (so Registry-
+      only path resolves)
+    - Candles mock standard
+    - Assertion 1: "Trading Pair" visible (page
+      mounted past chain gate)
+    - Assertion 2: `waitForTimeout(3000)`
+      (useSnapshotData mount effect settles)
+    - Assertion 3: `ctx.callsTo(/market_event_proposal_links/).length === 0`
+
+  * **Mechanical verification**:
+    1. Injected a `fetch(${SUPABASE_URL}/rest/v1/
+       market_event_proposal_links?select=*)` in
+       useSnapshotData's mount useEffect (the
+       cleanest way to simulate the regression
+       without re-creating the deleted file).
+       Killed dev server (slice-88 HMR note).
+    2. Regression test → FAILED:
+       `Scenario 57 found 3 request(s) to the
+       deprecated Supabase
+       market_event_proposal_links endpoint`.
+       Three requests: React StrictMode mounts
+       the component twice + a refresh interval
+       refire — the network monitor captures
+       all three.
+    3. Restored useEffect → PASSED (17.1s).
+
+  * **Why three requests, not one**: the mount
+    useEffect fires once per StrictMode-mount
+    (twice in dev), then the parent component
+    re-renders once (third). Total: 3 captured
+    requests. The assertion uses
+    `length > 0` (any non-zero count), so the
+    exact number is fine — what matters is the
+    PRESENCE.
+
+  * **Catalog state**: 57 scenarios, **15
+    mechanically verified** (44, 45, 46, 47, 48,
+    10, 49, 50, 51, 52, 53, 54, 55, 56, 57).
+    Recent-PR coverage: **13/22 = 59%**.
+    Eight assertion KINDs unchanged; new SHAPE
+    within the network-monitor KIND (slice 82):
+    NEGATIVE — "no calls to deprecated URL"
+    (counterpart to slice 82's POSITIVE — "calls
+    to expected URL").
+
+  * **Live re-validation**:
+    - Scenario 57 wall-clock: ~17s cold, ~5s
+      warm (includes the 3s settle).
+    - src/ tree clean after verification cycle
+      (useSnapshotData mount effect restored).
+    - 47/47 stub smoke tests + 5/5 live-anvil
+      tests still pass.
+
 - **slice 91-live-anvil-time-control (Phase 6 —
   validates slice 90 primitives against real
   anvil)** (this iteration, on the interface
