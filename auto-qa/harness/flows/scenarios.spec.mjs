@@ -139,9 +139,21 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
             // Navigate
             await page.goto(scenario.route, { waitUntil: 'domcontentloaded' });
 
+            // Step 10: enriched assertion context. Existing
+            // scenarios destructure `(page) =>` and ignore the
+            // second argument. Mutating scenarios use it to issue
+            // mid-test fork state changes via the fork-state.mjs
+            // primitives (the wallet here is the SAME synthetic
+            // address globalSetup funded, derived deterministically
+            // from `nStubWallets(1)[0]`).
+            const ctx = {
+                wallet,
+                anvilUrl: STUB_RPC_URL,
+            };
+
             // Run assertions in order
             for (const assertion of scenario.assertions ?? []) {
-                await assertion(page);
+                await assertion(page, ctx);
             }
         });
     }

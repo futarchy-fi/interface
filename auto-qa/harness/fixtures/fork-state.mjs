@@ -34,7 +34,14 @@ import {
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const DEFAULT_TIMEOUT_MS = 5_000;
+// Step 10: bumped from 5s. When the anvil RPC proxy is forwarding
+// page traffic (many concurrent eth_calls) AND a fixture issues a
+// mid-test mutation (anvil_setStorageAt, eth_call, etc.), anvil
+// serializes them all. A primitive that lands behind a backlog of
+// queued eth_calls can take 10-20s to acknowledge — well past the
+// old 5s default. 30s is the same ceiling step 9 used for the
+// snapshot/revert primitives.
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 // ── Token constants (Gnosis chain) ──
 //
@@ -150,7 +157,9 @@ const FUTARCHY_PROPOSAL_CONDITION_ID_ABI = [{
  */
 export async function anvilRpc(rpcUrl, method, params = [], timeoutMs = DEFAULT_TIMEOUT_MS) {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    let abortReason = null;
+    const t = setTimeout(() => { abortReason = `client timeout after ${timeoutMs}ms`; ctrl.abort(); }, timeoutMs);
+    const startedAt = Date.now();
     try {
         const r = await fetch(rpcUrl, {
             method: 'POST',
@@ -166,6 +175,21 @@ export async function anvilRpc(rpcUrl, method, params = [], timeoutMs = DEFAULT_
             throw new Error(`RPC error (${method}): ${JSON.stringify(j.error)}`);
         }
         return j.result;
+    } catch (err) {
+        const elapsed = Date.now() - startedAt;
+        // Surface the actual cause: client-side timeout vs anything
+        // else (host abort by Playwright / network reset / etc).
+        // The bare "AbortError: This operation was aborted" message
+        // doesn't distinguish them, which made step 10 debugging
+        // hard.
+        if (err.name === 'AbortError') {
+            throw new Error(
+                `[fork-state] anvilRpc(${method}) aborted after ${elapsed}ms ` +
+                `(${abortReason ?? 'host-aborted, NOT our timeout'})`,
+                { cause: err },
+            );
+        }
+        throw err;
     } finally {
         clearTimeout(t);
     }

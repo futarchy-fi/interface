@@ -2313,6 +2313,100 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-10-first-mutating-scenario
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — first scenario in the harness
+  that MUTATES fork state mid-test and asserts the
+  page picks up the change. Also: enriched the
+  scenarios runner to pass `{wallet, anvilUrl}` as a
+  second arg to assertions, and bumped the default
+  RPC timeout from 5s to 30s with a structured abort
+  error so future flakes are diagnosable.
+
+  * **Scenario #15** —
+    `15-market-page-balance-update.scenario.mjs`. Three
+    assertion steps:
+    1. Navigate to /markets/<probe>; wait for the
+       trading panel's "Available 1100 sDAI" line
+       (the pre-mutation state).
+    2. Mutate fork state via `setErc20Balance(wallet,
+       500e18)`. NOT through the wallet stub or a
+       transaction — direct storage write, no mining
+       required.
+    3. Wait for the page's auto-refresh tick (15s
+       interval per `useBalanceManager.js:185`);
+       assert "Available 600 sDAI" appears (wallet=500
+       + min(YES 100, NO 100) = 600).
+
+  * **Why 500 → 600 (not 0 → 100)** — "100 sDAI"
+    ALREADY renders on the page (the position line in
+    the Balance panel). Asserting "100 sDAI" after
+    draining wallet to 0 would match the existing
+    rendering and pass even if change-detection
+    broke. 600 is unique to the post-mutation state,
+    so its presence unambiguously signals correct
+    refresh.
+
+  * **Bug-shapes captured** (NEW failure modes #14
+    can't catch):
+    - useBalanceManager auto-refresh interval cleared
+      by an unmount/remount cycle
+    - balance render path caches first read forever
+      (useMemo wrong-deps regression)
+    - wallet-balance call de-duped against a stale
+      cached promise from first render
+    - zero-transition swaps value for a loading
+      sentinel (Available shows "loading..." forever)
+
+  * **Runner extension** — `flows/scenarios.spec.mjs`'s
+    test body now passes `{wallet, anvilUrl}` as a
+    second arg to each assertion. Existing 14 scenarios
+    use `async (page) => {...}` and ignore it
+    (destructuring is non-throwing on extra args).
+    Mutating scenarios use it to issue mid-test fork
+    primitives via `fork-state.mjs`. The wallet
+    address is the SAME synthetic wallet globalSetup
+    funded — derived deterministically from
+    `nStubWallets(1)[0]`.
+
+  * **Default RPC timeout: 5s → 30s** — caught when
+    scenario #15's `setErc20Balance` call started
+    timing out at 5s on a cold anvil. Live curl
+    measured a fresh `anvil_setStorageAt` against
+    SDAI at 9.3s (subsequent calls: 0.6ms — anvil
+    fetches contract bytecode from upstream Gnosis
+    on first read). Globalsetup's first few calls
+    are similarly cold; subsequent ones warm. 30s
+    aligns with step 9's snapshot/revert ceiling.
+
+  * **Structured abort error** — anvilRpc previously
+    threw a bare "AbortError: This operation was
+    aborted" with no signal of WHY (client timeout
+    vs host abort vs network reset). Now throws
+    "[fork-state] anvilRpc(<method>) aborted after
+    Nms (client timeout after Tms / host-aborted)"
+    with the original error chained as `cause`. Step
+    10's debugging would have taken ~3× longer
+    without this.
+
+  * **Live re-validation**:
+    - 15/15 scenarios pass live in 47.3s (no
+      regression vs. step 9's ~48s; isolation
+      working through the mutation)
+    - 65/65 smoke tests pass (no new fixture
+      surface; existing primitives covered the
+      mutation path)
+
+  * **Confirms step 7 isolation works under load**
+    — scenario #15 mutates fork state, scenarios
+    #01-#14 (run alphabetically AFTER #15 ... no
+    actually they run BEFORE since #01 sorts first;
+    but if a future scenario ran after #15, it
+    would inherit the dirty state without isolation).
+    Within this run order, #15 is last, so isolation
+    isn't yet load-bearing. Adding a future fork-read
+    scenario AFTER #15 would test that.
+
 - **slice fork-bootstrap-step-9-isolation-recovery
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — partial mitigation of the
