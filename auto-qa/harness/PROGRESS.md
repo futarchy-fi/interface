@@ -2313,6 +2313,175 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 64-dom-api-invariant-split-title-display
+  (Phase 5 invariant catalog — 23rd DOM↔API
+  invariant; STRUCTURAL DISCOVERY)**
+  (this iteration, on the interface side) —
+  empirical discovery during planned title-
+  precedence test: the title cascade is NOT a
+  precedence lattice analogous to the image
+  cascade. When BOTH `displayNameEvent` AND
+  `displayNameQuestion` are set, the card
+  renders BOTH as a SPLIT display (question
+  prefix + event suffix), not picking one.
+  Reframed slice 4u as a split-display
+  invariant rather than a precedence test.
+
+  * **Empirical finding pinned**: the
+    "precedence" framing I'd planned (analogous
+    to slice 4p for image cascade) doesn't
+    match production behavior. Two render
+    paths:
+    - `useAggregatorProposals.js:145` — single-
+      line fallback chain (`event || question
+      || 'Unknown Proposal'`) used when ONE
+      field is absent (covered by 4s, 4t)
+    - `useAggregatorProposals.js:198-199` —
+      split-display metadata copies both fields
+      into `metadata.display_title_0`
+      (= displayNameQuestion) and
+      `metadata.display_title_1`
+      (= displayNameEvent)
+    - `EventHighlightCard.jsx:266`:
+      `const shouldUseSplitTitles =
+      displayTitle0 && displayTitle1;`
+      when true, the card renders BOTH lines
+      as prefix+suffix display (real production
+      pattern: "What's the impact" + "if
+      GIP-145 passes?")
+    So the title cascade is 3-way fallback +
+    split-display branch — DIFFERENT topology
+    from the image cascade's 4-way precedence
+    lattice.
+
+  * **The new invariant** —
+    `slice 4u — SPLIT-TITLE display when both
+    fields set`. Mock `displayNameEvent=
+    'HARNESS-PROBE-EVENT-PART'` AND
+    `displayNameQuestion=
+    'HARNESS-PROBE-QUESTION-PART'` (different
+    tokens). Two POSITIVE assertions: BOTH
+    texts appear in the carousel card.
+
+  * **Why this matters**: split-title display
+    is the production-realistic case for
+    futarchy proposals. A regression that
+    breaks it would either:
+    - Hide one of the texts (UX loss)
+    - Collapse to a single line with the wrong
+      text (visual regression)
+    - Render both in WRONG positions (less
+      visually obvious but still wrong)
+
+  * **Bug classes caught** (NEW vs 4s and 4t):
+    - Regression that DROPS the split-display
+      branch (`shouldUseSplitTitles` always
+      false, or conditional render path
+      removed) — only one text would appear;
+      one assertion fails
+    - Regression in useAggregatorProposals that
+      DROPS `metadata.display_title_0` or
+      `metadata.display_title_1` from the
+      proposal transform — card's
+      `displayTitle0/1` undefined → split-
+      display branch never engages
+    - Regression in the mapping (swap
+      display_title_0 = displayNameEvent
+      instead of displayNameQuestion) — both
+      texts still appear but in WRONG
+      positions; this slice would pass (both
+      visible) but a future stricter slice
+      could assert ordering
+    - Refactor that uses one field for title
+      and the other for tooltip/aria-label
+      (visible only on hover) —
+      `toBeVisible()` may fail for the
+      non-rendered text
+
+  * **Topology refinement of the title
+    cascade**:
+    - 4r (preferred branch, displayNameEvent
+      set, displayNameQuestion absent) —
+      future; trivially covered by every
+      existing carousel test
+    - 4s (fallback branch, event=null,
+      question set) — done
+    - 4t (final fallback, both=null) — done
+    - 4u (split display, both set with
+      distinct values) — done ★
+    The title-cascade topology is now fully
+    probed for distinct outcomes. A future
+    iteration can also add explicit ordering
+    assertions to 4u (e.g., the question text
+    appears BEFORE the event text in the DOM).
+
+  * **Why the bug-discovery is valuable
+    feedback**: my initial assertion was
+    wrong, and the failing test pointed me at
+    the actual production behavior — the
+    split-display branch. This is exactly the
+    kind of "ask the test what the truth is"
+    workflow the harness enables. The wrong
+    assertion didn't break production code; it
+    forced me to read the actual production
+    code more carefully, which produced a
+    BETTER invariant.
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (no infra changes)
+    - All 23 DOM↔API invariant tests pass:
+      51.7s (was 22 in 47.0s); new slice 4u
+      alone: 7.5s on first run (after fix from
+      the initial precedence-framing failure)
+
+  * **Cross-layer DOM↔API invariant catalog
+    after this slice (23 tests in
+    flows/dom-api-invariant.spec.mjs)**:
+    | name                       | shape                                              |
+    |----------------------------|----------------------------------------------------|
+    | mocked org name → cell     | string-passthrough field (slice 4 v1)              |
+    | slice 4b active/total      | 8/3 split — HIDDEN filter active                   |
+    | slice 4d zero counts       | empty array → "0" / "0"                            |
+    | slice 4f archived filter   | 5/2/3 split → "5" / "7" — ARCHIVED filter active   |
+    | slice 4g resolved-status   | 6/2 split → "6" / "8" — resolution_status branch   |
+    | slice 4h resolved-outcome  | 7/3 split → "7" / "10" — resolution_outcome branch |
+    | slice 4l filter-stress     | 10 mixed-flag → "3" / "6" — composition stable     |
+    | slice 4m logo fallback     | no orgMetadata → img.src matches /fallback-company/|
+    | slice 4n cover-image       | coverImage='/test-probe-cover.png' → img.src       |
+    | slice 4o logo-only         | logo='/test-probe-logo.png' → img.src              |
+    | slice 4p img precedence    | both set → coverImage wins; logo NOT in src        |
+    | slice 4q href on card      | event card anchor → /market?proposalId=<addr>      |
+    | slice 4s title fallback    | event=null + question='X' → "X" appears            |
+    | slice 4t title final FB    | both=null → "Unknown Proposal" appears             |
+    | slice 4u split-title ★     | both set → BOTH render (event AND question)        |
+    | slice 4i chain default     | no metadata.chain → "Gnosis" (chainId=100 default) |
+    | slice 4c v1 chain enum     | chain=10 → "Optimism" (lookup-table branch)        |
+    | slice 4c v2 chain fallback | chain=999 → "Chain 999" (template-literal branch)  |
+    | slice 4c v3a YES-pool query| request mentions PROBE_POOL_YES address            |
+    | slice 4e BOTH-pools query  | request mentions BOTH PROBE_POOL_YES and _NO       |
+    | slice 4c v3b price formatter | YES=0.42 → "0.4200 SDAI" (both<1 → precision=4) |
+    | slice 4j precision sticky  | YES=1.42 + NO=0.58 → "1.4200 SDAI" (OR keeps p=4)  |
+    | slice 4k precision drop    | YES=1.42 + NO=1.58 → "1.42 SDAI" (no leg → p=2)    |
+
+  * **Coverage dimensions update**:
+    - Text-level field-flow: **16 invariants**
+      (was 15; split-title joins the title
+      family)
+    - Network-level request body: 2 invariants
+    - Attribute-level rendering: 5 invariants
+
+  * **What's next**:
+    - 'Unknown Organization' fallback test
+      (parallel to 'Unknown Proposal' but for
+      org-level data) — org.name absent →
+      title = 'Unknown Organization' per
+      useAggregatorCompanies.js:93
+    - aria-label on counts cells (a11y
+      dimension)
+    - Pool-shape invariants (volumeToken*,
+      liquidity numbers)
+    - Pool address rendering in card subtext
+
 - **slice 63-dom-api-invariant-title-final-fallback
   (Phase 5 invariant catalog — 22nd DOM↔API
   invariant; title-cascade FINAL FALLBACK)**

@@ -1311,6 +1311,118 @@ test.describe('Phase 5 slice 4 — DOM↔API invariant', () => {
         ).toBeVisible({ timeout: 30_000 });
     });
 
+    test('slice 4u — SPLIT-TITLE display when both fields set: card renders BOTH event and question text', async ({ context, page }) => {
+        test.setTimeout(180_000);
+
+        // Discovered during empirical testing that the
+        // "precedence" framing I'd planned doesn't match the
+        // actual product behavior. When BOTH displayNameEvent
+        // AND displayNameQuestion are set with DIFFERENT values,
+        // the card does NOT pick one — it renders BOTH as a
+        // SPLIT display (question as prefix line, event as
+        // suffix line).
+        //
+        // The two render paths:
+        //   - `useAggregatorProposals.js:145` (single-line
+        //     fallback chain):
+        //       eventTitle: displayNameEvent
+        //                   || displayNameQuestion
+        //                   || 'Unknown Proposal'
+        //     used when ONE field is absent (covered by 4s, 4t)
+        //   - `useAggregatorProposals.js:198-199` (split-display
+        //     metadata): copies both fields into
+        //     `metadata.display_title_0` (= displayNameQuestion)
+        //     and `metadata.display_title_1` (= displayNameEvent)
+        //     — the carousel passes metadata to the card
+        //   - `EventHighlightCard.jsx:266`:
+        //       const shouldUseSplitTitles =
+        //           displayTitle0 && displayTitle1;
+        //     when true, the card renders BOTH lines as a
+        //     prefix+suffix display (real production pattern:
+        //     "What's the impact" + "if GIP-145 passes?")
+        //
+        // So the title cascade isn't a 4-way precedence lattice
+        // (analogous to image cascade) — it's a 3-way fallback
+        // chain (4r preferred / 4s fallback / 4t final) PLUS a
+        // SPLIT-DISPLAY branch (4u) when both fields are set.
+        // Structurally different from the image cascade's 4p
+        // precedence test.
+        //
+        // What this slice probes:
+        //   - Both displayNameEvent and displayNameQuestion
+        //     flow through to `metadata.display_title_0/1`
+        //   - `shouldUseSplitTitles` correctly detects "both
+        //     set" and engages the split-display branch
+        //   - Both texts render in the card's DOM
+        //
+        // Two POSITIVE assertions (no negative this time —
+        // BOTH must appear, that IS the invariant):
+        //   (a) 'HARNESS-PROBE-EVENT-PART' appears (event-leg
+        //       flows from displayNameEvent →
+        //       metadata.display_title_1 → card render)
+        //   (b) 'HARNESS-PROBE-QUESTION-PART' appears
+        //       (question-leg flows from displayNameQuestion →
+        //       metadata.display_title_0 → card render)
+        //
+        // Bug classes caught (NEW vs 4s and 4t):
+        //   - Regression that DROPS the split-display branch
+        //     (`shouldUseSplitTitles` always false, or the
+        //     conditional render path removed) — only one
+        //     text would appear; one of the assertions fails
+        //   - Regression in useAggregatorProposals that DROPS
+        //     `metadata.display_title_0` or
+        //     `metadata.display_title_1` from the proposal
+        //     transform — card's `displayTitle0/1` undefined →
+        //     split-display branch never engages
+        //   - Regression in the mapping (e.g., swap
+        //     display_title_0 = displayNameEvent instead of
+        //     displayNameQuestion) — both texts still appear
+        //     but in WRONG positions; this slice would pass
+        //     (both visible) but a future stricter slice could
+        //     assert ordering
+        //   - Refactor that uses one field for title and the
+        //     other for tooltip/aria-label (visible only on
+        //     hover) — `toBeVisible()` may fail for the
+        //     non-rendered text
+        //
+        // Why this matters: split-title display is the
+        // production-realistic case for futarchy proposals.
+        // A regression that breaks it would either hide one
+        // text (UX loss) or render in the wrong layout (visual
+        // regression).
+        //
+        // Distinctive tokens 'EVENT-PART' / 'QUESTION-PART'
+        // (vs the slice 4s 'QUESTION-FALLBACK' and 4t
+        // 'Unknown Proposal') keep failure logs unambiguous —
+        // each title-cascade slice has its own probe set.
+
+        const richProposal = {
+            ...fakePoolBearingProposal({}),
+            displayNameEvent:    'HARNESS-PROBE-EVENT-PART',
+            displayNameQuestion: 'HARNESS-PROBE-QUESTION-PART',
+        };
+        await context.route(REGISTRY_GRAPHQL_URL, makeGraphqlMockHandler({
+            proposals: [richProposal],
+        }));
+
+        const wallet = nStubWallets(1)[0];
+        await context.addInitScript(installWalletStub({
+            privateKey: wallet.privateKey,
+            rpcUrl: STUB_RPC_URL,
+            chainId: 100,
+        }));
+
+        await page.goto('/companies', { waitUntil: 'domcontentloaded' });
+
+        // Both texts must appear — the split-display invariant.
+        await expect(
+            page.getByText('HARNESS-PROBE-EVENT-PART').first(),
+        ).toBeVisible({ timeout: 30_000 });
+        await expect(
+            page.getByText('HARNESS-PROBE-QUESTION-PART').first(),
+        ).toBeVisible({ timeout: 15_000 });
+    });
+
     test('slice 4c v1 — chain enum formatter (mocked metadata.chain → ChainBadge text)', async ({ context, page }) => {
         test.setTimeout(180_000);
 
