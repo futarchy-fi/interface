@@ -2313,6 +2313,90 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-11-isolation-canary
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — adds scenario #16, an isolation-
+  health canary that runs alphabetically AFTER #15
+  (the mutating scenario) and asserts the BASELINE
+  state. Closes the loop on step 7's per-scenario
+  isolation: it's not enough to BUILD the snapshot/
+  revert plumbing, the harness has to PROVE it works.
+
+  * **Scenario #16** —
+    `16-market-page-isolation-canary.scenario.mjs`.
+    Same mocks + proxy as #11. Single assertion:
+    "Available 1100 sDAI" appears on the trading panel
+    (the pre-mutation aggregate). If per-scenario
+    revert worked, #15's `setErc20Balance(wallet,
+    500e18)` was undone and this passes. If isolation
+    broke, the wallet still holds 500 sDAI and the
+    assertion fails.
+
+  * **Why this isn't redundant with #11** — #11
+    runs BEFORE #15 alphabetically. globalSetup gives
+    every scenario a clean baseline at start-of-suite.
+    So #11 would pass even if revert was a complete
+    no-op (the state hasn't been mutated yet when
+    #11 runs). The discriminating test is a scenario
+    that runs AFTER a known-mutating scenario — the
+    only way it sees the baseline is if revert
+    actually undid the mutation.
+
+  * **Why this is shipped as its own scenario** rather
+    than as a trailing assertion on #15 — Playwright
+    reports each scenario as a distinct test in the
+    trace. When isolation breaks, the harness should
+    produce a clear named failure ("isolation canary")
+    rather than a confusing "second assertion in the
+    mutation scenario". Also: the validation has to
+    happen in a SEPARATE scenario than the one that
+    mutates, otherwise the revert hasn't fired yet.
+
+  * **Bug-shapes captured** (NEW failure modes the
+    pre-#16 suite couldn't catch):
+    - Per-scenario beforeEach revert silently fails
+      (e.g., anvil RPC timeout, snapshot ID file
+      consumed). #15's mutation persists into the
+      next scenario.
+    - Step 9's recovery-bail logic deletes the
+      snapshot file but doesn't reset wallet state.
+      The first scenario after the bail surfaces the
+      broken state.
+    - A refactor of the runner's beforeEach (e.g.,
+      moving revert to afterEach by mistake) lets
+      mutation persist; this scenario fails first.
+
+  * **What this slice DOESN'T do** — verify the canary
+    actually FAILS when isolation breaks. The scenario
+    is small enough that the intent is clear from
+    code; setting up a deliberate break to test the
+    canary would require infrastructure (env var to
+    skip revert in beforeEach, etc.) that doesn't
+    pay for itself yet. If the snapshot flake from
+    step 9 ever triggers in CI, this canary will be
+    the first failing test — natural validation.
+
+  * **Live re-validation**:
+    - 16/16 scenarios pass live in 51.5s (was 47.3s
+      with 15 — +4s for the new canary, of which
+      ~half is its own beforeEach revert + page load,
+      proving the cumulative chain still works
+      through scenario 16)
+    - 65/65 smoke tests pass (no new fixture surface)
+
+  * **Next-iteration candidates** (incremental):
+    - Extend value-flow to scenario #12 (allowances)
+      and #13 (charts) — pairing each market-page
+      surface with its own value-flow assertion
+    - Add scenario #17: another mutation, different
+      mutation type (e.g., set ERC1155 position to
+      a non-default value), with another canary
+      after it. Tests isolation under repeated
+      mutation cycles
+    - Investigate the snapshot-revert flake's actual
+      cause (the step 9 mitigation just bounds wall-
+      time; root cause is still unknown)
+
 - **slice fork-bootstrap-step-10-first-mutating-scenario
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — first scenario in the harness
