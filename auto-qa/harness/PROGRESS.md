@@ -2313,6 +2313,107 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 26-scenario-23-candles-corrupt-pool
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the LAST cell of the
+  /companies chaos matrix: (CANDLES, per-row
+  corrupt). Mirrors #09 (registry-corrupt-org) on
+  the candles side. Two pools returned in the
+  candles GraphQL response: one well-formed
+  (price=0.42), one structurally corrupt
+  (`price` field absent). Asserts the well-formed
+  pool's card renders "0.4200 SDAI" — proves the
+  corrupt sibling didn't poison the prefetched-
+  price flow. **Matrix is now 12/12.**
+
+  * **The scenario** — `23-candles-corrupt-pool`
+    on `/companies`. Two proposals registered,
+    each tied to a different pool pair. Custom
+    candles handler returns corrupt pool entries
+    FIRST in the array (so the consumer's loop
+    hits them before the well-formed ones —
+    same defensive-test rationale as #09).
+
+  * **Why this is a NEW failure-mode branch
+    vs other candles-side scenarios**:
+    - #03 hard 502 — every fetch fails
+    - #04 partial 200 — some addresses absent
+    - #08 malformed body — non-JSON envelope
+    - #20 slow valid — full data, just delayed
+    - #21 empty 200 — pools array is `[]`
+    - #23 (this slice) — pools array
+      STRUCTURALLY-VALID (parses cleanly) but a
+      ROW MISSING the `price` field. Defensive
+      code must handle `pool.price === undefined`
+      without crashing OR leaking the undefined
+      to the well-formed sibling's card.
+
+  * **Bug-shapes captured** (NEW vs #09 which
+    is registry-side):
+    - One corrupt pool CRASHES the entire
+      carousel (no defensive guard around
+      `pool.price` access)
+    - Corrupt pool's price LEAKS into the
+      well-formed pool's card (cache-key
+      collision)
+    - Well-formed pool wrongly assigned
+      `undefined` price (loop continues past
+      corrupt row but leaves a sentinel in
+      shared state)
+    - Corrupt pool renders raw "undefined SDAI"
+      or "NaN SDAI" (formatter doesn't guard
+      against missing field)
+    - Both cards stuck on LoadingSpinner from
+      shared-promise rejection regression
+
+  * **Helper added inline**:
+    `makeCorruptCandlesHandler()` constructs
+    the mixed-pool response. Local to this
+    scenario rather than promoted to
+    `api-mocks.mjs` because no other scenario
+    currently needs "structurally-corrupt
+    pool" construction.
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #23 itself: passed in 10.3s on
+      first run
+    - Catalog regenerated: 23 scenarios (was 22)
+
+  * **Chaos coverage matrix on /companies after
+    this slice (12/12 COMPLETE)**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #02      | #03     |
+    | partial response  | #22      | #04     |
+    | empty 200         | #05      | #21     |
+    | malformed body    | #07      | #08     |
+    | per-row corrupt   | #09      | #23 ★   |
+    | slow valid resp   | #19      | #20     |
+    Each cell catches a DISTINCT class of bug —
+    all 12 land at different control-flow
+    branches in the page's data-fetching +
+    rendering pipeline. 6 iterations (#22-#26)
+    of 1 cell each closes out the matrix.
+
+  * **What's NEXT** (now that /companies chaos
+    is complete):
+    - Apply the same matrix discipline to OTHER
+      pages: /markets/[address] has scenarios
+      #10-#18 but only the happy + a few bug-
+      shape captures; the chaos axes (slow,
+      partial, empty, malformed, corrupt) on the
+      market page's data sources are mostly
+      uncovered.
+    - OR add NEW page coverage entirely: /markets
+      list, /milestones, /rpc-diagnostics — none
+      have any scenarios.
+    - OR pivot back to fork-bootstrap: the
+      cold-anvil flake from steps 17-21 is still
+      unresolved; with more harness coverage in
+      place, the time investment in trace-level
+      anvil diagnostics may pay off better.
+
 - **slice 25-scenario-22-registry-partial
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (REGISTRY, partial-
