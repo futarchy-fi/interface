@@ -2313,6 +2313,92 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 35-scenario-32-market-page-registry-partial
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (REGISTRY, partial-
+  response) cell on the market-page chaos matrix.
+  Mirror of #22 (registry-partial on /companies)
+  applied to the market page's single-row lookup
+  contract. Distinct from #24 (registry 502),
+  #26 (registry empty-200), #28 (registry
+  malformed-body), and #30 (registry slow)
+  because the row IS PRESENT and PARSEABLE — just
+  missing optional sub-fields that the market
+  page's enrichment pipeline expects.
+
+  * **The scenario** — `32-market-page-registry-
+    partial` on /markets/<MARKET_PROBE_ADDRESS>.
+    Registry returns one row matching the URL
+    address with multiple degraded sub-fields:
+    - `title` / `description` / `displayName*`
+      all null
+    - `metadata.conditional_pools` field MISSING
+      from the parseable JSON envelope
+    - `organization` set to null (not just its
+      sub-aggregator)
+    Same page-shell assertions as prior market-
+    page chaos slices.
+
+  * **Distinction from #22** (same shape,
+    different page contract):
+    - #22 /companies: returns TWO proposals
+      (one full + one partial); tests that the
+      partial sibling doesn't poison the full
+      sibling's render
+    - #32 /markets/[address]: returns ONE
+      proposal matching the URL with degraded
+      metadata; tests that the single-row
+      degradation doesn't break the page's
+      enrichment pipeline. Pool-address-
+      extraction lookup, organization-name
+      access, title/description formatter all
+      need defensive null-guards.
+
+  * **Bug-shapes captured** (NEW vs #24/#26/
+    #28/#30):
+    - Page CRASHES when proposal.title is null
+      (formatter assumes string, errors on
+      `proposal.title.toUpperCase()`-style
+      access)
+    - Page renders raw "undefined" or "null"
+      as proposal title or description
+      (missing `?? ''` somewhere)
+    - `proposal.organization.name` access
+      CRASHES because `organization` is null
+      (no nullish-chain guard)
+    - `proposal.metadata.conditional_pools.yes
+      .address` access CRASHES because
+      `conditional_pools` is absent (same shape
+      as #22, different code path — market-
+      page's address-extraction surface)
+    - "Market Not Found" FALSE-POSITIVE on a
+      row that's PRESENT but partially
+      degraded (metadata-validity check too
+      strict)
+    - Chart panel goes BLANK from
+      address-extraction propagating up the
+      chart-data-derivation chain
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #32 itself: passed in 11.8s on
+      first run
+    - Catalog regenerated: 32 scenarios (was 31)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  | #32 ★    |   —     |
+    | empty 200         | #26      | #27     |
+    | malformed body    | #28      | #29     |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   | #30      | #31     |
+    9 of 12 cells filled. Three remaining:
+    (candles, partial), (registry, per-row
+    corrupt), (candles, per-row corrupt).
+
 - **slice 34-scenario-31-market-page-candles-slow
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (CANDLES, slow)
