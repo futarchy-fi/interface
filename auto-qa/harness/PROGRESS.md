@@ -2313,6 +2313,105 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-2.5 (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — third step
+  of the multi-iteration fork bootstrap. Adds higher-
+  level state-setup helpers built on top of step 2's
+  primitives.
+
+  * **`fixtures/fork-state.mjs` extensions**:
+    - `SDAI_GNOSIS_ADDRESS` constant (matches the api-
+      side rate-provider invariant)
+    - `SDAI_BALANCE_SLOT` constant (currently 0,
+      OpenZeppelin default; flagged with TODO for
+      live verification via `cast storage`)
+    - `setStorageAt(rpcUrl, address, slot, value)` —
+      raw storage-write primitive; pads value to
+      32 bytes
+    - `mappingStorageKey(addressKey, mappingSlot)` —
+      Solidity mapping-slot hash:
+      `keccak256(abi.encode(key, slot))`
+    - `setErc20Balance(rpcUrl, token, holder, amount,
+      slot=0)` — writes to the `_balances` mapping
+      slot; doesn't update `_totalSupply` (caveat
+      flagged in JSDoc)
+    - `getErc20Balance(rpcUrl, token, holder)` —
+      proper `eth_call` to `balanceOf(address)`,
+      decoded to bigint. **Verification step** for
+      `setErc20Balance` — if the storage write
+      targets the wrong slot, this read returns
+      the unchanged on-chain balance loudly.
+    - `fundWalletWithSDAI(rpcUrl, holder, amountWei?)`
+      — convenience wrapper, defaults to 1000 sDAI
+      (1e21 wei), enough for most market-page
+      scenarios.
+
+  * **viem usage**: pulled in for `keccak256`,
+    `encodeAbiParameters`, `encodeFunctionData`,
+    `decodeFunctionResult`, `pad`, `toHex`. No wallet
+    client, no provider object — just ABI + crypto.
+    Available via the existing `viem` dep already used
+    by `wallet-stub.mjs`.
+
+  * **Why storage write vs whale impersonation**:
+    - **Faster**: single setStorageAt call vs
+      impersonate → transfer → stop
+    - **Deterministic**: doesn't depend on a
+      particular whale still holding sDAI on the
+      forked block
+    - **Simpler error model**: storage slots are
+      contract-specific but stable; whales come
+      and go
+    - **Caveat**: doesn't update `totalSupply()`. If
+      a future scenario specifically asserts on
+      total supply, switch to whale impersonation
+      for that one (the primitives ship side-by-side
+      so either approach works).
+
+  * **Smoke test extensions**
+    (`tests/smoke-fork-state.test.mjs`) — 7 new
+    tests using the in-process JSON-RPC stub:
+    - setStorageAt parameter shape (addr, slot hex,
+      32-byte padded value)
+    - mappingStorageKey matches a deterministic
+      reference value (caught a sign-flip in
+      `keccak256(abi.encode(key, slot))` if anyone
+      flips the order)
+    - setErc20Balance hits the right storage key for
+      the default slot
+    - Different slots produce DIFFERENT storage keys
+      (catches a regression that ignores the slot
+      arg)
+    - getErc20Balance encodes balanceOf selector
+      `0x70a08231` correctly + decodes uint256 result
+    - fundWalletWithSDAI targets sDAI address at the
+      configured slot
+    - fundWalletWithSDAI defaults amount to 1000 sDAI
+      (1e21 wei = `0x3635c9adc5dea00000`)
+
+  * Total interface harness smoke tests: 37/37
+    (was 30).
+
+  * **Multi-iteration plan progress**:
+    - ✓ Step 1: anvil in webServer
+    - ✓ Step 2: fork-state primitives + globalSetup
+    - ✓ Step 2.5 (this slice): ERC20 storage-write
+      + sDAI funding wrapper
+    - ⏳ Step 2.6 (next): wire `fundWalletWithSDAI`
+      into globalSetup so the synthetic wallet has
+      sDAI by the time the page navigates; verify
+      via `getErc20Balance` post-write (catches the
+      `SDAI_BALANCE_SLOT` constant being wrong)
+    - ⏳ Step 2.7: `mintConditionalPosition()` —
+      call `splitPosition` through the futarchy
+      router to mint YES/NO ERC1155 positions for
+      the synthetic wallet
+    - ⏳ Step 3: per-scenario fork-pin support
+    - ⏳ Step 4: positions scenario asserting real
+      on-chain ERC1155 balances
+    - ⏳ Step 5: liquidity scenario
+    - ⏳ Step 6: CI workflow Foundry install step
+
 - **slice fork-bootstrap-step-2 (Phase 7 fork wiring)**
   (this iteration, on the interface side) — second
   step of the multi-iteration fork bootstrap. Adds the

@@ -24,6 +24,13 @@ import {
     getEthBalance,
     impersonateAndSend,
     getChainId,
+    setStorageAt,
+    mappingStorageKey,
+    setErc20Balance,
+    getErc20Balance,
+    fundWalletWithSDAI,
+    SDAI_GNOSIS_ADDRESS,
+    SDAI_BALANCE_SLOT,
 } from '../fixtures/fork-state.mjs';
 
 // ── Stub server fixture ──────────────────────────────────────────────
@@ -182,6 +189,143 @@ test('impersonateAndSend — impersonates, sends tx, ALWAYS stops impersonating 
             'eth_sendTransaction',
             'anvil_stopImpersonatingAccount',
         ]);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+// ── Step 2.5: ERC20 storage-write helpers ───────────────────────────
+
+test('setStorageAt — calls anvil_setStorageAt with [addr, slotHex, paddedValue]', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: null };
+    });
+    try {
+        await setStorageAt(url, '0xabc', 5n, 42n);
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].method, 'anvil_setStorageAt');
+        assert.equal(calls[0].params[0], '0xabc');
+        assert.equal(calls[0].params[1], '0x5');
+        // Value pads to 32 bytes (64 hex chars + '0x' prefix).
+        assert.equal(calls[0].params[2].length, 66);
+        assert.match(calls[0].params[2], /0x0+2a$/); // 42 = 0x2a
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('mappingStorageKey — Solidity mapping-slot hash matches known reference', () => {
+    // Reference values from a deterministic ethers/web3 keccak run:
+    // mapping(address => uint256) at slot 0
+    //   key = 0x0000000000000000000000000000000000000001
+    //   slot = 0
+    //   keccak256(abi.encode(key, slot))
+    //     = 0xada5013122d395ba3c54772283fb069b10426056ef8ca54750cb9bb552a59e7d
+    const key = mappingStorageKey('0x0000000000000000000000000000000000000001', 0);
+    assert.equal(
+        key.toLowerCase(),
+        '0xada5013122d395ba3c54772283fb069b10426056ef8ca54750cb9bb552a59e7d',
+    );
+    // Slot 1 (different slot → different key).
+    const keySlot1 = mappingStorageKey('0x0000000000000000000000000000000000000001', 1);
+    assert.notEqual(key, keySlot1);
+});
+
+test('setErc20Balance — issues setStorageAt at the mapping slot', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: null };
+    });
+    try {
+        const holder = '0xabcdef0000000000000000000000000000000000';
+        const expected = mappingStorageKey(holder, 0);
+        await setErc20Balance(url, '0xtoken', holder, 100n);
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].method, 'anvil_setStorageAt');
+        assert.equal(calls[0].params[0].toLowerCase(), '0xtoken');
+        assert.equal(calls[0].params[1].toLowerCase(), expected.toLowerCase());
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('setErc20Balance — non-zero slot produces a DIFFERENT storage key', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: null };
+    });
+    try {
+        const holder = '0xabcdef0000000000000000000000000000000000';
+        await setErc20Balance(url, '0xtoken', holder, 100n, 0);
+        await setErc20Balance(url, '0xtoken', holder, 100n, 5);
+        // Different slots → different storage keys; catches a
+        // regression that ignores the slot arg.
+        assert.notEqual(calls[0].params[1], calls[1].params[1]);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('getErc20Balance — encodes balanceOf(address) + decodes uint256 result', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        // Result: 42 as 32-byte big-endian uint256.
+        return { result: '0x000000000000000000000000000000000000000000000000000000000000002a' };
+    });
+    try {
+        const holder = '0x0000000000000000000000000000000000000001';
+        const balance = await getErc20Balance(url, '0xtoken', holder);
+        assert.equal(balance, 42n);
+        assert.equal(typeof balance, 'bigint');
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].method, 'eth_call');
+        // Calldata starts with the balanceOf(address) selector.
+        assert.match(calls[0].params[0].data, /^0x70a08231/); // keccak("balanceOf(address)")[0:4]
+        // Calldata includes the holder address, lowercased + padded.
+        assert.match(calls[0].params[0].data.toLowerCase(), /0+1$/);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('fundWalletWithSDAI — targets sDAI on Gnosis at the configured slot', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: null };
+    });
+    try {
+        const holder = '0xabcdef0000000000000000000000000000000000';
+        await fundWalletWithSDAI(url, holder);
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].method, 'anvil_setStorageAt');
+        assert.equal(calls[0].params[0].toLowerCase(), SDAI_GNOSIS_ADDRESS.toLowerCase());
+        // Storage key matches mappingStorageKey at the configured
+        // slot — catches a regression that ignores SDAI_BALANCE_SLOT.
+        assert.equal(
+            calls[0].params[1].toLowerCase(),
+            mappingStorageKey(holder, SDAI_BALANCE_SLOT).toLowerCase(),
+        );
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('fundWalletWithSDAI — defaults amount to 1000 sDAI (1e21 wei)', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: null };
+    });
+    try {
+        await fundWalletWithSDAI(url, '0xabcdef0000000000000000000000000000000000');
+        // 1000e18 = 0x3635c9adc5dea00000
+        assert.match(calls[0].params[2], /0+3635c9adc5dea00000$/);
     } finally {
         await closeStub(server);
     }
