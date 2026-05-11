@@ -37,12 +37,16 @@
  */
 
 import { nStubWallets } from './wallet-stub.mjs';
+import { MARKET_PROBE_ADDRESS } from './api-mocks.mjs';
 import {
     getChainId,
     getEthBalance,
     getErc20Balance,
     fundWalletWithSDAI,
     SDAI_TOKEN_GNOSIS_ADDRESS,
+    deriveYesNoPositionIds,
+    setConditionalPosition,
+    getConditionalPosition,
 } from './fork-state.mjs';
 
 const RPC_URL =
@@ -53,6 +57,7 @@ const RPC_URL =
 const EXPECTED_CHAIN_ID = 100; // Gnosis
 const MIN_WALLET_ETH_WEI = 1n * 10n ** 18n; // 1 ETH; default funding is 10000
 const SDAI_FUND_AMOUNT_WEI = 1000n * 10n ** 18n; // 1000 sDAI
+const POSITION_FUND_AMOUNT_WEI = 100n * 10n ** 18n; // 100 YES + 100 NO ERC1155 units
 
 /**
  * @returns {Promise<void>}
@@ -118,4 +123,39 @@ export default async function globalSetup() {
         );
     }
     console.log(`[fork-state-setup] sDAI funded — wallet ${wallet.address} now holds ${sdaiBalance / 10n ** 18n} sDAI`);
+
+    // Mint YES + NO ConditionalTokens positions for the probe market
+    // (GIP-145). Approach mirrors the sDAI funding above: derive the
+    // position IDs from the live FutarchyProposal contract, write to
+    // the CT contract's _balances mapping at CT_BALANCE_SLOT, read
+    // back via balanceOf to verify the slot constant + position-ID
+    // derivation worked.
+    //
+    // 100 YES + 100 NO is enough for the positions panel to show
+    // non-zero balances; scenarios that need specific values can
+    // override per-test (step 3).
+    const { conditionId, yes: yesPositionId, no: noPositionId } =
+        await deriveYesNoPositionIds(RPC_URL, MARKET_PROBE_ADDRESS, SDAI_TOKEN_GNOSIS_ADDRESS);
+
+    await setConditionalPosition(RPC_URL, wallet.address, yesPositionId, POSITION_FUND_AMOUNT_WEI);
+    await setConditionalPosition(RPC_URL, wallet.address, noPositionId,  POSITION_FUND_AMOUNT_WEI);
+
+    const yesBalance = await getConditionalPosition(RPC_URL, wallet.address, yesPositionId);
+    const noBalance  = await getConditionalPosition(RPC_URL, wallet.address, noPositionId);
+
+    if (yesBalance !== POSITION_FUND_AMOUNT_WEI || noBalance !== POSITION_FUND_AMOUNT_WEI) {
+        throw new Error(
+            `[fork-state-setup] conditional-position funding verification FAILED — ` +
+            `wrote ${POSITION_FUND_AMOUNT_WEI} to YES + NO at CT_BALANCE_SLOT, but balanceOf returned ` +
+            `YES=${yesBalance}, NO=${noBalance}. ` +
+            `Either CT_BALANCE_SLOT is wrong (it was live-verified at 1 in step 2.8 — re-derive if CT upgraded), ` +
+            `OR the probe market's conditionId getter (proposal.conditionId() at ${MARKET_PROBE_ADDRESS}) ` +
+            `returned a value that doesn't match what the CT contract was initialized with for this market.`
+        );
+    }
+    console.log(
+        `[fork-state-setup] CT positions funded — wallet ${wallet.address} now holds ` +
+        `${yesBalance / 10n ** 18n} YES + ${noBalance / 10n ** 18n} NO ` +
+        `(market ${MARKET_PROBE_ADDRESS}, conditionId ${conditionId})`
+    );
 }

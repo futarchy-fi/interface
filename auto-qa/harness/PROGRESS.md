@@ -2313,6 +2313,112 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-2.9 (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — seventh
+  step of the multi-iteration fork bootstrap. Closes
+  the loop on the synthetic-state setup: derives the
+  probe market's conditionId from the live
+  `FutarchyProposal` contract, computes YES + NO
+  position IDs, funds them, verifies via `balanceOf`.
+
+  * **`fixtures/fork-state.mjs` extensions**:
+    - `proposalGetConditionId(rpcUrl, proposalAddress)`
+      — eth_call to `FutarchyProposal.conditionId()`
+      (selector `0x2ddc7de7`)
+    - `deriveYesNoPositionIds(rpcUrl, proposalAddress,
+      collateralToken)` — three-call orchestration
+      (proposal.conditionId + 2× ct.getCollectionId +
+      ct.getPositionId pairs); returns
+      `{ conditionId, yes: bigint, no: bigint }`.
+      Pins index-set convention: indexSet=1 → YES,
+      indexSet=2 → NO.
+
+  * **`fixtures/fork-state-setup.mjs` extensions**:
+    after the existing sDAI funding step, now also:
+    - Derives YES + NO position IDs for
+      `MARKET_PROBE_ADDRESS` (GIP-145) against
+      `SDAI_TOKEN_GNOSIS_ADDRESS` collateral
+    - Writes 100 each via `setConditionalPosition`
+    - Reads back via `getConditionalPosition` —
+      VERIFICATION step
+    - Hard-fails with a detailed error message if
+      readback != written (covers two failure modes:
+      `CT_BALANCE_SLOT` is wrong, OR the
+      conditionId getter returned a value that
+      doesn't match what the CT contract was
+      initialized with for this market)
+
+  * **End-to-end live verified**:
+    ```
+    [fork-state-setup] anvil OK at http://localhost:8546
+      — chain 100, wallet 0xf39F…6e51 has 10000 ETH
+    [fork-state-setup] sDAI funded — wallet 0xf39F…6e51
+      now holds 1000 sDAI
+    [fork-state-setup] CT positions funded — wallet
+      0xf39F…6e51 now holds 100 YES + 100 NO
+      (market 0x45e1…b28fc, conditionId 0xf3a4…6163)
+    GLOBALSETUP-OK
+    ```
+
+  * **GIP-145 conditionId discovered**:
+    `0xf3a4bd711370dbcb82ec9b91d111041925a62333faa9cad9f614658d76136163`
+    — derived live from `FutarchyProposal.conditionId()`
+    at `MARKET_PROBE_ADDRESS`.
+
+  * **YES + NO position IDs for GIP-145** (against
+    sDAI collateral):
+    - YES: `0xe2ddaea74c81c205c48888af232877e487776d4ba84de43635713638bf361971`
+    - NO:  `0xa73cd14e0e8d546fd4b7611557115a06f5ec972aa8dff98daa2cbe9e874f3172`
+    Derived live; not hardcoded — re-derive automatically
+    on each globalSetup so a market upgrade or
+    re-initialization picks up the new IDs without
+    constant updates.
+
+  * **Smoke test extensions** — 2 new tests
+    (51 total in the file now):
+    - proposalGetConditionId selector `0x2ddc7de7`
+      pinned (live-derived; assertion catches a
+      regression that uses the wrong selector)
+    - deriveYesNoPositionIds issues exactly 5 eth_calls
+      in the right order (proposal + 2× CT pair); the
+      stub responds with distinct values and the
+      assertion checks they thread through the right
+      branches
+
+  * Total interface harness smoke tests: 51/51
+    (was 49, +2 new).
+
+  * **What this iteration unblocks**: the synthetic
+    wallet now arrives at the market page WITH:
+    - 10000 ETH (anvil pre-fund)
+    - 1000 sDAI (storage write at slot 0)
+    - 100 YES + 100 NO conditional positions
+      (storage write at CT slot 1)
+    The positions panel should render NON-ZERO
+    balances. Step 4 (positions scenario) can now
+    assert on those values.
+
+  * **Multi-iteration plan progress**:
+    - ✓ Step 1: anvil in webServer
+    - ✓ Step 2: fork-state primitives + globalSetup
+    - ✓ Step 2.5: ERC20 storage-write + sDAI wrapper
+    - ✓ Step 2.6: wire sDAI into globalSetup +
+      live-verify slot
+    - ✓ Step 2.7: ERC1155 storage-write primitives
+    - ✓ Step 2.8: CT position-ID helpers +
+      live-verified CT_BALANCE_SLOT=1
+    - ✓ Step 2.9 (this slice): probe-market position-
+      ID derivation wired into globalSetup +
+      end-to-end verified
+    - ⏳ Step 3: per-scenario fork-pin support
+      (snapshot/revert between scenarios so they
+      don't see each other's funded balances)
+    - ⏳ Step 4: positions scenario asserting real
+      on-chain ERC1155 balances render in
+      MarketBalancePanel
+    - ⏳ Step 5: liquidity scenario
+    - ⏳ Step 6: CI workflow Foundry install step
+
 - **slice fork-bootstrap-step-2.8 (Phase 7 fork wiring)**
   (this iteration, on the interface side) — sixth step
   of the multi-iteration fork bootstrap. Adds the

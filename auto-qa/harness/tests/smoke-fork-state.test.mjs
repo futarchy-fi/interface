@@ -42,6 +42,8 @@ import {
     ctDerivePositionId,
     setConditionalPosition,
     getConditionalPosition,
+    proposalGetConditionId,
+    deriveYesNoPositionIds,
 } from '../fixtures/fork-state.mjs';
 
 // ── Stub server fixture ──────────────────────────────────────────────
@@ -551,6 +553,67 @@ test('getConditionalPosition — eth_call balanceOf on CT contract', async () =>
         assert.equal(calls[0].params[0].to.toLowerCase(), CT_GNOSIS_ADDRESS.toLowerCase());
         // ERC1155 balanceOf selector
         assert.match(calls[0].params[0].data, /^0x00fdd58e/);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+// ── Step 2.9: probe-market position-ID derivation ───────────────────
+
+test('proposalGetConditionId — eth_call to FutarchyProposal at the given address', async () => {
+    const calls = [];
+    const { url, server } = await startStub((req) => {
+        calls.push(req);
+        return { result: '0xf3a4bd711370dbcb82ec9b91d111041925a62333faa9cad9f614658d76136163' };
+    });
+    try {
+        const PROBE = '0x45e1064348fd8a407d6d1f59fc64b05f633b28fc';
+        const condId = await proposalGetConditionId(url, PROBE);
+        assert.equal(
+            condId.toLowerCase(),
+            '0xf3a4bd711370dbcb82ec9b91d111041925a62333faa9cad9f614658d76136163',
+        );
+        assert.equal(calls[0].method, 'eth_call');
+        assert.equal(calls[0].params[0].to.toLowerCase(), PROBE);
+        // conditionId() selector: keccak256("conditionId()")[0:4] = 0x2ddc7de7
+        assert.match(calls[0].params[0].data, /^0x2ddc7de7/);
+    } finally {
+        await closeStub(server);
+    }
+});
+
+test('deriveYesNoPositionIds — issues 3 eth_calls (proposal.conditionId + 2× CT pair)', async () => {
+    let callIdx = 0;
+    const { url, server } = await startStub(() => {
+        callIdx++;
+        const responses = [
+            // 1. proposal.conditionId() → bytes32
+            { result: '0xf3a4bd711370dbcb82ec9b91d111041925a62333faa9cad9f614658d76136163' },
+            // 2. ct.getCollectionId(0, condId, 1) → bytes32
+            { result: '0x' + '11'.repeat(32) },
+            // 3. ct.getPositionId(token, collectionId) → uint256
+            { result: '0x000000000000000000000000000000000000000000000000000000000000000a' },
+            // 4. ct.getCollectionId(0, condId, 2) → bytes32
+            { result: '0x' + '22'.repeat(32) },
+            // 5. ct.getPositionId(token, collectionId) → uint256
+            { result: '0x0000000000000000000000000000000000000000000000000000000000000014' },
+        ];
+        return responses[callIdx - 1];
+    });
+    try {
+        const result = await deriveYesNoPositionIds(
+            url,
+            '0x45e1064348fd8a407d6d1f59fc64b05f633b28fc',
+            '0xaf204776c7245bF4147c2612BF6e5972Ee483701',
+        );
+        // 5 eth_calls total: 1 proposal + 2 (collectionId+positionId) pairs
+        assert.equal(callIdx, 5);
+        assert.equal(
+            result.conditionId.toLowerCase(),
+            '0xf3a4bd711370dbcb82ec9b91d111041925a62333faa9cad9f614658d76136163',
+        );
+        assert.equal(result.yes, 10n);
+        assert.equal(result.no, 20n);
     } finally {
         await closeStub(server);
     }

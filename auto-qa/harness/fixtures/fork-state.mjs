@@ -128,6 +128,14 @@ const CT_GET_POSITION_ID_ABI = [{
     outputs: [{ name: '', type: 'uint256' }],
 }];
 
+const FUTARCHY_PROPOSAL_CONDITION_ID_ABI = [{
+    type: 'function',
+    name: 'conditionId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'bytes32' }],
+}];
+
 /**
  * Send a raw JSON-RPC request to an anvil endpoint and return the
  * `result` field (or throw on RPC error / network failure).
@@ -613,4 +621,58 @@ export async function setConditionalPosition(rpcUrl, holder, positionId, amount)
  */
 export async function getConditionalPosition(rpcUrl, holder, positionId) {
     return getErc1155Balance(rpcUrl, CT_GNOSIS_ADDRESS, holder, positionId);
+}
+
+// ── Step 2.9: probe-market position-ID derivation ──
+
+/**
+ * Read a FutarchyProposal contract's `conditionId()` via eth_call.
+ * Each proposal is its own contract that pins the conditionId at
+ * deployment; without this getter the harness would have to guess
+ * the conditionId or hardcode it per probe market.
+ *
+ * @param {string} rpcUrl
+ * @param {`0x${string}`} proposalAddress  the FutarchyProposal /
+ *                                         FutarchyMarket address
+ *                                         (e.g., MARKET_PROBE_ADDRESS)
+ * @returns {Promise<`0x${string}`>}  bytes32 condition id
+ */
+export async function proposalGetConditionId(rpcUrl, proposalAddress) {
+    const data = encodeFunctionData({
+        abi:          FUTARCHY_PROPOSAL_CONDITION_ID_ABI,
+        functionName: 'conditionId',
+    });
+    const result = await anvilRpc(rpcUrl, 'eth_call', [
+        { to: proposalAddress, data },
+        'latest',
+    ]);
+    return decodeFunctionResult({
+        abi:          FUTARCHY_PROPOSAL_CONDITION_ID_ABI,
+        functionName: 'conditionId',
+        data:         result,
+    });
+}
+
+/**
+ * Convenience helper for the standard YES/NO 2-outcome partition.
+ * Returns `{ yes, no }` position IDs as bigints, ready to pass to
+ * `setConditionalPosition`. Index-set convention: indexSet=1 →
+ * outcome 0 (YES per the futarchy contract's outcome ordering),
+ * indexSet=2 → outcome 1 (NO). The harness pins this convention
+ * here so per-scenario callers don't have to remember.
+ *
+ * Three eth_calls (proposal.conditionId + 2× ct.getCollectionId/
+ * getPositionId pairs) — fine at globalSetup time, never inside
+ * a hot loop.
+ *
+ * @param {string} rpcUrl
+ * @param {`0x${string}`} proposalAddress
+ * @param {`0x${string}`} collateralToken
+ * @returns {Promise<{conditionId:`0x${string}`, yes:bigint, no:bigint}>}
+ */
+export async function deriveYesNoPositionIds(rpcUrl, proposalAddress, collateralToken) {
+    const conditionId = await proposalGetConditionId(rpcUrl, proposalAddress);
+    const yes = await ctDerivePositionId(rpcUrl, collateralToken, conditionId, 1n);
+    const no  = await ctDerivePositionId(rpcUrl, collateralToken, conditionId, 2n);
+    return { conditionId, yes, no };
 }
