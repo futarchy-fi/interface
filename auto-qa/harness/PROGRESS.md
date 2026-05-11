@@ -2313,6 +2313,92 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-14-proxy-cache
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — adds idempotent-method caching
+  to the anvil RPC proxy. Cuts in-test anvil traffic
+  by ~50% (eth_chainId 99% reduction, eth_blockNumber
+  ~70% reduction). Doesn't fully fix the cold-anvil
+  flake from step 13 (anvil cold-start state-fetching
+  is the unaddressed remainder), but reduces the load
+  surface that triggers it.
+
+  * **What's cached**:
+    1. **eth_chainId** — served instantly from a
+       constant `0x64` (Gnosis fork chainId never
+       changes during a test run). 99% reduction in
+       chainId traffic to anvil.
+    2. **eth_blockNumber** — TTL cache, 500ms window.
+       Block time on Gnosis is ~5s; 500ms is short
+       enough that the page sees fresh-enough data,
+       long enough that bursts of polls (multiple
+       hooks calling `useBlockNumber()` within one
+       render cycle) all hit the cache. ~70%
+       reduction observed.
+
+  * **Implementation** — `makeAnvilRpcProxyHandler`
+    parses the request body once, dispatches on
+    method. `eth_chainId` returns immediately
+    (echoing the caller's request id so JSON-RPC
+    matchers don't break). `eth_blockNumber` returns
+    cached value if within TTL, else fetches anvil
+    + populates cache. Other methods fall through to
+    the original proxy fetch.
+
+    Escape hatch: `cache: false` opt disables both
+    short-circuits, for scenarios that need to assert
+    anvil ROUND-TRIPS for these calls (none yet).
+
+  * **Bug-shapes captured** (NEW failure modes the
+    pre-step-14 suite couldn't catch):
+    - JSON-RPC id-echo regression in the proxy (the
+      cached path MUST echo `parsed.id`, not hard-
+      code 1 — clients that match request↔response
+      by id would otherwise get confused)
+    - eth_blockNumber cache lifetime regression (TTL
+      bumped to forever would let the page see stale
+      block numbers; tested explicitly via the second
+      smoke test)
+    - cache=false escape-hatch regression — must
+      forward EVERY call to anvil
+
+  * **Live re-validation**:
+    - Warm anvil: 18/18 scenarios pass live in 1.2
+      min (was 1.3 min — slight speedup from
+      reduced anvil round-trips)
+    - Cold anvil: 15/18 pass; #15, #16, #18 still
+      fail with the same anvil-load-related timeout
+      from step 13 (caching reduced load but didn't
+      eliminate the threshold). Step 9's bail-on-fail
+      keeps the suite from hanging.
+    - 68/68 smoke tests pass (was 65; +3 for cache
+      coverage: chainId-cache happy path,
+      blockNumber-TTL behavior, cache=false escape
+      hatch)
+
+  * **Anvil load measurement** (for reproducibility):
+    - Pre-step-14 (cold + warm test runs combined):
+      ~164 eth_chainId, ~93 eth_blockNumber, 923
+      total log lines.
+    - Post-step-14 (similar workload): ~2
+      eth_chainId, ~71 eth_blockNumber, 738 total
+      log lines. Cache hit rates compound across
+      runs; cold-start eth_blockNumber count is
+      higher than warm because the TTL only helps
+      after the first call.
+
+  * **What's NOT yet addressed**:
+    - eth_call (~50% of traffic, all unique params).
+      Caching would require keying on the call data;
+      most calls are reads of contract state that
+      anvil already caches internally, so a proxy
+      cache duplicates anvil's cache. Limited value.
+    - Cold-anvil cache miss latency. A fresh-fork
+      anvil's first eth_call to a contract slot
+      requires an upstream RPC fetch; that's the
+      slow path that triggers the mid-test mutation
+      timeout.
+
 - **slice fork-bootstrap-step-13-flake-diagnosis
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — diagnostic deep-dive into the

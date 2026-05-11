@@ -451,6 +451,15 @@ export const PUBLIC_GNOSIS_RPC_URLS = [
 ];
 
 /**
+ * Default cache TTL for `eth_blockNumber` responses. The page polls
+ * block number every few seconds; on Gnosis blocks come ~5s apart.
+ * 500ms is short enough that the page sees fresh-enough data, long
+ * enough that bursts of polls (multiple hooks calling
+ * `useBlockNumber()` within one render cycle) all hit the cache.
+ */
+const ETH_BLOCK_NUMBER_CACHE_TTL_MS = 500;
+
+/**
  * Build a Playwright route handler that forwards an intercepted
  * JSON-RPC POST to the local anvil fork (default `http://localhost:8546`).
  *
@@ -460,18 +469,66 @@ export const PUBLIC_GNOSIS_RPC_URLS = [
  * inside Playwright's Node context, so CORS doesn't apply — we control
  * what gets fulfilled back to the page.
  *
+ * **Step 14 caching**: `eth_chainId` is served from a constant
+ * (chainId never changes for a forked Gnosis run) and
+ * `eth_blockNumber` from a TTL cache. Together these account for
+ * ~28% of the in-test anvil traffic (measured against /tmp/anvil.log
+ * on a representative run). Reducing anvil's load reduces the
+ * probability that mid-test mutation primitives time out behind a
+ * deep request queue (see step 13 for the diagnosis).
+ *
  * @param {object}   opts
  * @param {string}   [opts.anvilUrl='http://localhost:8546'] anvil endpoint
  * @param {(body:string)=>void} [opts.onCall]                 observer for each call
+ * @param {boolean}  [opts.cache=true]   set false to disable the
+ *                                       eth_chainId / eth_blockNumber
+ *                                       short-circuit (e.g., when a
+ *                                       scenario needs to assert that
+ *                                       the page actually round-trips
+ *                                       anvil for those calls)
  */
 export function makeAnvilRpcProxyHandler({
     anvilUrl = 'http://localhost:8546',
     onCall,
+    cache = true,
 } = {}) {
+    let blockNumberCache = null; // { value: string, expiresAt: number }
+
     return async (route) => {
         const request = route.request();
         const body = request.postData() || '';
         onCall?.(body);
+
+        // Cache fast path. Parse the body once, dispatch on method.
+        // Failure to parse means the body is malformed; fall through
+        // to the proxy fetch and let anvil decide.
+        let parsed = null;
+        if (cache) {
+            try { parsed = JSON.parse(body); } catch { /* fall through */ }
+        }
+        if (parsed?.method === 'eth_chainId') {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                // Echo the caller's `id` field so JSON-RPC clients
+                // that match request↔response by id don't get
+                // confused.
+                body: JSON.stringify({ jsonrpc: '2.0', id: parsed.id ?? 1, result: '0x64' }),
+            });
+            return;
+        }
+        if (parsed?.method === 'eth_blockNumber') {
+            const now = Date.now();
+            if (blockNumberCache && blockNumberCache.expiresAt > now) {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ jsonrpc: '2.0', id: parsed.id ?? 1, result: blockNumberCache.value }),
+                });
+                return;
+            }
+            // Fall through to fetch + cache the result below.
+        }
 
         try {
             const response = await fetch(anvilUrl, {
@@ -480,6 +537,24 @@ export function makeAnvilRpcProxyHandler({
                 body,
             });
             const text = await response.text();
+
+            // If the call we just forwarded was an eth_blockNumber
+            // (cache miss path above), populate the cache from the
+            // response. Tolerant of malformed responses — only
+            // updates the cache when the parse + result extract
+            // both succeed.
+            if (cache && parsed?.method === 'eth_blockNumber') {
+                try {
+                    const respJson = JSON.parse(text);
+                    if (typeof respJson.result === 'string' && respJson.result.startsWith('0x')) {
+                        blockNumberCache = {
+                            value: respJson.result,
+                            expiresAt: Date.now() + ETH_BLOCK_NUMBER_CACHE_TTL_MS,
+                        };
+                    }
+                } catch { /* ignore parse errors; serve direct response without caching */ }
+            }
+
             await route.fulfill({
                 status: response.status,
                 contentType: 'application/json',

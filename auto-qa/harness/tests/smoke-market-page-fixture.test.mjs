@@ -427,3 +427,104 @@ test('makeAnvilRpcProxyHandler — fails loudly with JSON-RPC error when anvil u
         globalThis.fetch = originalFetch;
     }
 });
+
+test('makeAnvilRpcProxyHandler — eth_chainId served from cache (no anvil round-trip)', async () => {
+    // Step 14: eth_chainId is ~18% of the in-test anvil traffic.
+    // The proxy short-circuits it with a constant 0x64 (Gnosis)
+    // response so anvil's request queue isn't loaded with calls
+    // for a value that never changes.
+    const originalFetch = globalThis.fetch;
+    let fetchCount = 0;
+    globalThis.fetch = async () => { fetchCount++; throw new Error('fetch should NOT be called for cached eth_chainId'); };
+
+    try {
+        const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546' });
+        let fulfilled = null;
+        const stubRoute = {
+            request: () => ({ postData: () => JSON.stringify({ jsonrpc: '2.0', id: 42, method: 'eth_chainId', params: [] }) }),
+            fulfill: async (resp) => { fulfilled = resp; },
+        };
+
+        await handler(stubRoute);
+
+        assert.equal(fetchCount, 0, 'cached method MUST NOT round-trip anvil');
+        assert.equal(fulfilled.status, 200);
+        const body = JSON.parse(fulfilled.body);
+        assert.equal(body.jsonrpc, '2.0');
+        assert.equal(body.id, 42, 'response MUST echo the request id');
+        assert.equal(body.result, '0x64');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('makeAnvilRpcProxyHandler — eth_blockNumber cached for the TTL window', async () => {
+    // Step 14: eth_blockNumber is ~10% of in-test traffic. Cache it
+    // for ~500ms so bursty page polling (multiple hooks calling
+    // useBlockNumber within one render) all hit the cache. The
+    // FIRST call goes to anvil; subsequent calls within the TTL
+    // window read the cached value.
+    const originalFetch = globalThis.fetch;
+    let fetchCount = 0;
+    globalThis.fetch = async () => {
+        fetchCount++;
+        return {
+            status: 200,
+            text: async () => JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x1234' }),
+        };
+    };
+
+    try {
+        const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546' });
+        const makeRoute = (id) => {
+            const route = {
+                request: () => ({ postData: () => JSON.stringify({ jsonrpc: '2.0', id, method: 'eth_blockNumber', params: [] }) }),
+                fulfill: async (resp) => { route.lastResp = resp; },
+            };
+            return route;
+        };
+
+        // First call: cache miss, hits anvil.
+        const r1 = makeRoute(1);
+        await handler(r1);
+        assert.equal(fetchCount, 1);
+        assert.equal(JSON.parse(r1.lastResp.body).result, '0x1234');
+
+        // Second call within TTL: served from cache, no anvil
+        // round-trip. Echoes the new request id.
+        const r2 = makeRoute(2);
+        await handler(r2);
+        assert.equal(fetchCount, 1, 'second call within TTL MUST NOT re-fetch');
+        const body2 = JSON.parse(r2.lastResp.body);
+        assert.equal(body2.result, '0x1234');
+        assert.equal(body2.id, 2);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('makeAnvilRpcProxyHandler — cache=false disables both short-circuits', async () => {
+    // Escape hatch for scenarios that need to assert anvil
+    // ROUND-TRIPS for eth_chainId / eth_blockNumber (e.g., a
+    // scenario that probes the page's wallet-init RPC pattern).
+    const originalFetch = globalThis.fetch;
+    let fetchCount = 0;
+    globalThis.fetch = async () => {
+        fetchCount++;
+        return { status: 200, text: async () => JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x64' }) };
+    };
+
+    try {
+        const handler = makeAnvilRpcProxyHandler({ anvilUrl: 'http://localhost:8546', cache: false });
+        const stubRoute = {
+            request: () => ({ postData: () => JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }) }),
+            fulfill: async () => {},
+        };
+
+        await handler(stubRoute);
+        await handler(stubRoute);
+        assert.equal(fetchCount, 2, 'cache=false MUST forward every call to anvil');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
