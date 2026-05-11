@@ -2313,6 +2313,106 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 84-a11y-heuristics (Phase 6 — seventh
+  NEW assertion-target KIND: accessibility DOM
+  semantics)** (this iteration, on the interface
+  side) — Adds the 7th distinct assertion target
+  in the capability matrix. Catches accessibility
+  regressions invisible to every previous KIND
+  (DOM text, GraphQL shape, errors, URL state,
+  network, visual interaction).
+
+  * **The KIND**: refactor breaks DOM semantics
+    that screen readers and keyboard navigation
+    depend on, without changing visible content
+    or any other observable behavior. Common
+    forms:
+    - `<img>` without `alt` (invisible to screen
+      readers)
+    - `<button>` with no accessible name (icon-
+      only buttons that don't announce)
+    - `<input>` without associated label
+
+  * **Why no axe-core dep**: could integrate
+    `@axe-core/playwright` for comprehensive
+    coverage, but adds a 200+ KB dep with
+    version-coupling risk (axe rule output
+    changes across versions). Inline page.evaluate
+    heuristics cover the 3 high-ROI rule classes
+    in <50 lines and stay dep-free. Future slice
+    can swap in axe-core if comprehensive
+    auditing is needed.
+
+  * **The detection mechanism**:
+    `page.evaluate(A11Y_HEURISTICS)` runs inline
+    in the page context, returns an array of
+    violation records. Each record has `kind`
+    (`img-no-alt` / `button-no-name` /
+    `input-no-label`) and `html` (the offending
+    element's outerHTML, truncated to 200 chars
+    for diagnostic readability).
+
+  * **The scenario**
+    (`scenarios/52-a11y-heuristics-companies.scenario.mjs`):
+    Mount /companies, run heuristics, filter
+    `KNOWN_BASELINE` exclusions, throw if any
+    remain. The baseline starts EMPTY — /companies
+    passes all three heuristics under current
+    code. Surprising and good.
+
+  * **Mechanical verification**:
+    - Stripped `alt="Futarchy Logo"` from the
+      Header's logo `<Image>` (changed to
+      `alt=""`) — a realistic refactor mistake.
+    - Scenario 52 FAILED:
+      ```
+      Error: Scenario 52 found 1 unexcluded
+      a11y violation(s):
+        1. [img-no-alt] <img alt="" fetchpriority=
+           "high" width="128" height="22"
+           decoding="async" ... src="/assets/
+           futarchy-fi-logo-text-w...
+      ```
+      Full HTML of the offending img included for
+      diagnostic clarity (same shape as scenario
+      50's network monitor showing offending URLs).
+    - Restored → PASSES.
+
+  * **Capability matrix now spans 7 KINDS**:
+    ```
+    KIND                | First scenario | Catches
+    --------------------|----------------|----------
+    DOM text/attributes | many           | text regs
+    GraphQL query shape | 47             | schema
+    Page errors/console | 48             | silent JS
+    URL state evolution | 49             | URL bugs
+    Network requests    | 50             | silent net
+    Visual / user-CSS   | 51             | CSS-blocked
+    A11y heuristics     | 52 (this)      | screen-reader
+    ```
+
+    Each catches a class no other catches. Seven
+    KINDS spans nearly the full spectrum of
+    observable bug shapes the harness can
+    target. The remaining gaps are TIME-EVOLUTION
+    and BUILD-MODE — both require more
+    infrastructure than a single iteration.
+
+  * **Catalog state**: 52 scenarios; **10
+    mechanically verified** (44, 45, 46, 47, 48,
+    10, 49, 50, 51, 52). PR coverage stays at 10
+    — this slice's catch is a HYPOTHETICAL a11y
+    regression rather than a specific shipped PR.
+    But every future a11y refactor mistake will
+    be caught.
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `scenarios:catalog` clean (52)
+    - Scenario 52 wall-clock: ~3s warm
+    - src/ tree clean after verification mutation
+      restored
+
 - **slice 83-visual-state-via-user-selection
   (Phase 6 — sixth NEW assertion-target KIND:
   CSS-driven user interaction)** (this iteration,
