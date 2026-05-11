@@ -69,5 +69,5 @@ test('scenarios-chaos-matrix CLI — both pages have most chaos cells filled', (
     const r = spawnSync('node', [SCRIPT], { encoding: 'utf8' });
     assert.equal(r.status, 0);
     assert.match(r.stdout, /Page: \/companies — (16|1[7-9]|[2-9]\d)\/16 cells filled/);
-    assert.match(r.stdout, /Page: \/markets\/\[address\] — (1[4-9]|[2-9]\d)\/16 cells filled/);
+    assert.match(r.stdout, /Page: \/markets\/\[address\] — (1[5-9]|[2-9]\d)\/16 cells filled/);
 });

@@ -2313,6 +2313,95 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 46-scenario-42-market-page-registry-504-gateway-timeout
+  (Phase 7 chaos library — extends new row to
+  /markets/[address])** (this iteration, on the
+  interface side) — fills the 3rd cell of the new
+  "gateway timeout 504" matrix row. Mirror of #40
+  applied to the market page's distinct
+  proposal-metadata-fetch path. Distinct from #24
+  (502+JSON → .catch on same page), #38
+  (429+Retry-After+JSON on same page), and #40
+  (same failure mode, /companies contract):
+  /companies degrades to "No organizations found"
+  empty-state because registry is the foundation;
+  the market page should still mount its
+  page-shell from static MARKETS_CONFIG even when
+  registry returns 504+HTML.
+
+  * **The scenario** —
+    `42-market-page-registry-504-gateway-timeout`
+    on /markets/<MARKET_PROBE_ADDRESS>. Registry
+    responds 504 + `Content-Type: text/html` +
+    nginx-style HTML body (no JSON, no
+    Retry-After), candles happy. Same page-shell
+    assertions as prior market-page chaos slices
+    (Trading Pair + wallet shorthand visible).
+
+  * **Bug-shapes captured** (NEW vs #24, #38,
+    and #40):
+    - Page CRASHES on `response.json()` throwing
+      SyntaxError on the HTML body (uncaught
+      promise rejection → React error boundary →
+      "Application error" replaces page-shell;
+      distinct from #24's `.catch` on structured
+      envelope and #38's `.then`-with-valid-
+      envelope paths)
+    - Page-shell HANGS forever (504+HTML doesn't
+      trigger loading=false because the parse
+      error throws before the loading-cleanup
+      code runs)
+    - Page renders the HTML body raw in a panel
+      header or modal (consumer falls back to
+      `.text()` and renders LB error page
+      literally)
+    - Page IMMEDIATELY retries in tight loop (no
+      backoff, no Retry-After — WORSE than #38
+      because no contract to follow, AND worse
+      on market page than /companies because the
+      page polls registry on every state change
+      for proposal-metadata refresh)
+    - "Market Not Found" FALSE-POSITIVE (the
+      504-error code path collapses with the
+      missing-from-MARKETS_CONFIG gate — same
+      wrong-code-path collapse class as
+      #24/#26/#28/#34/#38)
+    - WrongNetworkModal incorrectly fires (chain
+      validation should NOT depend on registry
+      availability; a regression that gates the
+      chain check on registry success would
+      render the modal whenever the registry
+      blips a 504)
+
+  * **Distinct from #40 (same failure mode,
+    /companies)**:
+    - #40's contract: registry is the foundation
+      → empty registry = empty carousel
+    - #42's contract: registry is enrichment;
+      MARKETS_CONFIG is the foundation → page-
+      shell mounts even when registry is 504+HTML
+    - Therefore the assertions differ: #40
+      asserts "No organizations found"; #42
+      asserts the page-shell still renders
+      (Trading Pair + wallet shorthand)
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (matrix-smoke pin floor
+      bumped from 14 to 15 on /markets/[address];
+      no other infra changes)
+    - Scenario #42 itself: passed in 3.8s on
+      first run
+    - Catalog regenerated: 42 scenarios (was 41)
+    - Matrix script: /companies stays at 16/16;
+      /markets/[address] now 15/16 (one cell
+      remaining: candles-504 on market page)
+
+  * **What's next**: slice 47 fills
+    market-page-candles-504 (mirror of #41) —
+    the LAST cell of the new gateway-timeout row,
+    closing the matrix to 32/32 cells across both
+    pages × 8 failure-mode rows × 2 endpoints.
+
 - **slice 45-scenario-41-candles-504-gateway-timeout
   (Phase 7 chaos library — completes new row on
   /companies)** (this iteration, on the interface
