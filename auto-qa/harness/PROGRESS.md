@@ -2313,6 +2313,108 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 83-visual-state-via-user-selection
+  (Phase 6 — sixth NEW assertion-target KIND:
+  CSS-driven user interaction)** (this iteration,
+  on the interface side) — Catches PR #59 (allow
+  text selection across all pages). Adds the
+  6th assertion target: simulating user-level
+  browser behavior and inspecting the resulting
+  state. Catches CSS regressions that block
+  legitimate interactions without changing DOM
+  or network behavior.
+
+  * **PR #59 in one paragraph**:
+    `src/components/layout/PageLayout.jsx`'s root
+    container had `className="...select-none..."`
+    (Tailwind compiles to `user-select: none`).
+    PageLayout wraps /companies, /proposals, /market,
+    and other top-level routes — net effect, users
+    couldn't select or copy ANY text on those
+    pages. No errors, no DOM diff, no network change
+    — every other assertion target in the matrix
+    misses this entirely.
+
+  * **What makes this KIND distinct from every
+    previous capability**:
+    - DOM text: the text IS in the DOM; selection
+      regressions don't change rendered content
+    - GraphQL / network: no API surface involved
+    - Page errors / console: no errors fire when
+      selection silently fails
+    - URL state: no URL change
+
+    Only an assertion that SIMULATES user-level
+    interaction and inspects browser-internal
+    state (the Selection API) catches it.
+
+  * **Detection mechanism**: triple-click the
+    "Active Milestones" heading (a static
+    element rendered on /companies regardless of
+    org data), then read
+    `window.getSelection().toString()`. Browsers
+    respect `user-select: none` on triple-click
+    just as on double-click and drag — the line
+    doesn't get selected under the regression.
+
+  * **Why triple-click vs dblclick**: first
+    attempt used dblclick. It hit whitespace
+    inside the heading wrapper and returned just
+    a newline character. Triple-click selects
+    the WHOLE LINE regardless of which subnode
+    the click lands on — robust under wrapper
+    structure changes.
+
+  * **The scenario**
+    (`scenarios/51-pr59-text-selection.scenario.mjs`):
+    1. Anchor: "Active Milestones" visible
+    2. Clear any inherited selection
+    3. Triple-click heading
+    4. Assert `window.getSelection().toString()`
+       contains `"Active Milestones"`
+
+  * **Mechanical verification**:
+    - Re-added `select-none` to PageLayout's
+      root flex container className → scenario
+      51 FAILED:
+      ```
+      Expected substring: "Active Milestones"
+      Received string:    ""
+      ```
+      Selection captured nothing under the
+      regression.
+    - Removed `select-none` → PASSES.
+
+  * **Capability matrix now spans 6 KINDS**:
+    ```
+    KIND                | First scenario | Catches
+    --------------------|----------------|----------
+    DOM text/attributes | many           | text regs
+    GraphQL query shape | 47             | schema   
+    Page errors/console | 48             | silent JS
+    URL state evolution | 49             | URL bugs 
+    Network requests    | 50             | silent net
+    Visual / user-CSS   | 51 (this)      | CSS-blocked interactions
+    ```
+
+  * **Catalog state**: 51 scenarios; **9
+    mechanically verified** (44, 45, 46, 47, 48,
+    10, 49, 50, 51). PR coverage: 9 → **10**
+    (added #59).
+
+  * **Live re-validation**:
+    - 81/81 smoke tests pass
+    - `scenarios:catalog` clean (51)
+    - Scenario 51 wall-clock: ~3s warm
+    - src/ tree clean after verification mutation
+      restored
+
+  * **Remaining major KINDs**:
+    - Time-based / clock control (PR #54 class)
+    - Build-mode runtime (PR #58 class — TDZ
+      post-minification)
+    - Memory / long-running state regressions
+
 - **slice 82-network-request-monitor (Phase 6 —
   fifth NEW assertion-target KIND: outbound HTTP
   request shape)** (this iteration, on the interface
