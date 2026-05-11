@@ -2313,6 +2313,86 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 23-scenario-20-candles-slow
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — adds the symmetric slow-but-
+  recovers chaos primitive on the CANDLES side.
+  Where #19 covered slow registry (carousel never
+  mounts during the wait), #20 covers slow candles
+  while keeping registry fast (carousel mounts
+  immediately, but the price card has to react to
+  late-arriving prices). Fills the symmetric slot
+  in the candles failure-mode coverage matrix
+  alongside #03 (hard 502), #04 (partial — some
+  prices missing), and #08 (malformed body).
+
+  * **The scenario** — `20-candles-slow` on
+    `/companies`. Same pattern as #19: closure
+    wraps `makeCandlesMockHandler` with a 5s
+    per-request delay, then returns the
+    happy-path response (yes=0.42, no=0.58).
+    Two assertions: carousel mounts (registry
+    fast, same probe as #03), then the price
+    eventually transitions from interim state
+    to "0.4200 SDAI" (real price after candles
+    response lands).
+
+  * **Why this exercises a DIFFERENT page-side
+    code path than #19**:
+    - #19 slow-registry blocks the carousel from
+      mounting AT ALL — the price-render path
+      never gets to run, so price-side bugs are
+      invisible. The page sits at "no
+      organizations" until the slow registry
+      response lands.
+    - #20 slow-candles keeps the registry fast,
+      so the carousel mounts and the price card
+      RUNS against an upstream that's returning
+      late. The price-render REACT path is now
+      the one under test — useEffect deps,
+      memoized formatters, transitional states
+      all get exercised under latency pressure.
+
+  * **Bug-shapes captured** (NEW vs #03/#04/#08):
+    - Card stays at "0.00 SDAI" FOREVER after
+      slow candles arrives — i.e., the price
+      re-render path is broken (useEffect
+      dep-array regression, memo capturing first
+      stale value, setState swallowed by
+      unmount/remount cycle)
+    - Card CRASHES when the slow promise
+      resolves (formatter assumes prices
+      non-null but late-arriving fields are null)
+    - Card shows the SLOW promise's stale number
+      after a refresh tick — race condition
+      where late v1 response overwrites a
+      fresher v2 response
+    - Per-pool fallback fetcher races the bulk
+      prefetch under latency pressure
+    - Missing abort-controller — slow request
+      stacks under refresh tick, eventually OOM
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #20 itself: passed in 31.2s on
+      first run (anvil cold-boot + Next.js +
+      slow candles wait + price-card transition)
+    - Catalog regenerated: 20 scenarios (was 19)
+
+  * **Chaos coverage matrix on /companies after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #02      | #03     |
+    | partial response  |   —      | #04     |
+    | empty 200         | #05      |   —     |
+    | malformed body    | #07      | #08     |
+    | per-row corrupt   | #09      |   —     |
+    | slow valid resp   | #19      | #20     |
+    Filling the registry partial/empty-candles
+    cells (or per-row candles corruption) would
+    be the natural next coverage adds.
+
 - **slice 22-scenario-19-registry-slow
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — pivots away from the cold-anvil
