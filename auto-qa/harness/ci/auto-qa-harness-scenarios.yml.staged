@@ -49,6 +49,23 @@ jobs:
         working-directory: auto-qa/harness
         run: npm ci
 
+      - name: Install Foundry (anvil)
+        # Phase 7 step 6. The harness's playwright.config.mjs
+        # webServer block now spawns `anvil --fork-url ...` at
+        # port 8546 alongside the Next.js dev server, and
+        # globalSetup verifies the synthetic wallet is funded on
+        # the fork before any test runs. Without anvil in PATH,
+        # webServer would fail to start and ALL scenarios would
+        # error at the workflow level.
+        #
+        # The official Foundry action installs anvil + cast +
+        # forge in ~10s on the GitHub-hosted runner; cheap on
+        # the cold path, and Foundry's nightly tag is what the
+        # harness was developed against locally.
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v4
@@ -71,12 +88,18 @@ jobs:
 
       - name: Run Playwright scenarios suite
         env:
-          # No anvil in CI; point Wagmi at a public Gnosis RPC for the
-          # tests that just need a working wallet provider. The
-          # wallet-signing eth_sendTransaction case auto-skips when
-          # anvil is missing (see `whichAnvil()` in
-          # `flows/wallet-signing.spec.mjs`).
-          HARNESS_FRONTEND_RPC_URL: https://rpc.gnosischain.com
+          # FORK_URL is read by the anvil webServer block in
+          # playwright.config.mjs. Public Gnosis RPC; no auth.
+          FORK_URL: https://rpc.gnosis.gateway.fm
+          # Dummy Supabase env vars satisfy the createClient(...)
+          # module-init guard in pages/markets/[address].js. The
+          # actual Supabase requests get intercepted by Playwright's
+          # context.route() if a scenario mocks them; otherwise they
+          # fail gracefully (not the path scenarios assert on).
+          # Override via repo secrets if a scenario ever needs real
+          # Supabase data.
+          NEXT_PUBLIC_SUPABASE_URL: https://harness-supabase.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: harness-dummy-anon-key
         working-directory: auto-qa/harness
         run: npm run ui:full
 

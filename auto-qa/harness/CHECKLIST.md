@@ -556,6 +556,26 @@ freshly-generated addresses as recipients; documented in
       of 3a-promote (different workflow file), but the README
       recommends promoting + smoke-testing 3a first since it's
       cheaper.
+- [x] **3c-extend (Phase 7 step 6) — Foundry install +
+      env wiring in staged scenarios workflow.** Two
+      changes to `auto-qa-harness-scenarios.yml.staged`:
+      (1) new `Install Foundry (anvil)` step using
+      `foundry-rs/foundry-toolchain@v1` so anvil is on
+      PATH for the harness's `webServer` to spawn the
+      Gnosis fork at port 8546; (2) new env vars on
+      `Run Playwright scenarios suite`:
+      `FORK_URL=https://rpc.gnosis.gateway.fm` (read by
+      anvil webServer block),
+      `NEXT_PUBLIC_SUPABASE_URL` +
+      `NEXT_PUBLIC_SUPABASE_ANON_KEY` (dummy values,
+      satisfy `pages/markets/[address].js:20`'s
+      `createClient` module-init guard — see
+      live-validation-pass-1 slice for context). Removed
+      the obsolete "No anvil in CI" comment + the
+      `HARNESS_FRONTEND_RPC_URL` override pointing at
+      mainnet (no longer needed; anvil IS in CI now).
+      YAML re-validated via `js-yaml@4`; structure
+      shows 10 steps in the right order.
 - [x] **3d — per-failure artifact upload: STAGED.** Added an
       `actions/upload-artifact@v4` step to the slice-3c
       scenarios workflow file (not a new file — same staged

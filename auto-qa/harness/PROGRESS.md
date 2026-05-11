@@ -2313,6 +2313,98 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-6 (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — closes the
+  fork-bootstrap multi-iteration plan. CI workflow now
+  installs Foundry + has the right env vars to run the
+  fork-backed scenarios end-to-end on the GitHub
+  runner.
+
+  * **What changes in `auto-qa-harness-scenarios.yml.staged`**:
+    1. **New step "Install Foundry (anvil)"** between
+       `Install harness deps` and `Cache Playwright
+       browsers`. Uses `foundry-rs/foundry-toolchain@v1`
+       at `version: nightly` (matches what the harness
+       was developed against locally). ~10s on a cold
+       runner. Without this step, anvil isn't on PATH,
+       and the harness's webServer block fails to
+       launch the fork — every fork-backed scenario
+       errors at the workflow level.
+    2. **Env vars added to "Run Playwright scenarios
+       suite"**:
+       - `FORK_URL=https://rpc.gnosis.gateway.fm` —
+         read by the anvil webServer block; without
+         it the default URL applies (also a public
+         Gnosis RPC, but explicit is better)
+       - `NEXT_PUBLIC_SUPABASE_URL` +
+         `NEXT_PUBLIC_SUPABASE_ANON_KEY` — dummy
+         values to satisfy
+         `pages/markets/[address].js:20`'s
+         `createClient` module-init guard (see
+         live-validation-pass-1 slice). Override via
+         repo secrets if a future scenario needs real
+         Supabase data.
+    3. **Removed obsolete comment** ("No anvil in
+       CI; point Wagmi at a public Gnosis RPC for the
+       tests that just need a working wallet
+       provider"). With anvil now in CI, the
+       wallet-stub points at localhost:8546 (the
+       fork) per the harness's normal flow. The
+       wallet-signing eth_sendTransaction case no
+       longer needs to auto-skip in CI.
+
+  * **What this enables**: when the maintainer
+    promotes this workflow file to
+    `.github/workflows/`, **CI runs match local dev**
+    — same fork, same wallet pre-funding, same
+    scenarios. The "all 14 scenarios pass live in
+    ~31s" result from live-validation-pass-2 becomes
+    reproducible in CI.
+
+  * **Validation**: YAML re-parsed clean via
+    `js-yaml@4`; structure shows 10 steps in the
+    right order:
+    ```
+    Checkout, Set up Node 22, Install root deps,
+    Install harness deps, Install Foundry (anvil),
+    Cache Playwright browsers, Install Chromium
+    (cache miss), Install Chromium system deps
+    (cache hit), Run Playwright scenarios suite,
+    Upload Playwright artifacts on failure
+    ```
+
+  * **CHECKLIST item `3c-extend`** added recording
+    this slice's work + the YAML validation result.
+
+  * **Trigger remains workflow_dispatch only**;
+    matches the conservative roll-out pattern of all
+    other staged workflows. Future iterations can add
+    `pull_request: paths: ['auto-qa/harness/**']`
+    once the workflow's been smoke-tested manually
+    via the Actions UI.
+
+  * **Multi-iteration plan progress** — fork bootstrap
+    NOW COMPLETE:
+    - ✓ Step 1: anvil in webServer
+    - ✓ Step 2-2.9: fork-state primitives + globalSetup
+    - ✓ Step 4: positions scenario asserting on-chain
+    - ✓ Live-validation passes 1+2: all 14 scenarios
+      pass live
+    - ✓ Step 6 (this slice): CI Foundry install +
+      env wiring
+    - ⏳ Step 5: subgraph/snapshot/spot-price mocks
+      to unblock the deferred value-flow assertions
+      (#10 synthetic title, #14 "100.0000" balance)
+    - **Remaining maintainer task**: promote 3
+      already-staged workflows
+      (`auto-qa-harness.yml`,
+      `auto-qa-harness-smoke.yml`,
+      `auto-qa-harness-architecture-sync.yml`)
+      + this iteration's updated
+      `auto-qa-harness-scenarios.yml`. All ready to
+      `cp` to `.github/workflows/` per
+      `ci/README.md`.
+
 - **slice live-validation-pass-2 (Phase 7 fork-bootstrap)**
   (this iteration, on the interface side) — fixed
   the 3 assertion mismatches surfaced by pass 1.
