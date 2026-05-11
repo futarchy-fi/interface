@@ -2313,6 +2313,81 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 22-scenario-19-registry-slow
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — pivots away from the cold-anvil
+  flake (steps 17-21 explored 4 hypotheses; the
+  underlying issue is anvil-internal stuck state
+  that test-side mitigations can't escape) and adds
+  a NEW chaos scenario covering the
+  SLOW-but-recovers failure mode. Distinct from
+  #02 (hard 502), #05 (empty 200), #07 (malformed
+  body) — exercises the page's loading-state +
+  post-resolution rerender paths.
+
+  * **The scenario** — `19-registry-slow` on
+    `/companies`. Wraps the standard happy-path
+    `makeGraphqlMockHandler` with a 5s
+    per-request delay. `useAggregatorCompanies`
+    issues 3 sequential queries to the registry,
+    so total wait is ~15s. Single assertion:
+    `PROBE_ORG_NAME` eventually visible (30s
+    timeout = ~2× expected wait for variance
+    headroom).
+
+  * **Bug-shapes captured** (NEW vs prior
+    chaos-on-/companies scenarios):
+    - Page CRASHES during the 15s wait window
+      (e.g., a hook reads `data.something` while
+      data is still undefined because no
+      `loading` guard)
+    - Page renders PREMATURE "No organizations
+      found" empty-state before the slow response
+      lands (loading state was missed)
+    - Page never RECOVERS after the slow response
+      arrives (e.g., useEffect dep-array
+      regression that doesn't re-render on
+      `loading: false`)
+    - Layout SHIFT from missing skeleton during
+      the wait
+    - Client-side TIMEOUT regression (no abort
+      controller wired up to bound the wait)
+
+  * **Why this fits the chaos library**:
+    Chaos primitives compose with the existing
+    Phase 6 scenario format — same `mocks` field,
+    just a handler that adds latency. No format
+    change. Gives the harness coverage of the
+    delay axis (alongside the existing
+    failure-mode axes: status, body shape,
+    completeness).
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #19 itself: passed in 24.4s on
+      first run (anvil cold-boot + Next.js +
+      ~15s slow-registry wait + ~6s page render)
+    - Catalog regenerated: 19 scenarios (was 18)
+
+  * **Why pivot now** (the cold-flake context):
+    Steps 17-21 invested 5 iterations in the
+    cold-anvil mutation flake (#15 + #17 fail at
+    setStorageAt timeout). Each step ruled out
+    one hypothesis (queue saturation, drain wait,
+    response loss, transient drop). The diagnosis
+    is now precise: anvil enters a persistent
+    stuck state where ALL anvil_setStorageAt
+    requests time out at 30s, while reads stay
+    responsive. Test-side workarounds (retries,
+    pause + drain, longer timeouts) don't escape
+    it. The right next move on that front is
+    either RUST_LOG=anvil=trace introspection or
+    a switch to eth_sendTransaction-based
+    mutations — both bigger investments than
+    a single iteration. Better ROI: ship a
+    chaos-axis scenario that adds production
+    coverage today.
+
 - **slice fork-bootstrap-step-21-setstorage-retry
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — adds write + read-back +
