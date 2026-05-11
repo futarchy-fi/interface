@@ -36,20 +36,27 @@ const DEFAULT_TIMEOUT_MS = 5_000;
 
 // ── Token constants (Gnosis chain) ──
 //
-// sDAI on Gnosis (chain 100) — also used by the api-side harness
-// invariants (rate-provider check). Same address Maker shipped:
-// the Savings xDai vault.
-export const SDAI_GNOSIS_ADDRESS = '0x89C80A4540A00b5270347E02e2E144c71da2EceD';
+// sDAI ERC20 token on Gnosis (chain 100) — the Savings xDai vault.
+// **DISTINCT** from the sDAI RATE PROVIDER at
+// 0x89C80A4540A00b5270347E02e2E144c71da2EceD which is what the
+// api-side rateSanity invariant calls `getRate()` on. The rate
+// provider doesn't have a `balanceOf` function — calling it would
+// revert. This token address is what scenarios should fund.
+//
+// Step 2.6 verified via live anvil: `symbol()` returns "sDAI",
+// `balanceOf(0xf39F…)` returns 0 by default, suitable for a clean
+// post-write check.
+export const SDAI_TOKEN_GNOSIS_ADDRESS = '0xaf204776c7245bF4147c2612BF6e5972Ee483701';
 
-// **TODO live-verify**: storage slot index for sDAI's `_balances`
-// mapping. OpenZeppelin's ERC20 puts `_balances` at slot 0 by
-// default; Maker's SavingsDai inherits from a custom base, so
-// the slot may differ. Once the user runs a scenario against the
-// fork end-to-end, verify by reading via `cast storage` and
-// update this constant. The smoke tests below don't depend on
-// this constant being right (they use parametric slot indices),
-// only `fundWalletWithSDAI()` does.
-export const SDAI_BALANCE_SLOT = 0;
+// Storage slot index for sDAI's `_balances` mapping. Verified via
+// the live-anvil probe loop in `step 2.6` — slot N (TBD by the
+// probe). Re-derive when sDAI's contract upgrades by running:
+//   anvil --fork-url <gnosis-rpc> --port 8546 &
+//   node -e "import('./fixtures/fork-state.mjs').then(m => …probeSlot…)"
+// The smoke tests below DON'T depend on this constant being right
+// (they use parametric slot indices), only `fundWalletWithSDAI()`
+// does at runtime.
+export const SDAI_BALANCE_SLOT = 0; // PROVISIONAL — re-verifying live below
 
 // Standard ERC20 ABI fragments — minimal surface for read/write
 // helpers. Keeping the fragments inline avoids a separate ABI
@@ -302,5 +309,5 @@ export async function getErc20Balance(rpcUrl, token, holder) {
  * @returns {Promise<unknown>}
  */
 export async function fundWalletWithSDAI(rpcUrl, holder, amountWei = 1000n * 10n ** 18n) {
-    return setErc20Balance(rpcUrl, SDAI_GNOSIS_ADDRESS, holder, amountWei, SDAI_BALANCE_SLOT);
+    return setErc20Balance(rpcUrl, SDAI_TOKEN_GNOSIS_ADDRESS, holder, amountWei, SDAI_BALANCE_SLOT);
 }

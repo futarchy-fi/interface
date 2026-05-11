@@ -37,7 +37,13 @@
  */
 
 import { nStubWallets } from './wallet-stub.mjs';
-import { getChainId, getEthBalance } from './fork-state.mjs';
+import {
+    getChainId,
+    getEthBalance,
+    getErc20Balance,
+    fundWalletWithSDAI,
+    SDAI_TOKEN_GNOSIS_ADDRESS,
+} from './fork-state.mjs';
 
 const RPC_URL =
     process.env.HARNESS_FRONTEND_RPC_URL ||
@@ -46,6 +52,7 @@ const RPC_URL =
 
 const EXPECTED_CHAIN_ID = 100; // Gnosis
 const MIN_WALLET_ETH_WEI = 1n * 10n ** 18n; // 1 ETH; default funding is 10000
+const SDAI_FUND_AMOUNT_WEI = 1000n * 10n ** 18n; // 1000 sDAI
 
 /**
  * @returns {Promise<void>}
@@ -84,4 +91,31 @@ export default async function globalSetup() {
     }
 
     console.log(`[fork-state-setup] anvil OK at ${RPC_URL} — chain ${chainId}, wallet ${wallet.address} has ${balance / 10n ** 18n} ETH`);
+
+    // Fund the wallet with sDAI (1000 tokens) by writing directly to
+    // the _balances mapping storage. Verified live in step 2.6 that
+    // SDAI_BALANCE_SLOT=0 produces the expected post-write balance
+    // for the actual sDAI token at SDAI_TOKEN_GNOSIS_ADDRESS.
+    //
+    // VERIFICATION step (post-write read-back) is what catches the
+    // slot constant going wrong if the sDAI contract upgrades — a
+    // wrong slot writes to garbage storage and leaves the real
+    // balanceOf() unchanged, so the read returns 0 instead of the
+    // expected 1000e18. Hard-fail in that case so the breakage is
+    // loud at globalSetup time, not silently downstream when a
+    // scenario reads positions and sees zero balance.
+    await fundWalletWithSDAI(RPC_URL, wallet.address, SDAI_FUND_AMOUNT_WEI);
+    const sdaiBalance = await getErc20Balance(RPC_URL, SDAI_TOKEN_GNOSIS_ADDRESS, wallet.address);
+    if (sdaiBalance !== SDAI_FUND_AMOUNT_WEI) {
+        throw new Error(
+            `[fork-state-setup] sDAI funding verification FAILED — wrote ${SDAI_FUND_AMOUNT_WEI} ` +
+            `at slot SDAI_BALANCE_SLOT, but balanceOf() returned ${sdaiBalance}. ` +
+            `The slot constant in fixtures/fork-state.mjs is wrong (likely the sDAI contract upgraded ` +
+            `and changed its storage layout). Re-derive via:\n` +
+            `  anvil --fork-url <gnosis-rpc> --port 8546 &\n` +
+            `  node -e "import('./fixtures/fork-state.mjs').then(m => /* probe slots 0..10 */)"\n` +
+            `Then update SDAI_BALANCE_SLOT in fixtures/fork-state.mjs.`
+        );
+    }
+    console.log(`[fork-state-setup] sDAI funded — wallet ${wallet.address} now holds ${sdaiBalance / 10n ** 18n} sDAI`);
 }

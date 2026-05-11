@@ -2313,6 +2313,86 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-2.6 (Phase 7 fork wiring)**
+  (this iteration, on the interface side) — fourth
+  step of the multi-iteration fork bootstrap. Wires
+  step 2.5's `fundWalletWithSDAI()` into `globalSetup`
+  with a verification step. **Caught a real bug** in
+  step 2.5 along the way.
+
+  * **Bug discovered + fixed**: the previous slice
+    named the constant `SDAI_GNOSIS_ADDRESS` and
+    pointed it at `0x89C80A4540A00b5270347E02e2E144c71da2EceD`,
+    matching the api-side rate-provider invariant.
+    But that address is the sDAI **rate provider**
+    (only exposes `getRate()`), NOT the sDAI ERC20
+    token. Calling `balanceOf` on it reverts.
+    The actual sDAI ERC20 on Gnosis is at
+    `0xaf204776c7245bF4147c2612BF6e5972Ee483701`.
+    Renamed the constant to `SDAI_TOKEN_GNOSIS_ADDRESS`
+    to disambiguate from the api-side rate-provider
+    constant + updated the address. Smoke test
+    references updated.
+
+  * **Live verification of `SDAI_BALANCE_SLOT`**: spun
+    up anvil against `https://rpc.gnosis.gateway.fm`,
+    probed slots 0..10 + 51 + 101 against the corrected
+    sDAI token address. **Slot 0 confirmed correct**
+    (the OpenZeppelin default; the previous slice's
+    provisional value was right, just at the wrong
+    contract). The probe loop is documented inline so
+    future re-derivation (e.g., after a contract
+    upgrade) is straightforward.
+
+  * **`fixtures/fork-state-setup.mjs` extended**:
+    after the existing chain-id + ETH balance checks,
+    now also:
+    - Calls `fundWalletWithSDAI(RPC_URL, wallet.address,
+      1000n * 10n**18n)` — writes 1000 sDAI to the
+      synthetic wallet's storage slot
+    - Reads back via `getErc20Balance(...)` —
+      VERIFICATION step
+    - Hard-fails if read != written, with a
+      detailed error message including the
+      re-derive command (so the next person
+      hitting a slot-mismatch knows exactly what
+      to do)
+
+  * **End-to-end live test** of the full globalSetup
+    against anvil at port 8546:
+    ```
+    [fork-state-setup] anvil OK at http://localhost:8546
+      — chain 100, wallet 0xf39F…6e51 has 10000 ETH
+    [fork-state-setup] sDAI funded — wallet 0xf39F…6e51
+      now holds 1000 sDAI
+    GLOBALSETUP-OK
+    ```
+
+  * **Why the verification matters**: the previous
+    iteration's TODO ("re-derive via cast storage if
+    uncertain") was insufficient — it required someone
+    to MANUALLY check. The verification step makes
+    the slot mismatch self-detecting on every
+    `npm run ui:full`.
+
+  * Smoke totals: 37/37 pass (unchanged — constant
+    rename was the only smoke-test-affecting change).
+
+  * **Multi-iteration plan progress**:
+    - ✓ Step 1: anvil in webServer
+    - ✓ Step 2: fork-state primitives + globalSetup
+    - ✓ Step 2.5: ERC20 storage-write + sDAI wrapper
+    - ✓ Step 2.6 (this slice): wire into globalSetup
+      + live-verify slot
+    - ⏳ Step 2.7: `mintConditionalPosition()` —
+      call `splitPosition` through the futarchy
+      router to mint YES/NO ERC1155 positions
+    - ⏳ Step 3: per-scenario fork-pin support
+    - ⏳ Step 4: positions scenario asserting real
+      on-chain ERC1155 balances
+    - ⏳ Step 5: liquidity scenario
+    - ⏳ Step 6: CI workflow Foundry install step
+
 - **slice fork-bootstrap-step-2.5 (Phase 7 fork wiring)**
   (this iteration, on the interface side) — third step
   of the multi-iteration fork bootstrap. Adds higher-

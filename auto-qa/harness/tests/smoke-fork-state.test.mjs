@@ -29,7 +29,7 @@ import {
     setErc20Balance,
     getErc20Balance,
     fundWalletWithSDAI,
-    SDAI_GNOSIS_ADDRESS,
+    SDAI_TOKEN_GNOSIS_ADDRESS,
     SDAI_BALANCE_SLOT,
 } from '../fixtures/fork-state.mjs';
 
@@ -304,7 +304,7 @@ test('fundWalletWithSDAI — targets sDAI on Gnosis at the configured slot', asy
         await fundWalletWithSDAI(url, holder);
         assert.equal(calls.length, 1);
         assert.equal(calls[0].method, 'anvil_setStorageAt');
-        assert.equal(calls[0].params[0].toLowerCase(), SDAI_GNOSIS_ADDRESS.toLowerCase());
+        assert.equal(calls[0].params[0].toLowerCase(), SDAI_TOKEN_GNOSIS_ADDRESS.toLowerCase());
         // Storage key matches mappingStorageKey at the configured
         // slot — catches a regression that ignores SDAI_BALANCE_SLOT.
         assert.equal(
