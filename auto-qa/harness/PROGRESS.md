@@ -2313,6 +2313,89 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 34-scenario-31-market-page-candles-slow
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (CANDLES, slow)
+  cell, completing the slow-response row on the
+  market-page chaos matrix. Mirror of #20
+  (candles-slow on /companies) applied to the
+  market page's 4-query candles contract.
+  Distinct from #25 (candles 502, `.catch`),
+  #27 (candles empty-200, `.then-with-empty`),
+  and #30 (registry slow) — exercises in-flight
+  state + post-resolution rerender path
+  specifically on the candles-driven panels
+  (chart + per-pool spot-price).
+
+  * **The scenario** — `31-market-page-candles-
+    slow` on /markets/<MARKET_PROBE_ADDRESS>.
+    Registry happy + candles delayed 5s per
+    request for all 4 query shapes. Same
+    page-shell assertions as prior market-page
+    chaos slices.
+
+  * **Why this is a NEW failure mode** (vs
+    #25/#27 and vs #30):
+    - vs #25 candles-502 (`.catch`): tests
+      the in-flight loading window + post-
+      resolution rerender, which `.catch`
+      bypasses
+    - vs #27 candles-empty-200
+      (`.then([])`): the slow case is
+      orthogonal — different control flow
+      AND different surface (chart panel +
+      price-card transition)
+    - vs #30 registry-slow: orthogonal
+      panel — #30 exercises registry-driven
+      title/description swap-in; #31
+      exercises candles-driven chart panel
+      + per-pool spot-price transition.
+      Trading panel (on-chain-driven)
+      remains functional independent of
+      candles latency.
+
+  * **Bug-shapes captured** (NEW vs #25/#27/
+    #30):
+    - Chart panel stuck-loading after slow
+      candles arrives (price-card-stuck-at-
+      fallback shape on market-page's
+      chart-render path)
+    - Per-pool spot-price CRASHES on late-
+      arriving prices (formatter assumes
+      synchronous data shape)
+    - Chart shows stale data from
+      slow-promise-race after refresh tick
+    - Bulk-prefetch vs per-pool fallback
+      race under latency
+    - Refresh tick stacks slow candles
+      requests (no abort-controller;
+      exhausts connections / OOMs)
+    - Late-arriving response causes chart-
+      panel LAYOUT-SHIFT (chart placeholder
+      swaps for real chart 5+s after mount)
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #31 itself: passed in 10.9s on
+      first run
+    - Catalog regenerated: 31 scenarios (was 30)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  |   —      |   —     |
+    | empty 200         | #26      | #27     |
+    | malformed body    | #28      | #29     |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   | #30      | #31 ★   |
+    8 of 12 cells filled (4 rows complete:
+    hard-502 + empty-200 + malformed-body +
+    slow × both endpoints). Last 2 rows
+    (partial response + per-row corrupt) are
+    the remaining gaps.
+
 - **slice 33-scenario-30-market-page-registry-slow
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (REGISTRY, slow)
