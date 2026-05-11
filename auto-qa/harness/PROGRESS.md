@@ -2313,6 +2313,76 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 39-scenarios-chaos-matrix-script
+  (Phase 7 ergonomics)** (this iteration, on the
+  interface side) — adds
+  `npm run scenarios:chaos-matrix` script that
+  derives the chaos coverage matrix from the
+  scenarios catalog and prints it grouped by
+  page. Replaces the hand-maintained matrices in
+  PROGRESS.md with a drift-resistant dynamic
+  view. Sister to `scenarios:by-route` (groups
+  by route) and the api-side `scenarios:by-layer`
+  (groups by data layer); this one groups by
+  (page, endpoint, failure_mode).
+
+  * **The script** —
+    `scripts/scenarios-chaos-matrix.mjs`. Loads
+    every `*.scenario.mjs` in `scenarios/`,
+    classifies by parsing filename heuristics:
+    - endpoint: `registry` / `candles` / `both`
+    - failure_mode: keyword match against the
+      6 canonical modes (hard 502, partial,
+      empty 200, malformed body, per-row
+      corrupt, slow valid resp)
+    Prints one matrix per page; `both` /
+    cross-endpoint scenarios get a separate
+    section so per-cell counts stay accurate.
+    Non-chaos scenarios (happy / mutation /
+    canary) listed at the bottom for
+    completeness.
+
+  * **Output ergonomics**:
+    - Markdown-table per page so you can paste
+      directly into PROGRESS.md or a PR comment
+    - Routes containing the
+      MARKET_PROBE_ADDRESS get folded to
+      `/markets/[address]` — implementation
+      detail doesn't bake into the table
+      header
+    - Cells empty (—) for un-filled
+      combinations — surfaces gaps at a glance
+    - Reconciling footer line for sanity
+
+  * **Why this matters**: PROGRESS.md tracked
+    the chaos matrix as a hand-written table
+    that drifts whenever a scenario is added or
+    removed. The script regenerates the matrix
+    from disk so it's always current.
+    Reviewer or CI can run
+    `scenarios:chaos-matrix` and immediately
+    see what's covered vs missing.
+
+  * **Smoke tests**: 2 new tests in
+    `tests/smoke-scenarios-chaos-matrix.test.mjs`:
+    - CLI produces matrix structure (header,
+      both endpoint columns, all 6 mode rows,
+      cross-endpoint section, non-chaos
+      section, reconciling footer)
+    - Both matrices currently reach 12/12 (pin
+      the current state — if a new scenario
+      shifts the count, test surfaces it)
+
+  * **Live re-validation**:
+    - Smoke tests: 80/80 (was 78; +2 — CLI
+      structure check + 12/12 matrix pin)
+    - Script output: 35 scenarios total · 24
+      per-endpoint chaos across 2 pages · 1
+      cross-endpoint chaos (#06) · 10
+      non-chaos
+    - Catalog regenerated: 35 scenarios
+      (unchanged from step 38)
+
 - **slice 38-scenario-35-market-page-candles-corrupt-pool
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the LAST cell of the
