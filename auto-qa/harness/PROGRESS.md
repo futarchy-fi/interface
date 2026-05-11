@@ -2313,6 +2313,80 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 33-scenario-30-market-page-registry-slow
+  (Phase 7 chaos library)** (this iteration, on the
+  interface side) — fills the (REGISTRY, slow)
+  cell on the market-page chaos matrix. Mirror
+  of #19 (registry-slow on /companies) but on
+  the market page with its static MARKETS_CONFIG
+  foundation. Distinct from #19 because the
+  market page's page-shell should mount
+  IMMEDIATELY from static config regardless of
+  how slow the registry-side enrichment is —
+  registry is enrichment, not foundation.
+
+  * **The scenario** — `30-market-page-registry-
+    slow` on /markets/<MARKET_PROBE_ADDRESS>.
+    Registry delayed by 5s per request + candles
+    happy. Same page-shell assertions as the
+    prior market-page chaos slices.
+
+  * **Why this is a NEW failure mode**: the
+    slow-response axis exercises a DIFFERENT
+    page-side code path than the hard-failure
+    axes (#24/#26/#28). Those test fully-resolved
+    degraded shapes; this tests the IN-FLIGHT
+    state itself. Specifically:
+    - Does the page-shell mount BEFORE the
+      registry resolves? (It should.)
+    - Does the page handle the resolved response
+      correctly when it arrives?
+    - Does anything CRASH during the in-flight
+      window when downstream consumers read
+      from a not-yet-resolved registry-data
+      hook?
+
+  * **Bug-shapes captured** (NEW vs #24/#26/#28):
+    - Page-shell HANGS waiting for registry
+      instead of mounting via MARKETS_CONFIG
+      (regression that gated page-shell mount
+      on registry resolution instead of static
+      config)
+    - In-flight registry hook returns
+      `undefined` and downstream consumer
+      accesses `proposal.title` → "Cannot read
+      property 'title' of undefined"
+    - Registry-data hook initializes with `[]`
+      and a downstream consumer treats it as
+      resolved-empty, prematurely showing
+      "Market Not Found" before the real
+      response arrives
+    - Late-arriving registry response causes
+      render LAYOUT SHIFT (proposal title swaps
+      in 5s after mount, chart panel jumps
+      down the viewport — UX paper-cut)
+    - Refresh tick stacks slow registry
+      requests (no abort-controller; exhausts
+      network connections or OOMs eventually)
+
+  * **Live re-validation**:
+    - Smoke tests: 78/78 (no test infra changes)
+    - Scenario #30 itself: passed in 11.7s on
+      first run
+    - Catalog regenerated: 30 scenarios (was 29)
+
+  * **Market-page chaos coverage matrix after
+    this slice**:
+    | failure mode      | registry | candles |
+    |-------------------|----------|---------|
+    | hard 502          | #24      | #25     |
+    | partial response  |   —      |   —     |
+    | empty 200         | #26      | #27     |
+    | malformed body    | #28      | #29     |
+    | per-row corrupt   |   —      |   —     |
+    | slow valid resp   | #30 ★    |   —     |
+    7 of 12 cells filled.
+
 - **slice 32-scenario-29-market-page-candles-malformed
   (Phase 7 chaos library)** (this iteration, on the
   interface side) — fills the (CANDLES, malformed-
