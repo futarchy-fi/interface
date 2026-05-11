@@ -2313,6 +2313,90 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice fork-bootstrap-step-16-trace-probe
+  (Phase 7 fork wiring)** (this iteration, on the
+  interface side) — closes the address-level gap in
+  the step-15 warmup by tracing the page's actual
+  eth_call traffic and adding the one un-warmed
+  contract (FutarchyQuoteHelper) to
+  `PAGE_CONTRACT_ADDRESSES`. Cold-anvil suite now
+  17/18 (was 16/18). The remaining failure is #17's
+  ERC1155 position mutation — a per-SLOT write
+  (nested mapping) that no bytecode warmup can help.
+
+  * **What the probe captured** (35-second sample on
+    cold anvil, market-page navigation only):
+    - 34 total eth_call requests
+    - 10 unique (to, selector) pairs across 10
+      unique addresses
+    - 9/10 addresses already warmed by step 15's
+      `PAGE_CONTRACT_ADDRESSES` + globalSetup's
+      sDAI/CT funding paths (which incidentally warm
+      sDAI + ConditionalTokens bytecode)
+    - 1/10 missing: FutarchyQuoteHelper at
+      `0xe32bfb3DD8bA4c7F82dADc4982c04Afa90027EFb`
+      (HELPER_ADDRESS in
+      `src/utils/FutarchyQuoteHelper.js`, called via
+      selector `0x1dc3d87b` once per poll cycle for
+      quote calculations)
+
+  * **The probe itself** — `_probe-trace-addresses
+    .spec.mjs`, a one-shot diagnostic. Customizes
+    `makeAnvilRpcProxyHandler` with an `onCall`
+    callback that increments a `Map<key, count>`
+    keyed on `${to}::${selector}`. Useful for ANY
+    future "what IS the page touching?" question;
+    leaving the helper hook (`onCall`) on the
+    fixture itself rather than only on the probe so
+    a future trace doesn't require a fork. Probe
+    file deleted post-run; the fixture hook stays.
+
+  * **Why per-(to, selector) rather than per-to**:
+    different selectors hit different storage slots,
+    and anvil's slot cache is per-slot. A `to` with
+    8 selectors → 8 separate slot fetches on cold
+    anvil. The probe surfaces that distinction, so
+    we know address-level warmup ≠ slot-level
+    warmup.
+
+  * **Live re-validation** (this iteration):
+    - Warm anvil: 18/18 scenarios pass live in 1.2
+      min (no regression vs. step 15)
+    - Cold anvil: 17/18 pass (vs. 16/18 step 15) —
+      #15 mutation no longer flakes, #16 canary
+      passes. Only #17 (ERC1155 nested-mapping
+      write — 2-3 `anvil_setStorageAt` calls per
+      position) still hits the 60s mutation timeout
+    - 71/71 smoke tests pass (no new tests — the
+      change is a one-line append to an existing
+      list)
+
+  * **What this DOESN'T fix**: scenario #17's
+    cold-anvil flake. The error trace is now
+    consistent: beforeEach `evm_revert` aborts at
+    30s, then the in-scenario `anvil_setStorageAt`
+    aborts at 60s. Anvil under proxy load + a
+    deeply-nested ERC1155 storage path is still
+    serializing too slowly.
+
+  * **What's NEXT** (the un-addressed remainder):
+    - The remaining cold flake is dominated by
+      per-slot fetching at write time. Approaches:
+      (a) pre-warm specific slots by issuing
+      throwaway `eth_call`s in globalSetup that
+      touch the slots #17 writes; (b) drain
+      page-side polling before the mutation by
+      pausing the proxy briefly; (c) accept the
+      flake and document it as known-cold (warm
+      runs are 18/18 in 1.2 min — production CI
+      will be warm). (a) is the most tractable
+      since the slots are computable from the
+      position IDs.
+    - The probe pattern (`onCall` hook +
+      Map-based counter) generalizes — could be
+      reused to find the slow scenarios in any
+      future flake investigation.
+
 - **slice fork-bootstrap-step-15-anvil-warmup
   (Phase 7 fork wiring)** (this iteration, on the
   interface side) — pre-warms anvil's bytecode +

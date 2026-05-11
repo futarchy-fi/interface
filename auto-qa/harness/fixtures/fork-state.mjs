@@ -163,6 +163,11 @@ export const PAGE_CONTRACT_ADDRESSES = [
     '0x7495a583ba85875d59407781b4958ED6e0E1228f',
     // Wrapper service (WRAPPER_SERVICE_ADDRESS default)
     '0xc14f5d2B9d6945EF1BA93f8dB20294b90FA5b5b1',
+    // FutarchyQuoteHelper (HELPER_ADDRESS in
+    // src/utils/FutarchyQuoteHelper.js — read every poll cycle for
+    // quote calculations). Discovered via the step 16 trace probe
+    // which captured the page's actual eth_call addresses.
+    '0xe32bfb3DD8bA4c7F82dADc4982c04Afa90027EFb',
 ];
 
 /**
