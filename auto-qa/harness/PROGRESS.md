@@ -2313,6 +2313,99 @@ Phase 6+7 scenarios (4 cases, chromium + Next.js)      ✓ ~5s
     cross-layer reconciliation. Remaining: cross-layer
     reconciliations + cross-run monotonicity.
 
+- **slice 89-archived-org-filter (Phase 6 —
+  catches PR #61's org-level archived filter,
+  sister to slice 88)** (this iteration, on the
+  interface side) — Catches PR #61's org-level
+  archived/hidden filter in
+  `EventsHighlightDataTransformer.jsx` and
+  `ResolvedEventsDataTransformer.jsx`. Recent-PR
+  coverage: 11/22 → 12/22 (55%).
+
+  * **The KIND**: same DOM-absence SHAPE as slice
+    88, but the gate is at the ORG level rather
+    than the proposal level. Reverting EITHER
+    filter site (proposal-level in slice 88, or
+    org-level in this slice) trips its
+    corresponding scenario. Together scenarios
+    55 + 56 pin both branches of the filter
+    chain.
+
+  * **The fixture extension**:
+    `fakePoolBearingProposal` now accepts an
+    optional `organizationId` (defaults to
+    `PROBE_ORG_ID`). Scenarios can build multi-
+    org proposal sets by passing distinct ids.
+    Scenario 47, 55, 56 all still pass — the
+    default keeps the single-org case unchanged.
+
+  * **The scenario** (`scenarios/56-pr61-filter-
+    archived-orgs.scenario.mjs`):
+    - Route: `/companies`.
+    - Registry mock returns TWO orgs: ACTIVE
+      (`PROBE_ORG_ID`, no archived flag) and
+      ARCHIVED (distinct id, metadata
+      `{ archived: true }`). Each has one
+      proposal pointing back via the new
+      `organizationId` option.
+    - Assertion 1: ACTIVE event title IS visible
+      (sanity — two-org mock pipeline works).
+    - Assertion 2: ARCHIVED event title is NOT
+      visible (`toHaveCount(0)`).
+
+  * **Mechanical verification — caught the bug**:
+    Removed the org-level archived/hidden filter
+    block (lines 30-32 of
+    `EventsHighlightDataTransformer.jsx`). After
+    killing the dev server (per slice 88's HMR
+    note), regression test FAILED with:
+    `Received: 2 elements` for ARCHIVED_TITLE.
+    A diagnostic dump confirmed:
+    - ACTIVE title appears 2× (as expected — once
+      per Active Milestones + Recently Resolved
+      pre-filter)
+    - ARCHIVED title leaks 2× (the bug)
+    - ARCHIVED_ORG_NAME does NOT appear (org
+      card itself is filtered by
+      `useAggregatorCompanies`'s separate
+      archived filter at line 133)
+    Restored → 2 passed (scenarios 55 + 56) in
+    21s.
+
+  * **The interesting finding**: the
+    archived-ORG'S PROPOSAL leaks even though
+    the archived ORG CARD itself is hidden. Two
+    independent filter sites:
+    - `useAggregatorCompanies.transformOrgToCard`
+      filters orgs from the org-card grid
+    - `EventsHighlightDataTransformer` filters
+      proposals from the carousels by their ORG
+      metadata
+    Both must be present for the full hide.
+    Reverting either is a half-fix; PR #61 added
+    the second. Scenario 56 specifically pins
+    the second.
+
+  * **Catalog state**: 56 scenarios, **14
+    mechanically verified** (44, 45, 46, 47, 48,
+    10, 49, 50, 51, 52, 53, 54, 55, 56).
+    Recent-PR coverage: **12/22 = 55%**. Eight
+    assertion KINDs unchanged; new SHAPE within
+    the DOM-absence KIND (multi-org variant of
+    slice 88's single-org assertion).
+
+  * **Live re-validation**:
+    - Scenario 56 wall-clock: 3.5s (faster than
+      55 because no `waitForTimeout(2000)` slack
+      — empirically not needed for absence
+      assertion when the affirmative title is
+      already visible).
+    - src/ tree clean after verification cycle.
+    - Scenario 47 still passes (the
+      `organizationId` fixture parameter
+      defaults to `PROBE_ORG_ID` so legacy
+      single-org callers are unaffected).
+
 - **slice 88-archived-proposal-filter (Phase 6 —
   catches PR #46 via DOM absence assertion)**
   (this iteration, on the interface side) — Catches
