@@ -2894,6 +2894,21 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     native: rawBalances.native   // Native xDAI balance
   }), [rawBalances]);
 
+  // Detect whether the user holds any active conditional-token position
+  const hasActivePosition = useMemo(() => {
+    try {
+      const currDiff = ethers.utils.parseUnits(
+        positions?.currencyYes?.total || '0', 18
+      ).sub(ethers.utils.parseUnits(positions?.currencyNo?.total || '0', 18));
+      const compDiff = ethers.utils.parseUnits(
+        positions?.companyYes?.total || '0', 18
+      ).sub(ethers.utils.parseUnits(positions?.companyNo?.total || '0', 18));
+      return !currDiff.isZero() || !compDiff.isZero();
+    } catch {
+      return false;
+    }
+  }, [positions]);
+
   // Balance manager handles wallet disconnection automatically
 
   const [showEventDetails, setShowEventDetails] = useState(false);
@@ -4545,6 +4560,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
   const handleTransactionComplete = (transactionDetails) => {
     // Refresh balances or any other state that needs updating
     refetchBalances();
+    // Auto-switch to Position tab so the user sees their updated position
+    setActiveTab('position');
   };
 
   // Add selectedAction state
@@ -5266,6 +5283,9 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                                   }`}
                               >
                                 Position
+                                {hasActivePosition && (
+                                  <span className="inline-block w-1.5 h-1.5 ml-1 rounded-full bg-futarchyGreen9" />
+                                )}
                               </button>
                             </>
                           )}
