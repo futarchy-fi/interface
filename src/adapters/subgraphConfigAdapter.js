@@ -5,6 +5,8 @@
  * to match the Supabase market_event format for seamless consumption.
  */
 
+import { createPublicClient, http, fallback } from 'viem';
+import { gnosis, mainnet } from 'viem/chains';
 import { SUBGRAPH_ENDPOINTS } from '../config/subgraphEndpoints';
 
 // Re-export for backward compatibility
@@ -17,16 +19,162 @@ const CHAIN_CONFIG = {
         routerAddress: '0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc',
         futarchyAdapter: '0xAc9Bf8EbA6Bd31f8E8c76f8E8B2AAd0BD93f98Dc',
         conditionalTokens: '0xC59b0e4De5F1248C1140964E0fF287B192407E0C',
-        wrapperService: '0x...' // TODO: Add mainnet wrapper
+        wrapperService: '0x...', // TODO: Add mainnet wrapper
+        // Uniswap V3 factory (Ethereum) — for the on-chain pool-discovery fallback
+        ammFactory: '0x1F98431c8aD98523631AE4a59f267346ea31F984',
+        viemChain: mainnet,
+        rpcUrls: ['https://eth.llamarpc.com', 'https://rpc.ankr.com/eth', 'https://ethereum-rpc.publicnode.com']
     },
     100: {
         factoryAddress: '0xa6cB18FCDC17a2B44E5cAd2d80a6D5942d30a345',
         routerAddress: '0x7495a583ba85875d59407781b4958ED6e0E1228f',
         futarchyAdapter: '0x7495a583ba85875d59407781b4958ED6e0E1228f',
         conditionalTokens: '0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce',
-        wrapperService: '0xc14f5d2B9d6945EF1BA93f8dB20294b90FA5b5b1'
+        wrapperService: '0xc14f5d2B9d6945EF1BA93f8dB20294b90FA5b5b1',
+        // Algebra (Swapr) factory on Gnosis — for the on-chain pool-discovery fallback
+        ammFactory: '0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766',
+        viemChain: gnosis,
+        rpcUrls: ['https://gnosis.drpc.org', 'https://rpc.gnosischain.com', 'https://gnosis-rpc.publicnode.com', 'https://rpc.gnosis.gateway.fm']
     }
 };
+
+// Minimal ABIs for the on-chain fallback (when the candles subgraph has not
+// yet indexed a freshly-created proposal).
+const PROPOSAL_ABI = [
+    { name: 'marketName', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
+    { name: 'collateralToken1', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+    { name: 'collateralToken2', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+    { name: 'wrappedOutcome', type: 'function', stateMutability: 'view', inputs: [{ type: 'uint256' }], outputs: [{ type: 'address' }, { type: 'bytes' }] }
+];
+const ERC20_SYMBOL_ABI = [
+    { name: 'symbol', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
+    { name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] }
+];
+// Algebra: poolByPair(a,b); Uniswap V3: getPool(a,b,fee). We try Algebra first
+// (Gnosis) and fall back to the UniV3 signature (Ethereum).
+const ALGEBRA_FACTORY_ABI = [
+    { name: 'poolByPair', type: 'function', stateMutability: 'view', inputs: [{ type: 'address' }, { type: 'address' }], outputs: [{ type: 'address' }] }
+];
+const UNIV3_FACTORY_ABI = [
+    { name: 'getPool', type: 'function', stateMutability: 'view', inputs: [{ type: 'address' }, { type: 'address' }, { type: 'uint24' }], outputs: [{ type: 'address' }] }
+];
+
+const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
+
+// Cache one public client per chain so we don't rebuild transports per call.
+const _clients = {};
+function getPublicClient(chainId) {
+    if (_clients[chainId]) return _clients[chainId];
+    const cfg = CHAIN_CONFIG[chainId];
+    if (!cfg) return null;
+    const client = createPublicClient({
+        chain: cfg.viemChain,
+        transport: fallback((cfg.rpcUrls || []).map(u => http(u))),
+    });
+    _clients[chainId] = client;
+    return client;
+}
+
+/**
+ * On-chain fallback: assemble the same shape as fetchProposalFromSubgraph by
+ * reading the proposal contract directly. Used when the candles subgraph has
+ * not yet indexed a freshly-created proposal, so the market page (balances,
+ * swap panel, add-liquidity links, token symbols) works immediately instead
+ * of failing with "not found".
+ *
+ * wrappedOutcome index map: 0=YES_COMPANY, 1=NO_COMPANY, 2=YES_CURRENCY, 3=NO_CURRENCY.
+ * Pools are discovered via the AMM factory (CONDITIONAL pools only — the side
+ * that gates basic trading). Other pool types remain subgraph-enriched.
+ *
+ * @param {string} proposalAddress
+ * @param {number} chainId
+ * @returns {Promise<Object|null>} same shape as fetchProposalFromSubgraph
+ */
+export async function fetchProposalFromChain(proposalAddress, chainId) {
+    const cfg = CHAIN_CONFIG[chainId];
+    const client = getPublicClient(chainId);
+    if (!cfg || !client) {
+        console.error(`[OnChainFallback] No chain config/client for chain ${chainId}`);
+        return null;
+    }
+
+    try {
+        const proposal = { address: proposalAddress, abi: PROPOSAL_ABI };
+        const [marketName, c1, c2, w0, w1, w2, w3] = await Promise.all([
+            client.readContract({ ...proposal, functionName: 'marketName' }).catch(() => null),
+            client.readContract({ ...proposal, functionName: 'collateralToken1' }).catch(() => null),
+            client.readContract({ ...proposal, functionName: 'collateralToken2' }).catch(() => null),
+            client.readContract({ ...proposal, functionName: 'wrappedOutcome', args: [0n] }).catch(() => null),
+            client.readContract({ ...proposal, functionName: 'wrappedOutcome', args: [1n] }).catch(() => null),
+            client.readContract({ ...proposal, functionName: 'wrappedOutcome', args: [2n] }).catch(() => null),
+            client.readContract({ ...proposal, functionName: 'wrappedOutcome', args: [3n] }).catch(() => null),
+        ]);
+
+        // wrappedOutcome returns (address token, bytes data); take element 0.
+        const yesCompanyAddr = Array.isArray(w0) ? w0[0] : w0;
+        const noCompanyAddr = Array.isArray(w1) ? w1[0] : w1;
+        const yesCurrencyAddr = Array.isArray(w2) ? w2[0] : w2;
+        const noCurrencyAddr = Array.isArray(w3) ? w3[0] : w3;
+
+        if (!c1 || !c2 || !yesCompanyAddr || !noCompanyAddr || !yesCurrencyAddr || !noCurrencyAddr) {
+            console.warn('[OnChainFallback] Proposal missing expected outcome tokens; not a futarchy proposal?');
+            return null;
+        }
+
+        // Read base + outcome token symbols (best-effort; default decimals 18).
+        const symbolOf = (addr) => client.readContract({ address: addr, abi: ERC20_SYMBOL_ABI, functionName: 'symbol' }).catch(() => null);
+        const [companySym, currencySym, yCoSym, nCoSym, yCuSym, nCuSym] = await Promise.all([
+            symbolOf(c1), symbolOf(c2), symbolOf(yesCompanyAddr), symbolOf(noCompanyAddr), symbolOf(yesCurrencyAddr), symbolOf(noCurrencyAddr)
+        ]);
+
+        // Discover CONDITIONAL pools on the AMM factory (YES: companyYES/currencyYES, NO: companyNO/currencyNO).
+        const findPool = async (tokenA, tokenB) => {
+            try {
+                return await client.readContract({ address: cfg.ammFactory, abi: ALGEBRA_FACTORY_ABI, functionName: 'poolByPair', args: [tokenA, tokenB] });
+            } catch {
+                // UniV3 (Ethereum): default 1% fee tier used by these markets.
+                try {
+                    return await client.readContract({ address: cfg.ammFactory, abi: UNIV3_FACTORY_ABI, functionName: 'getPool', args: [tokenA, tokenB, 10000] });
+                } catch { return null; }
+            }
+        };
+        const [yesPool, noPool] = await Promise.all([
+            findPool(yesCompanyAddr, yesCurrencyAddr),
+            findPool(noCompanyAddr, noCurrencyAddr),
+        ]);
+
+        const pools = [];
+        if (yesPool && yesPool !== ZERO_ADDR) pools.push({ id: yesPool.toLowerCase(), name: 'CONDITIONAL_YES', type: 'CONDITIONAL', outcomeSide: 'YES', price: null });
+        if (noPool && noPool !== ZERO_ADDR) pools.push({ id: noPool.toLowerCase(), name: 'CONDITIONAL_NO', type: 'CONDITIONAL', outcomeSide: 'NO', price: null });
+
+        const companySymbol = companySym || 'COMPANY';
+        const currencySymbol = currencySym || (chainId === 1 ? 'USDS' : 'sDAI');
+
+        // Outcome-token symbols must match `${PREFIX}_${baseSymbol}` for
+        // transformSubgraphToSupabaseFormat's findToken() to pair them.
+        const outcomeTokens = [
+            { id: yesCompanyAddr.toLowerCase(), symbol: yCoSym || `YES_${companySymbol}`, decimals: 18 },
+            { id: noCompanyAddr.toLowerCase(), symbol: nCoSym || `NO_${companySymbol}`, decimals: 18 },
+            { id: yesCurrencyAddr.toLowerCase(), symbol: yCuSym || `YES_${currencySymbol}`, decimals: 18 },
+            { id: noCurrencyAddr.toLowerCase(), symbol: nCuSym || `NO_${currencySymbol}`, decimals: 18 },
+        ];
+
+        console.log(`[OnChainFallback] Assembled config for ${proposalAddress} (${pools.length} conditional pools found on-chain)`);
+
+        return {
+            id: proposalAddress.toLowerCase(),
+            marketName: marketName || '',
+            companyToken: { id: c1.toLowerCase(), symbol: companySymbol, decimals: 18 },
+            currencyToken: { id: c2.toLowerCase(), symbol: currencySymbol, decimals: 18 },
+            outcomeTokens,
+            pools,
+            _fromChain: true,
+        };
+    } catch (error) {
+        console.error('[OnChainFallback] Error:', error);
+        return null;
+    }
+}
 
 /**
  * Strip a "<chainId>-" prefix from a Checkpoint ID. Defensive — the
@@ -360,10 +508,21 @@ export async function fetchMarketEventData(proposalId, sourceParam = null) {
 
         if (subgraphData) {
             return transformSubgraphToSupabaseFormat(subgraphData, proposalId, source.chainId);
-        } else {
-            console.warn(`[SubgraphAdapter] Proposal not found in subgraph, falling back to null`);
-            return null;
         }
+
+        // On-chain fallback: the candles subgraph has not indexed this proposal
+        // yet (common for freshly-created markets, or during indexer lag/outage).
+        // Derive tokens + conditional pools directly from the proposal contract
+        // so the market page works immediately instead of failing with "not found".
+        console.warn(`[SubgraphAdapter] Proposal not in subgraph, trying on-chain fallback...`);
+        const chainData = await fetchProposalFromChain(proposalId, source.chainId);
+        if (chainData) {
+            console.log(`[SubgraphAdapter] ✅ Built config from chain for ${proposalId}`);
+            return transformSubgraphToSupabaseFormat(chainData, proposalId, source.chainId);
+        }
+
+        console.warn(`[SubgraphAdapter] On-chain fallback failed, returning null`);
+        return null;
     }
 
     // For 'supabase' type, return null to indicate Supabase should be used
