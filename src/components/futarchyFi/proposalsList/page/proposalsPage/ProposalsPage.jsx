@@ -183,6 +183,11 @@ const ProposalsPage = ({
                 : 'ongoing',
               resolution_status: proposalMeta.resolution_status || null,
               resolution_outcome: proposalMeta.resolution_outcome || null,
+              // Visibility: 'public' (default) or 'hidden'. Hidden proposals are
+              // filtered from the public list below and shown to the org owner
+              // with a "Hidden" badge (mirrors EventHighlightCard's convention).
+              visibility: proposalMeta.visibility || 'public',
+              isOwner,
               chainId,
               // Use org's cover image as the card banner
               image: subgraphOrg.coverImage || subgraphOrg.logo || PROPOSAL_IMAGES['gnosis-pay'],
@@ -232,9 +237,22 @@ const ProposalsPage = ({
   ];
 
   // Update the filter logic to handle new options and debug mode
+  // Hidden proposals are removed from the public list, but still shown to the
+  // org owner (who sees a "Hidden" badge on the card). Matches the convention
+  // used by EventHighlightCard / the company carousels. Without this, hidden
+  // proposals leaked onto the milestones list (this page reads the raw,
+  // unfiltered org.proposals from useOrganization, which does no filtering).
+  const isVisibleToViewer = (proposal) =>
+    !(proposal.visibility === "hidden" && !isOwner && !debugMode);
+
   const filteredProposals = (proposals || []).filter((proposal) => {
     // First apply debug mode filtering - hide pending_review unless debug mode is on
     if (proposal.approvalStatus === "pending_review" && !debugMode) {
+      return false;
+    }
+
+    // Visibility: drop 'hidden' proposals for the public (owner/debug still see them)
+    if (!isVisibleToViewer(proposal)) {
       return false;
     }
 
@@ -262,9 +280,10 @@ const ProposalsPage = ({
   // Calculate active proposals count
   const activeProposalsCount = useMemo(() => {
     return proposals.filter((proposal) =>
-      proposal.approvalStatus === "ongoing" || proposal.approvalStatus === "on_going"
+      isVisibleToViewer(proposal) &&
+      (proposal.approvalStatus === "ongoing" || proposal.approvalStatus === "on_going")
     ).length;
-  }, [proposals]);
+  }, [proposals, isOwner, debugMode]);
 
   // Calculate total visible milestones count (respecting debug mode)
   const visibleMilestonesCount = useMemo(() => {
@@ -273,9 +292,13 @@ const ProposalsPage = ({
       if (proposal.approvalStatus === "pending_review" && !debugMode) {
         return false;
       }
+      // Hide 'hidden' proposals from non-owners
+      if (!isVisibleToViewer(proposal)) {
+        return false;
+      }
       return true;
     }).length;
-  }, [proposals, debugMode]);
+  }, [proposals, debugMode, isOwner]);
 
   const heroContent = useMemo(() => {
     if (isLoadingCompany) {
