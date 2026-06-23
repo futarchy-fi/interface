@@ -17,12 +17,11 @@ The page must never accept arbitrary calldata from query params, a mutable datab
 ## Initial Route
 
 - Add `src/pages/ops/index.jsx`.
-- Add `netlify/edge-functions/ops-access.js`.
 - Use the existing app providers: Next.js, Wagmi, RainbowKit, viem, and the configured Gnosis Chain transport.
 - Rabby should work as an injected wallet through RainbowKit/Wagmi.
 - Require Gnosis Chain (`chainId: 100`) for the initial action set.
 - Do not link this route from regular app navigation.
-- Protect the route at the Netlify edge because the app is statically exported.
+- Keep the route out of normal app navigation and mark it `noindex,nofollow`.
 
 ## Repository Layout
 
@@ -34,7 +33,6 @@ Suggested files:
 - `src/ops/actionTypes/snapshotLinkUpsert.js`
 - `src/ops/components/OpsActionCard.jsx`
 - `src/pages/ops/index.jsx`
-- `netlify/edge-functions/ops-access.js`
 
 Keep action builders and validation logic in the repo. Keep active action manifests in the repo for v0.
 
@@ -131,24 +129,16 @@ Optional hardening:
 - Add an action checksum to the UI for copy-review.
 - Add a manual "I reviewed this transaction" checkbox for owner-only actions.
 
-## Access Gate
+## Route Exposure
 
-The page should be hidden from regular app flow and regular URL access. Because `futarchy.fi` is built as a static
-Next export, this gate lives in a Netlify Edge Function rather than `getServerSideProps`.
+The page should be hidden from the regular app flow but should load directly at `/ops`.
 
 Production behavior:
 
-- `OPS_SIGNER_ACCESS_KEY` must be set in the deployment environment.
-- `/ops` without access returns 404.
-- `/ops?access=<OPS_SIGNER_ACCESS_KEY>` sets an HttpOnly, Secure, SameSite=Strict, HMAC-signed cookie scoped to `/ops`, then redirects to `/ops`.
-- The cookie is checked by the Netlify Edge Function on later visits.
-- The access key is not embedded into the client bundle.
-- The page remains unlinked from normal navigation and is marked `noindex,nofollow`.
-
-Development behavior:
-
-- `next dev` serves the static page directly for local UI work.
-- `netlify dev` can test the access gate when `OPS_SIGNER_ACCESS_KEY` is set.
+- `/ops` is a direct URL.
+- The page is not linked from regular navigation.
+- The page is marked `noindex,nofollow`.
+- Transaction signing remains protected by wallet, chain, owner, precheck, simulation, and postcheck gates.
 
 ## First Implementation Steps
 
