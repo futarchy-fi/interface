@@ -12,6 +12,12 @@ import { useState, useEffect } from 'react';
 
 // Subgraph endpoint for futarchy-complete (metadata hierarchy)
 import { AGGREGATOR_SUBGRAPH_URL as SUBGRAPH_URL } from '../config/subgraphEndpoints';
+import {
+    getProposalCloseTimestamp,
+    isProposalArchived,
+    isProposalClosed,
+    isProposalResolved,
+} from '../utils/proposalLifecycle';
 
 // The Checkpoint indexer doesn't auto-generate reverse relation fields,
 // so we issue three flat queries and assemble the legacy nested shape
@@ -114,24 +120,22 @@ function transformProposalToEvent(proposal, org, connectedWallet) {
     // Start time - no createdAt in subgraph, use current time as placeholder
     const startTimeSeconds = Math.floor(Date.now() / 1000);
 
-    // End time: prioritize closeTimestamp from metadata JSON
-    // closeTimestamp can be in seconds or milliseconds - normalize to seconds
-    let endTimeSeconds = startTimeSeconds + 7 * 24 * 60 * 60; // Default 7 days
-    if (proposalMeta.closeTimestamp) {
-        const closeTs = parseInt(proposalMeta.closeTimestamp);
-        // If timestamp > 10 billion, it's likely milliseconds
-        endTimeSeconds = closeTs > 10000000000 ? Math.floor(closeTs / 1000) : closeTs;
+    // End time: prioritize closeTimestamp from metadata JSON.
+    const closeTimestamp = getProposalCloseTimestamp(proposalMeta);
+    let endTimeSeconds = closeTimestamp || startTimeSeconds + 7 * 24 * 60 * 60; // Default 7 days
+    if (closeTimestamp) {
         console.log(`[🔗 CLOSE-TIME] Proposal "${proposal.displayNameEvent?.slice(0, 30)}..." closeTimestamp:`, {
             raw: proposalMeta.closeTimestamp,
             normalized: endTimeSeconds,
             date: new Date(endTimeSeconds * 1000).toISOString()
         });
-    } else if (proposalMeta.endTime) {
-        endTimeSeconds = proposalMeta.endTime;
     }
 
     // Visibility: 'public' (default), 'hidden' (staging/test - only for owner/editor)
     const visibility = proposalMeta.visibility || 'public';
+
+    const resolved = isProposalResolved(proposalMeta);
+    const closed = isProposalClosed(proposalMeta);
 
     return {
         // =============================================
@@ -167,11 +171,13 @@ function transformProposalToEvent(proposal, org, connectedWallet) {
         // Time info (seconds, not milliseconds)
         startTime: startTimeSeconds,
         endTime: endTimeSeconds,  // Uses closeTimestamp from metadata if available
+        closeTimestamp,
+        isClosed: closed,
         timeProgress: 0,
 
         // Status — use metadata resolution fields if available
-        status: proposalMeta.resolution_status === 'resolved' ? 'resolved' : 'ongoing',
-        resolutionStatus: proposalMeta.resolution_status || 'unresolved',
+        status: resolved ? 'resolved' : (closed ? 'ended' : 'ongoing'),
+        resolutionStatus: proposalMeta.resolution_status || (closed ? 'closed' : 'unresolved'),
         resolution_status: proposalMeta.resolution_status || null,
         resolution_outcome: proposalMeta.resolution_outcome || null,
         resolutionOutcome: proposalMeta.resolution_outcome || null,
@@ -431,7 +437,7 @@ export async function fetchProposalsFromAggregator(aggregatorAddress, connectedW
         for (const proposal of org.proposals || []) {
             // Skip archived proposals (test/abandoned, never going live)
             const proposalMeta = parseMetadata(proposal.metadata);
-            if (proposalMeta.archived === true) {
+            if (isProposalArchived(proposalMeta)) {
                 console.log(`[🗄️ ARCHIVED] Skipping "${proposal.displayNameEvent?.slice(0, 40)}..."`);
                 continue;
             }

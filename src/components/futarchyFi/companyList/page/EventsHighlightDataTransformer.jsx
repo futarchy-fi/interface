@@ -44,9 +44,13 @@ export const fetchEventHighlightData = async (_companyId = "all", options = {}) 
       return [];
     }
 
-    // Filter out resolved proposals — they belong in Recently Resolved, not Active Milestones
+    // Filter out resolved and closed proposals. Resolved proposals belong in
+    // Recently Resolved; closed unresolved proposals are over and should not
+    // remain in Active Milestones.
     const activeSubgraphEvents = subgraphEvents.filter(p =>
-      p.resolution_status !== 'resolved' && p.resolutionStatus !== 'resolved'
+      !p.isClosed &&
+      p.resolution_status !== 'resolved' &&
+      p.resolutionStatus !== 'resolved'
     );
 
     // Bulk fetch prices for the remaining events

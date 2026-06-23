@@ -12,6 +12,7 @@
 import { useState, useEffect } from 'react';
 
 import { AGGREGATOR_SUBGRAPH_URL as SUBGRAPH_URL } from '../config/subgraphEndpoints';
+import { isProposalActive, isProposalArchived } from '../utils/proposalLifecycle';
 
 // Three flat queries — Checkpoint has no auto-generated reverse fields.
 const AGGREGATOR_QUERY = `
@@ -79,14 +80,10 @@ function transformOrgToCard(org, proposalsForOrg) {
     const chainId = meta.chain ? parseInt(meta.chain, 10) : 100;
 
     // "Total proposals" excludes archived ones (treat archive as a delete).
-    // "Active proposals" further excludes hidden + resolved.
-    const nonArchived = proposalsForOrg.filter(p => parseMetadata(p.metadata).archived !== true);
-    const active = nonArchived.filter(p => {
-        const pm = parseMetadata(p.metadata);
-        if (pm.visibility === 'hidden') return false;
-        if (pm.resolution_status === 'resolved' || pm.resolution_outcome) return false;
-        return true;
-    });
+    // "Active proposals" further excludes hidden, resolved, and closed markets.
+    const proposalMetadata = proposalsForOrg.map(p => parseMetadata(p.metadata));
+    const nonArchived = proposalMetadata.filter(pm => !isProposalArchived(pm));
+    const active = nonArchived.filter(pm => isProposalActive(pm));
 
     return {
         companyID: org.id,
