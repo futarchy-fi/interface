@@ -2061,6 +2061,10 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     '0xFb45aE9d8e5874e85b8e23D735EB9718EfEF47Fa': {
       useSubgraph: 'only',
       useSpotPrice: 'composite::0xaa7a70070e7495fe86c67225329dbd39baa2f63b+0xc8cf54b0b70899ea846b70361e62f3f5b22b1f4binvert+0x3de27efa2f1aa663ae5d458857e731c129069f29invert-hour-100-eth'  // AAVE/GHO composite: USDC/GHO * AAVE/USDC(inv) * AAVE/GHO(inv)
+    },
+    '0xeCe80208CB8376Be311cE0f5Ea4eF73850a0dcF0': {
+      useSubgraph: 'only',
+      useSpotPrice: '0x8189c4c96826d016a99986394103dfa9ae41e7ee::0x89c80a4540a00b5270347e02e2e144c71da2eced-hour-500-xdai'  // GNO/WXDAI pool + sDAI rate provider
     }
   };
 
@@ -2074,7 +2078,10 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
 
   // Get proposal ID early for defaults lookup
   const proposalIdForDefaults = proposalIdFromPath || proposal?.address || proposal?.id || searchParams.get('proposalId');
-  const proposalDefaults = PROPOSAL_DEFAULTS[proposalIdForDefaults] || {};
+  const normalizedProposalIdForDefaults = proposalIdForDefaults?.toLowerCase?.();
+  const proposalDefaults = Object.entries(PROPOSAL_DEFAULTS).find(
+    ([address]) => address.toLowerCase() === normalizedProposalIdForDefaults
+  )?.[1] || {};
 
   // Apply defaults: URL params override proposal defaults
   // If global toggle is enabled, force subgraph for all proposals
