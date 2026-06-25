@@ -423,7 +423,7 @@ const LandingPage = ({ useStorybookUrl = false }) => {
                         }}
                         startDelay={100}
                         cursorColor="transparent"
-                        text="Markets know better than experts."
+                        text="Markets know better."
                         typeSpeed={35}
                       />
                       <div className="flex flex-row gap-3">
@@ -527,7 +527,7 @@ const LandingPage = ({ useStorybookUrl = false }) => {
                         }}
                         startDelay={100}
                         cursorColor="transparent"
-                        text="Markets know better than experts."
+                        text="Markets know better."
                         typeSpeed={70}
                       />
 
