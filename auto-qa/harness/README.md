@@ -25,9 +25,26 @@ directory.
 
 ## How to run
 
-> **Phase 0 — scaffold only.** The harness is not yet runnable.
+Install the harness-local dependencies first:
 
-Once Phase 5 lands:
+```bash
+npm --prefix auto-qa/harness ci
+```
+
+Fast, deterministic harness checks:
+
+```bash
+npm --prefix auto-qa/harness test
+```
+
+Forked-chain checks that start or require Anvil and submit transactions against
+a local fork:
+
+```bash
+npm --prefix auto-qa/harness run test:fork
+```
+
+The browser scenario suite is still heavier and should be run explicitly:
 
 ```bash
 # From the repo root
@@ -78,8 +95,8 @@ The harness has its own runner.
 - **Wallet stub MUST behave like MetaMask** for the strategy pattern in
   `src/components/refactor/strategies/` — any divergence breaks the
   realism of the test.
-- **No real RPC calls** — the wallet stub talks to the local anvil fork
-  via `NEXT_PUBLIC_RPC_URL` override.
+- **No real writes** — fork/write checks must use a local Anvil fork and must
+  stay out of the default `npm test` path.
 - **CI execution model** is deferred to Phase 7 — until then, the
   harness is run manually.
 

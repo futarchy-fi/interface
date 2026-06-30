@@ -1,0 +1,58 @@
+name: auto-qa harness fork tests
+
+# Explicit fork/write workflow for tests that start or require Anvil and submit
+# transactions against a local fork. This workflow is intentionally
+# workflow_dispatch-only; it should not be a default PR gate.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  harness-fork:
+    name: Harness fork/write suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      FORK_URL: https://rpc.gnosis.gateway.fm
+      HARNESS_ANVIL_URL: http://127.0.0.1:8546
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: auto-qa/harness/package-lock.json
+
+      - name: Install harness deps
+        working-directory: auto-qa/harness
+        run: npm ci
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Start shared Anvil fork
+        run: |
+          set -euo pipefail
+          anvil --host 127.0.0.1 --port 8546 --fork-url "$FORK_URL" --chain-id 100 --no-mining > /tmp/auto-qa-anvil.log 2>&1 &
+          echo $! > /tmp/auto-qa-anvil.pid
+          for i in $(seq 1 60); do
+            if curl -sSf -X POST "$HARNESS_ANVIL_URL" \
+              -H 'Content-Type: application/json' \
+              --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/auto-qa-anvil.log
+          exit 1
+
+      - name: Run fork/write tests
+        working-directory: auto-qa/harness
+        run: npm run test:fork
