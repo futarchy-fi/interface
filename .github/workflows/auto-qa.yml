@@ -1,0 +1,36 @@
+name: auto-qa
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/auto-qa.yml'
+      - 'auto-qa/**'
+      - 'package.json'
+      - 'src/utils/proposalLifecycle.js'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/auto-qa.yml'
+      - 'auto-qa/**'
+      - 'package.json'
+      - 'src/utils/proposalLifecycle.js'
+  workflow_dispatch:
+
+jobs:
+  proposal-lifecycle:
+    name: Proposal lifecycle auto-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run auto-qa tests
+        run: npm run auto-qa:test
