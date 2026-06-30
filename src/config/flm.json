@@ -8,7 +8,7 @@
     "chainId": 100,
     "pair": "PNK/sDAI",
     "status": "live",
-    "managerAddress": "0x939A5fc3fd8B6091f561504204aD2e25126e42F7",
+    "managerAddress": "0xAA365a7F5d7141ff90c62B3f00fd6F0f1E563b1a",
     "proposalSourceAddress": "0x0489c06F9f2634ee90799D23453a99C02b4B1f26",
     "token": {
       "symbol": "PNK",
