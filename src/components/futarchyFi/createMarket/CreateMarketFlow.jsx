@@ -18,6 +18,10 @@ function formatDate(timestamp) {
   return new Date(Number(timestamp) * 1000).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
 }
 
+function formatLiquidityMode(mode) {
+  return mode === 'flm' ? 'Liquidity manager' : String(mode || '').toUpperCase();
+}
+
 function StageList({ stages }) {
   return (
     <ol className="divide-y divide-futarchyGray5 dark:divide-futarchyGray7">
@@ -120,7 +124,7 @@ export default function CreateMarketFlow() {
               <h1 className="text-2xl font-semibold text-futarchyGray12 dark:text-white">Create Market</h1>
               <p className="mt-2 max-w-3xl text-sm text-futarchyGray11 dark:text-futarchyGray11">
                 A single operational flow for organization setup, proposal metadata, market creation,
-                FLM liquidity, Snapshot linking, candle readiness, arbitrage setup, and publishing.
+                liquidity manager setup, Snapshot linking, candle readiness, arbitrage setup, and publishing.
               </p>
             </div>
             <Link
@@ -136,7 +140,7 @@ export default function CreateMarketFlow() {
               <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Permissionless Chiado Stack</h2>
               <p className="mt-1 text-sm text-futarchyGray11">
                 This is the target testnet lifecycle: any wallet creates an organization, it is listed
-                automatically, and the organization receives a default FLM for proposal liquidity.
+                automatically, and the organization receives a default liquidity manager for proposal liquidity.
               </p>
             </div>
             <StageList stages={permissionlessPlan.stages} />
@@ -248,7 +252,7 @@ export default function CreateMarketFlow() {
                 <div className="mt-2 grid gap-2 text-xs text-futarchyGray10 md:grid-cols-3">
                   <span>Org: {marketPlan.values.organizationName}</span>
                   <span>Close: {formatDate(marketPlan.values.closeTimestamp)}</span>
-                  <span>Liquidity: {marketPlan.values.initialLiquidityMode.toUpperCase()}</span>
+                  <span>Liquidity: {formatLiquidityMode(marketPlan.values.initialLiquidityMode)}</span>
                 </div>
               </div>
               <StageList stages={marketPlan.stages} />

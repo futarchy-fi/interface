@@ -12,7 +12,7 @@ const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const optionalAddress = (value) => value === '' || ADDRESS_RE.test(value);
 const bySlug = Object.fromEntries(flmConfig.map((config) => [config.slug, config]));
 
-test('FLM config pins Kleros and Gnosis organization routes', () => {
+test('liquidity manager config pins Kleros and Gnosis organization routes', () => {
     assert.deepEqual(Object.keys(bySlug).sort(), ['gnosis', 'kleros']);
 
     assert.equal(bySlug.kleros.path, '/flm/kleros');
@@ -24,7 +24,7 @@ test('FLM config pins Kleros and Gnosis organization routes', () => {
     assert.equal(bySlug.gnosis.companyId, 9);
 });
 
-test('FLM proposal metadata keeps the current official markets discoverable', () => {
+test('liquidity manager proposal metadata keeps the current official markets discoverable', () => {
     assert.equal(bySlug.kleros.activeProposal.label, 'KIP-90');
     assert.equal(bySlug.kleros.activeProposal.marketAddress, '0x84412Fe9D088C1D8Dd676a7be9a3d5d0291Ab1Cf');
     assert.equal(
@@ -42,7 +42,7 @@ test('FLM proposal metadata keeps the current official markets discoverable', ()
     assert.equal(bySlug.gnosis.activeProposal.marketUrl, '/markets/0xeCe80208CB8376Be311cE0f5Ea4eF73850a0dcF0');
 });
 
-test('FLM token and contract fields use valid address shapes', () => {
+test('liquidity manager token and contract fields use valid address shapes', () => {
     for (const config of flmConfig) {
         assert.equal(config.chainId, 100);
         assert.match(config.token.address, ADDRESS_RE);
@@ -53,7 +53,7 @@ test('FLM token and contract fields use valid address shapes', () => {
     }
 });
 
-test('FLM helpers pin Swapr adapter calldata and manager overloads', async () => {
+test('liquidity manager helpers pin Swapr adapter calldata and manager overloads', async () => {
     const utilsSource = await readFile(resolve(root, 'src/utils/flm.js'), 'utf8');
     const pageSource = await readFile(resolve(root, 'src/pages/flm/[org].jsx'), 'utf8');
 
@@ -69,7 +69,7 @@ test('FLM helpers pin Swapr adapter calldata and manager overloads', async () =>
     assert.match(pageSource, /encodeDualExitParams\(yesExitData, noExitData\)/);
 });
 
-test('companies table links configured organizations to their FLM page', async () => {
+test('companies table links configured organizations to their liquidity page', async () => {
     const hookSource = await readFile(resolve(root, 'src/hooks/useAggregatorCompanies.js'), 'utf8');
     const rowSource = await readFile(resolve(root, 'src/components/futarchyFi/companyList/table/OrgRow.jsx'), 'utf8');
 

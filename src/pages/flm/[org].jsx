@@ -44,6 +44,10 @@ function formatUtcTime(timestamp) {
   return `${new Date(timestamp * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
+function formatLpShares(value, decimals) {
+  return `${formatTokenAmount(value, decimals)} LP shares`;
+}
+
 async function readOr(contractCall, fallback) {
   try {
     return await contractCall();
@@ -362,7 +366,7 @@ export default function FlmPage({ config }) {
       setReadState((current) => ({
         ...current,
         loading: false,
-        error: error.message || 'Unable to read FLM position state.',
+        error: error.message || 'Unable to read liquidity manager position state.',
       }));
     }
   }, [address, config, managerConfigured]);
@@ -423,7 +427,7 @@ export default function FlmPage({ config }) {
     const amount = kind === 'company' ? amountChecks.companyAmount : amountChecks.collateralAmount;
 
     return runWalletAction(`approve-${kind}`, async (signer) => {
-      if (!managerConfigured) throw new Error('FLM manager is not configured.');
+      if (!managerConfigured) throw new Error('Liquidity manager is not configured.');
       if (amount.lte(0)) throw new Error('Enter an approval amount first.');
 
       const token = new ethers.Contract(tokenConfig.address, ERC20_ABI, signer);
@@ -433,7 +437,7 @@ export default function FlmPage({ config }) {
 
   const depositToSpot = () => {
     return runWalletAction('deposit', async (signer) => {
-      if (!managerConfigured) throw new Error('FLM manager is not configured.');
+      if (!managerConfigured) throw new Error('Liquidity manager is not configured.');
       if (!amountChecks.hasDepositAmount) throw new Error('Enter a deposit amount first.');
       if (amountChecks.needsCompanyApproval || amountChecks.needsCollateralApproval) {
         throw new Error('Approve the deposit tokens first.');
@@ -459,7 +463,7 @@ export default function FlmPage({ config }) {
 
   const redeemShares = () => {
     return runWalletAction('redeem', async (signer) => {
-      if (!managerConfigured) throw new Error('FLM manager is not configured.');
+      if (!managerConfigured) throw new Error('Liquidity manager is not configured.');
       if (!amountChecks.hasShares) throw new Error('Enter a share amount first.');
       if (!isConfiguredAddress(redeem.recipient)) throw new Error('Enter a valid recipient address.');
 
@@ -496,10 +500,10 @@ export default function FlmPage({ config }) {
   return (
     <>
       <Head>
-        <title>{config.organizationName} FLM | Futarchy</title>
+        <title>{config.organizationName} Liquidity Manager | Futarchy</title>
         <meta
           name="description"
-          content={`${config.organizationName} futarchy liquidity manager for ${config.pair}.`}
+          content={`${config.organizationName} liquidity manager for the ${config.pair} futarchy market pair.`}
         />
         <meta name="robots" content="noindex,nofollow" />
       </Head>
@@ -511,11 +515,17 @@ export default function FlmPage({ config }) {
           <section className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-futarchyGray11">
-                {config.organizationName} FLM
+                {config.organizationName} Liquidity Manager
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-normal text-futarchyGray12 md:text-4xl">
-                {config.pair}
+                {config.pair} Liquidity
               </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-futarchyGray11">
+                FLM means Futarchy Liquidity Manager. It is the LP tool for this pair:
+                deposit liquidity, receive LP shares, and let the manager keep liquidity
+                available for the spot market or the YES/NO markets when an official
+                proposal is active.
+              </p>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
                 <span className="rounded-lg border border-futarchyGray5 bg-white px-3 py-1 font-medium text-futarchyGray11">
                   Gnosis Chain
@@ -604,16 +614,16 @@ export default function FlmPage({ config }) {
             </div>
           </Section>
 
-          <Section title="Position">
+          <Section title="LP Position">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Metric
-                label="Wallet shares"
-                value={`${formatTokenAmount(readState.manager.walletShares, readState.manager.shareDecimals)} ${readState.manager.symbol}`}
+                label="Your LP shares"
+                value={formatLpShares(readState.manager.walletShares, readState.manager.shareDecimals)}
                 tone="accent"
               />
               <Metric
-                label="Total shares"
-                value={`${formatTokenAmount(readState.manager.totalSupply, readState.manager.shareDecimals)} ${readState.manager.symbol}`}
+                label="Total LP shares"
+                value={formatLpShares(readState.manager.totalSupply, readState.manager.shareDecimals)}
               />
               <Metric
                 label="Total liquidity"

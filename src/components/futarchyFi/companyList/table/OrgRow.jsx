@@ -7,7 +7,7 @@ import ChainBadge from '../components/ChainBadge';
 
 /**
  * Single row in the Organizations table
- * Displays: Logo | Name + Active Badge | Active | Proposals | Chain
+ * Displays: Logo | Name + Active Badge | Active | Proposals | Chain | Liquidity
  */
 const OrgRow = ({
     companyID,
@@ -76,7 +76,7 @@ const OrgRow = ({
                 <ChainBadge chainId={chainId} size="sm" />
             </td>
 
-            {/* FLM */}
+            {/* Liquidity */}
             <td className="py-4 px-4">
                 {flmPath ? (
                     <Link
@@ -84,7 +84,7 @@ const OrgRow = ({
                         onClick={(event) => event.stopPropagation()}
                         className="inline-flex h-9 items-center gap-1 rounded-lg border border-futarchyGray5 bg-white px-3 text-sm font-semibold text-futarchyGray12 hover:bg-futarchyGray3"
                     >
-                        <span>FLM</span>
+                        <span>Liquidity</span>
                         <ArrowTopRightOnSquareIcon className="h-4 w-4" />
                     </Link>
                 ) : (

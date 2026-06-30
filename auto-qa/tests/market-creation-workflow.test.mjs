@@ -23,7 +23,7 @@ const {
 
 const NOW = 1_782_777_600;
 
-test('Kleros defaults use KIP, PNK, sDAI, and FLM liquidity', () => {
+test('Kleros defaults use KIP, PNK, sDAI, and liquidity manager liquidity', () => {
   const defaults = createMarketWizardDefaults({ organizationId: 'kleros', nowSeconds: NOW });
 
   assert.equal(defaults.organizationName, 'Kleros DAO');
@@ -81,7 +81,7 @@ test('metadata draft includes registry fields needed by market pages and proposa
   );
 });
 
-test('permissionless stack plan includes org listing, owner proposals, and default FLM', () => {
+test('permissionless stack plan includes org listing, owner proposals, and default liquidity manager', () => {
   const plan = buildPermissionlessStackPlan();
   const stageIds = plan.stages.map((stage) => stage.id);
 
@@ -94,7 +94,7 @@ test('permissionless stack plan includes org listing, owner proposals, and defau
   assert.equal(plan.values.chainId, 10200);
 });
 
-test('permissionless contract actions create FLM before default organization wiring', () => {
+test('permissionless contract actions create liquidity manager before default organization wiring', () => {
   const plan = buildPermissionlessStackPlan();
   const actions = plan.contractActions;
   const actionIds = actions.map((action) => action.id);
@@ -110,7 +110,7 @@ test('permissionless contract actions create FLM before default organization wir
   assert.ok(actionIds.indexOf('create-default-flm-bundle') < actionIds.indexOf('create-and-list-organization'));
 });
 
-test('one-step market contract actions order market, FLM, official proposal, liquidity, and Snapshot', () => {
+test('one-step market contract actions order market, liquidity manager, official proposal, liquidity, and Snapshot', () => {
   const plan = buildOneStepMarketPlan({ organizationId: 'kleros', nowSeconds: NOW });
   const actions = plan.contractActions;
   const actionIds = actions.map((action) => action.id);
