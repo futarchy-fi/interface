@@ -15,7 +15,11 @@
     "copy-structure": "node copyStructure.mjs",
     "getpoolprice": "node getAlgebraPoolPrice.js",
     "start-proposal": "node scripts/proposal-cli.js",
-    "auto-qa:test": "node --test 'auto-qa/tests/**/*.test.mjs'"
+    "auto-qa:extract-graphql": "node auto-qa/tools/extract-graphql.mjs",
+    "auto-qa:probe-graphql": "node auto-qa/tools/probe-graphql.mjs",
+    "auto-qa:test": "npm run auto-qa:test:unit",
+    "auto-qa:test:unit": "node --test 'auto-qa/tests/**/*.test.mjs'",
+    "auto-qa:test:live": "node --test 'auto-qa/live/**/*.test.mjs'"
   },
   "dependencies": {
     "@balancer-labs/sdk": "^1.1.6",

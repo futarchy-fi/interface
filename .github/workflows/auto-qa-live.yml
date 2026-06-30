@@ -1,0 +1,31 @@
+name: auto-qa live
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: 'Override api.futarchy.fi base URL for live checks'
+        required: false
+        default: 'https://api.futarchy.fi'
+  schedule:
+    - cron: '17 4 * * *'
+
+jobs:
+  live:
+    name: Live endpoint auto-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run live auto-qa tests
+        env:
+          AUTO_QA_API_BASE: ${{ inputs.api_base || 'https://api.futarchy.fi' }}
+        run: npm run auto-qa:test:live
