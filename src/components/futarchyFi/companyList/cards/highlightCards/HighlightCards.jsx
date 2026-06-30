@@ -152,10 +152,13 @@ const Timestamp = ({ endTime }) => {
   ) : null;
 };
 
-// Component to show resolved status badge
-const ResolvedStatusBadge = () => (
-  <div className="w-fit px-2 py-0.5 text-start rounded-full text-xs bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 font-medium mt-1">
-    ✓ Resolved
+// Component to show completed status badge
+const CompletedStatusBadge = ({ label }) => (
+  <div className={`w-fit px-2 py-0.5 text-start rounded-full text-xs font-medium mt-1 ${label === 'Resolved'
+    ? 'bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400'
+    : 'bg-futarchyGold9/35 border border-futarchyGold9 text-futarchyGold11 dark:border-futarchyGold6 dark:bg-futarchyGold7/15 dark:text-futarchyGold6'
+    }`}>
+    {label === 'Resolved' ? '✓ Resolved' : 'Closed'}
   </div>
 );
 
@@ -182,6 +185,7 @@ const HighlightCard = ({
   useMockData = false,
   // New props for resolved events
   isResolved = false,
+  isClosed = false,
   resolutionOutcome,
   finalOutcome,
   impact: impactProp,
@@ -226,6 +230,7 @@ const HighlightCard = ({
   };
 
   const { marketName, endTime, proposalCreationTimestamp, companyLogoUrl, status, marketId } = data;
+  const isComplete = isResolved || isClosed;
 
   // Extract display titles from metadata (similar to EventHighlightCard)
   const displayTitle0 = metadata?.display_title_0 || null;
@@ -261,7 +266,7 @@ const HighlightCard = ({
   // Use dynamic price fetching for resolved events if poolAddresses are provided
   // Pass prefetchedPrices to skip Supabase fetch when available
   const { prices: fetchedPrices, loading: isPriceLoading } = useLatestPoolPrices(
-    isResolved && poolAddresses ? poolAddresses : null,
+    isComplete && poolAddresses ? poolAddresses : null,
     marketId,
     metadata,
     prefetchedPrices
@@ -273,12 +278,12 @@ const HighlightCard = ({
     : 'supabase';
 
   // Determine which prices to use - fetched for resolved events or props for active events
-  const priceYes = isResolved && fetchedPrices.yes !== null ? fetchedPrices.yes : parsePrice(data.priceYes);
-  const priceNo = isResolved && fetchedPrices.no !== null ? fetchedPrices.no : parsePrice(data.priceNo);
+  const priceYes = isComplete && fetchedPrices.yes !== null ? fetchedPrices.yes : parsePrice(data.priceYes);
+  const priceNo = isComplete && fetchedPrices.no !== null ? fetchedPrices.no : parsePrice(data.priceNo);
   const priceSpot = parsePrice(data.priceSpot);
   const eventProbability = parsePrice(data.eventProbability);
 
-  const isLoading = status === "Loading" || (isResolved && isPriceLoading);
+  const isLoading = status === "Loading" || (isComplete && isPriceLoading);
   const isError = status === "Error";
 
   const impact = useMemo(() => {
@@ -292,8 +297,8 @@ const HighlightCard = ({
       }
     }
 
-    // Fallback for resolved events: use provided impact value if no prices available
-    if (isResolved && impactProp !== undefined && impactProp !== null) {
+    // Fallback for completed events: use provided impact value if no prices available
+    if (isComplete && impactProp !== undefined && impactProp !== null) {
       const numericImpact = typeof impactProp === 'string' ? parseFloat(impactProp) : impactProp;
       if (typeof numericImpact === 'number' && !isNaN(numericImpact)) {
         return numericImpact >= 0 ? `+${numericImpact.toFixed(2)}%` : `${numericImpact.toFixed(2)}%`;
@@ -307,7 +312,7 @@ const HighlightCard = ({
     }
 
     return "N/A";
-  }, [priceYes, priceNo, priceSpot, isResolved, impactProp]);
+  }, [priceYes, priceNo, priceSpot, isComplete, impactProp]);
 
   const isImpactPositive = impact !== "N/A" && !impact.startsWith("-");
   const impactTextColorClass = isImpactPositive ? "text-futarchyTeal9 dark:text-futarchyTeal9" : "text-futarchyCrimson9 dark:text-futarchyCrimson9";
@@ -344,12 +349,13 @@ const HighlightCard = ({
 
   const outcome = finalOutcome || resolutionOutcome;
   const isYesOutcome = outcome?.toLowerCase() === 'yes';
+  const completionLabel = outcome ? 'Resolved' : 'Closed';
 
-  const statItems = isResolved ? [
-    // For resolved events, show outcome and impact
+  const statItems = isComplete ? [
+    // For completed events, show outcome when available; otherwise mark as closed.
     {
-      label: "Outcome",
-      value: outcome ? outcome.toUpperCase() : 'Unknown',
+      label: outcome ? "Outcome" : "Status",
+      value: outcome ? outcome.toUpperCase() : 'Closed',
       colorClass: isYesOutcome ? "text-futarchyBlue9 dark:text-futarchyBlue9" : "text-futarchyGold8 dark:text-futarchyGold8",
     },
     {
@@ -462,7 +468,7 @@ const HighlightCard = ({
                 marketName || "Untitled Market"
               )}
             </h3>
-            {isResolved ? <ResolvedStatusBadge /> : <Timestamp endTime={endTime} />}
+            {isComplete ? <CompletedStatusBadge label={completionLabel} /> : <Timestamp endTime={endTime} />}
           </div>
         </div>
       </div>
@@ -472,7 +478,7 @@ const HighlightCard = ({
 
       {/* Bottom Section - grows to fill space */}
       <div className="p-4 bg-futarchyGray3 dark:bg-futarchyDarkGray3 flex-grow flex items-end">
-        <div className={`grid ${isResolved ? 'grid-cols-2' : 'grid-cols-3'} md:gap-1 gap-3 w-full`}>
+        <div className={`grid ${isComplete ? 'grid-cols-2' : 'grid-cols-3'} md:gap-1 gap-3 w-full`}>
           {statItems.map((item) => (
             <div
               key={item.label}

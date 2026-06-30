@@ -49,7 +49,7 @@ const ResolvedEventsCarousel = ({ companyId = "all", limit = 10, aggregatorAddre
         const data = await fetchResolvedEventHighlightData(companyId, limit, { connectedWallet, aggregatorAddress });
         setResolvedEvents(data);
       } catch (error) {
-        console.error('Error loading resolved event highlights:', error);
+        console.error('Error loading closed event highlights:', error);
       } finally {
         setLoading(false);
       }
@@ -59,8 +59,7 @@ const ResolvedEventsCarousel = ({ companyId = "all", limit = 10, aggregatorAddre
   }, [companyId, limit, connectedWallet, aggregatorAddress]);
 
   useEffect(() => {
-    // For resolved events, we typically want to show all regardless of debug mode
-    // since they're already completed and resolved
+    // Closed/completed events should show regardless of debug mode.
     setFilteredEvents(resolvedEvents);
   }, [resolvedEvents, debugMode]);
 
@@ -102,7 +101,7 @@ const ResolvedEventsCarousel = ({ companyId = "all", limit = 10, aggregatorAddre
     return (
       <div className="flex flex-col justify-center items-center h-[200px] text-futarchyGray11">
         <div className="text-4xl mb-2">🏁</div>
-        <div className="text-sm">No resolved markets yet</div>
+        <div className="text-sm">No closed markets yet</div>
       </div>
     );
   }
@@ -138,9 +137,10 @@ const ResolvedEventsCarousel = ({ companyId = "all", limit = 10, aggregatorAddre
               marketName={event.eventTitle}
               companyLogoUrl={event.companyLogo}
               endTime={event.endTime}
-              proposalCreationTimestamp={event.endTime} // For resolved events, use endTime as proposal time
+              proposalCreationTimestamp={event.endTime} // For closed events, use endTime as proposal time
               status="Done"
-              isResolved={true}
+              isResolved={event.isResolved}
+              isClosed={event.isClosed}
               resolutionOutcome={event.resolutionOutcome}
               finalOutcome={event.finalOutcome}
               impact={event.impact}
