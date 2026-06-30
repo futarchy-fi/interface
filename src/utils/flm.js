@@ -26,7 +26,6 @@ export const FULCRUM_TICK_UPPER = 887220;
 export const FLM_MANAGER_ABI = [
     'function activeProposal() view returns (address)',
     'function balanceOf(address) view returns (uint256)',
-    'function conditionalLiquidity() view returns (uint128)',
     'function conditionalNoLiquidity() view returns (uint128)',
     'function conditionalYesLiquidity() view returns (uint128)',
     'function decimals() view returns (uint8)',
@@ -36,7 +35,6 @@ export const FLM_MANAGER_ABI = [
     'function redeem(uint256,address,bool,bytes,bytes) returns (uint256,uint256)',
     'function spotLiquidity() view returns (uint128)',
     'function symbol() view returns (string)',
-    'function totalManagedLiquidity() view returns (uint256)',
     'function totalSupply() view returns (uint256)',
 ];
 

@@ -234,9 +234,7 @@ export default function FlmPage({ config }) {
       shareDecimals: 18,
       totalSupply: ZERO,
       walletShares: ZERO,
-      totalManagedLiquidity: ZERO,
       spotLiquidity: ZERO,
-      conditionalLiquidity: ZERO,
       conditionalYesLiquidity: ZERO,
       conditionalNoLiquidity: ZERO,
       inConditionalMode: false,
@@ -294,9 +292,7 @@ export default function FlmPage({ config }) {
         shareDecimals,
         totalSupply,
         walletShares,
-        totalManagedLiquidity,
         spotLiquidity,
-        conditionalLiquidity,
         conditionalYesLiquidity,
         conditionalNoLiquidity,
         inConditionalMode,
@@ -315,9 +311,7 @@ export default function FlmPage({ config }) {
         readOr(() => manager.decimals(), 18),
         readOr(() => manager.totalSupply(), ZERO),
         address ? readOr(() => manager.balanceOf(wallet), ZERO) : ZERO,
-        readOr(() => manager.totalManagedLiquidity(), ZERO),
         readOr(() => manager.spotLiquidity(), ZERO),
-        readOr(() => manager.conditionalLiquidity(), ZERO),
         readOr(() => manager.conditionalYesLiquidity(), ZERO),
         readOr(() => manager.conditionalNoLiquidity(), ZERO),
         readOr(() => manager.inConditionalMode(), false),
@@ -353,9 +347,7 @@ export default function FlmPage({ config }) {
           shareDecimals,
           totalSupply,
           walletShares,
-          totalManagedLiquidity,
           spotLiquidity,
-          conditionalLiquidity,
           conditionalYesLiquidity,
           conditionalNoLiquidity,
           inConditionalMode,
@@ -390,6 +382,17 @@ export default function FlmPage({ config }) {
       hasShares: shareAmount.gt(0),
     };
   }, [deposit, readState, redeem.shares]);
+
+  const depositsDisabledInConditionalMode = readState.manager.inConditionalMode;
+  const depositActionDisabled = !managerConfigured
+    || !address
+    || Boolean(pendingAction)
+    || !amountChecks.hasDepositAmount
+    || depositsDisabledInConditionalMode;
+  const approvalActionDisabled = !managerConfigured
+    || !address
+    || Boolean(pendingAction)
+    || depositsDisabledInConditionalMode;
 
   const updateDeposit = (field, value) => {
     setDeposit((current) => ({ ...current, [field]: value }));
@@ -438,6 +441,9 @@ export default function FlmPage({ config }) {
   const depositToSpot = () => {
     return runWalletAction('deposit', async (signer) => {
       if (!managerConfigured) throw new Error('Liquidity manager is not configured.');
+      if (depositsDisabledInConditionalMode) {
+        throw new Error('Cannot deposit while the manager is in conditional mode.');
+      }
       if (!amountChecks.hasDepositAmount) throw new Error('Enter a deposit amount first.');
       if (amountChecks.needsCompanyApproval || amountChecks.needsCollateralApproval) {
         throw new Error('Approve the deposit tokens first.');
@@ -626,16 +632,11 @@ export default function FlmPage({ config }) {
                 value={formatLpShares(readState.manager.totalSupply, readState.manager.shareDecimals)}
               />
               <Metric
-                label="Total liquidity"
-                value={readState.manager.totalManagedLiquidity.toString()}
-              />
-              <Metric
                 label="Mode"
                 value={readState.manager.inConditionalMode ? 'Conditional' : 'Spot'}
                 tone={readState.manager.inConditionalMode ? 'accent' : 'default'}
               />
               <Metric label="Spot liquidity" value={readState.manager.spotLiquidity.toString()} />
-              <Metric label="Conditional liquidity" value={readState.manager.conditionalLiquidity.toString()} />
               <Metric label="YES liquidity" value={readState.manager.conditionalYesLiquidity.toString()} />
               <Metric label="NO liquidity" value={readState.manager.conditionalNoLiquidity.toString()} />
             </div>
@@ -653,6 +654,11 @@ export default function FlmPage({ config }) {
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Section title="Add Liquidity">
+              {depositsDisabledInConditionalMode && (
+                <div className="mb-4 rounded-lg border border-futarchyGold5 bg-futarchyGold3 px-3 py-2 text-sm font-medium text-futarchyGold11">
+                  Deposits are paused while this manager is in conditional mode.
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <FormInput
                   label={config.token.symbol}
@@ -705,7 +711,7 @@ export default function FlmPage({ config }) {
                   variant="secondary"
                   icon={CheckCircleIcon}
                   onClick={() => approveToken('company')}
-                  disabled={!managerConfigured || !address || Boolean(pendingAction) || !amountChecks.companyAmount.gt(0)}
+                  disabled={approvalActionDisabled || !amountChecks.companyAmount.gt(0)}
                 >
                   Approve {config.token.symbol}
                 </ActionButton>
@@ -713,7 +719,7 @@ export default function FlmPage({ config }) {
                   variant="secondary"
                   icon={CheckCircleIcon}
                   onClick={() => approveToken('collateral')}
-                  disabled={!managerConfigured || !address || Boolean(pendingAction) || !amountChecks.collateralAmount.gt(0)}
+                  disabled={approvalActionDisabled || !amountChecks.collateralAmount.gt(0)}
                 >
                   Approve {config.collateral.symbol}
                 </ActionButton>
@@ -721,9 +727,9 @@ export default function FlmPage({ config }) {
                   variant="accent"
                   icon={BanknotesIcon}
                   onClick={depositToSpot}
-                  disabled={!managerConfigured || !address || Boolean(pendingAction) || !amountChecks.hasDepositAmount}
+                  disabled={depositActionDisabled}
                 >
-                  Deposit
+                  {depositsDisabledInConditionalMode ? 'Deposits paused' : 'Deposit'}
                 </ActionButton>
               </div>
 
