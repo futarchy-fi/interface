@@ -66,6 +66,7 @@ import {
     PROBE_POOL_YES,
     PROBE_POOL_NO,
 } from '../fixtures/api-mocks.mjs';
+import { BASELINE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 // Distinct addresses for two proposals. Both are referenced in
 // the registry response so both cards mount; the candles side
@@ -167,6 +168,12 @@ export default {
         }),
         [CANDLES_GRAPHQL_URL]: makeCorruptCandlesHandler(),
     },
+
+    // Slice 129: page-error monitor opt-in for chaos scenarios.
+    // Per-row corruption is the prototypical "defensive code path
+    // logs without throwing" surface. /companies uses BASELINE.
+    assertNoPageErrors: true,
+    excludePageErrors: BASELINE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Both cards mount — proves no card vanishes due to its

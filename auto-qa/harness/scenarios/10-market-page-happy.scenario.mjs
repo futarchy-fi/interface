@@ -62,6 +62,7 @@ import {
     makeGraphqlMockHandler,
     makeMarketCandlesMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { MARKET_PAGE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '10-market-page-happy',
@@ -94,30 +95,12 @@ export default {
     //     similar bugs in different components still surface.
     //     Filed for separate fix — adds to the latent-bug ledger
     //     alongside slice 79's fallback-company.png finding.
+    // Slice 124: exclusion list extracted to a shared module so future
+    // scenarios opt in by importing — no more N-way duplication. See
+    // `fixtures/page-error-exclusions.mjs` for the list itself and the
+    // empirical rationale for each entry.
     assertNoPageErrors: true,
-    excludePageErrors: [
-        // ── Test-mode artifacts (anvil unreachable) ─────────────
-        /localhost:8546/,                          // anvil unreachable
-        /SDAI contract.*missing revert data/,      // anvil downstream
-        /check allowance.*missing revert data/,    // anvil downstream
-        /Error fetching YES pool price/,           // legacy sushiswap fallback (anvil downstream)
-        /Error fetching NO pool price/,            // legacy sushiswap fallback (anvil downstream)
-
-        // ── Test-mode artifacts (dummy Supabase URL) ────────────
-        /harness-supabase\.invalid/,
-        /Error fetching market data/,
-
-        // ── Cross-page latent bugs (also caught by /companies) ──
-        /fallback-company\.png/i,                  // public/ asset missing
-        /Hydration failed/i,                       // SSR/client divergence
-
-        // ── REAL latent finding (slice 80) ──────────────────────
-        // React warning: setState in one component during render
-        // of another. Fires in production too — intermittent.
-        // Narrow regex so future similar warnings in different
-        // call paths still surface.
-        /Warning: Cannot update a component .* while rendering a different component/,
-    ],
+    excludePageErrors: MARKET_PAGE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // **Live-validated assertions** (pass 2). The synthetic title

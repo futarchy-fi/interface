@@ -66,6 +66,7 @@ import {
     makeGraphqlMockHandler,
     makeMarketCandlesMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { MARKET_PAGE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '14-market-page-positions',
@@ -88,6 +89,18 @@ export default {
     // for every balance — the panel renders, but the value flow
     // assertion below fails.
     useAnvilRpcProxy: true,
+
+    // Slice 125: extend page-error monitor opt-in to the positions
+    // value-flow scenario. The unifiedBalanceFetcher chain
+    // (useContractConfig → useBalanceManager → ERC1155 balanceOf
+    // → format) makes more RPC calls than scenarios 10-13; a NaN
+    // or undefined coercion anywhere in that chain would log a
+    // console.error. The monitor catches it where the "100 GNO"
+    // value-flow assertion would only catch a wrong NUMBER, not a
+    // silent mid-pipeline error that resolves to the correct number
+    // by accident.
+    assertNoPageErrors: true,
+    excludePageErrors: MARKET_PAGE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Page-shell mount check (same anchor as #11-#13). Validated

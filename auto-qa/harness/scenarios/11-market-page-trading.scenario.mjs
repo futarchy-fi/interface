@@ -60,6 +60,7 @@ import {
     makeGraphqlMockHandler,
     makeMarketCandlesMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { MARKET_PAGE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '11-market-page-trading',
@@ -83,6 +84,30 @@ export default {
     // wallet has zero balances → the line shows "1000 sDAI"
     // (wallet only) or "0 sDAI" depending on which RPC wins.
     useAnvilRpcProxy: true,
+
+    // Slice 123: extend the page-error monitor opt-in to the trading
+    // feature-area scenario. Scenario 10 already wires this into the
+    // page-shell foundation; this slice extends it to the
+    // TRADING-PANEL code path (ShowcaseSwapComponent +
+    // ConfirmSwapModal preload + unifiedBalanceFetcher chain).
+    //
+    // Same exclusion list as #10 — the additional code paths that
+    // #11 exercises (RPC proxy active for fork-balance reads, the
+    // trading panel mounts ConfirmSwapModal under the hood) should
+    // emit the SAME baseline of test-mode-artifact errors. If new
+    // errors surface empirically, they get added here narrowly.
+    //
+    // Why this slice matters: ConfirmSwapModal is the PR #58 culprit
+    // (TDZ crash). Scenario 10 catches the TDZ at foundation mount;
+    // scenario 11 catches it during the trading-panel mount where
+    // the modal's preload runs. Two distinct entry-paths to the
+    // same bug shape = stronger regression coverage.
+    // Slice 124: use the shared exclusion module instead of duplicating
+    // scenario 10's list. Same baseline applies to all market-page
+    // scenarios; future market-specific exclusions live in
+    // MARKET_PAGE_PAGE_ERROR_EXCLUSIONS.
+    assertNoPageErrors: true,
+    excludePageErrors: MARKET_PAGE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Outcome tabs — two static labels rendered side-by-side.

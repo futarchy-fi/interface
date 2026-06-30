@@ -65,6 +65,7 @@ import {
     PROBE_POOL_YES,
     PROBE_POOL_NO,
 } from '../fixtures/api-mocks.mjs';
+import { BASELINE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 const PRIMARY_PROPOSAL = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0011';
 const PRIMARY_TITLE    = 'HARNESS-PROBE-EVENT-FULL';
@@ -128,6 +129,13 @@ export default {
             },
         }),
     },
+
+    // Slice 129: page-error monitor opt-in for chaos scenarios.
+    // Particularly valuable here — partial-data branches are
+    // exactly where defensive code paths might log without
+    // throwing. /companies surface uses BASELINE exclusions.
+    assertNoPageErrors: true,
+    excludePageErrors: BASELINE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Both event cards mount — proves no card vanishes due

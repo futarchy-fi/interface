@@ -61,6 +61,7 @@ import {
     makeGraphqlMockHandler,
     makeMarketCandlesMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { MARKET_PAGE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '12-market-page-allowances',
@@ -74,6 +75,27 @@ export default {
         }),
         [CANDLES_GRAPHQL_URL]: makeMarketCandlesMockHandler(),
     },
+
+    // Slice 124: extend the page-error monitor opt-in (slice 79
+    // capability) to the allowances feature-area scenario. Scenarios
+    // 10 (page-shell) + 11 (trading panel) already opt in; this slice
+    // covers the MarketBalancePanel / CollateralModal mount path.
+    //
+    // Why this matters: MarketBalancePanel mounts off
+    // `useMarketBalances` which triggers an ERC20 allowance flow
+    // (line 102 of MarketBalancePanel.jsx + the
+    // setApprovalForAll chain inside CollateralModal). A regression
+    // in that hook chain — e.g., dependency-array TDZ, an undefined
+    // address coercion that throws on first render — would log a
+    // console error or throw an exception. DOM-text assertions only
+    // catch the most obvious bug shapes; the page-error monitor
+    // catches the silent ones.
+    //
+    // Same exclusion list as #10 / #11 (shared module) — scenario 12
+    // exercises the same fixture surface (registry + candles + wallet
+    // stub).
+    assertNoPageErrors: true,
+    excludePageErrors: MARKET_PAGE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // **Live-validated assertions** (pass 2). Original recon

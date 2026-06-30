@@ -82,6 +82,7 @@ import {
     PROBE_ORG_NAME,
     makeGraphqlMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { BASELINE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '48-no-page-errors-companies',
@@ -101,30 +102,14 @@ export default {
     // `ctx.pageErrors` is empty modulo `excludePageErrors`.
     assertNoPageErrors: true,
 
-    // Known-benign errors that fire during normal /companies load
-    // in dev mode. Empty until the first empirical pass surfaces
-    // any — then we either fix the upstream cause OR add an
-    // exclusion here with a justifying comment.
-    excludePageErrors: [
-        // EMPIRICAL FINDING from slice 79's first run: the asset
-        // `/assets/fallback-company.png` (referenced by
-        // `useAggregatorCompanies.js:95` as the no-logo fallback for
-        // every org card) doesn't exist in this repo's `public/`
-        // tree. Every /companies page load 404s on it. This is a
-        // REAL latent bug — orgs without metadata.logo show a broken
-        // image in production — but it's a pre-existing issue and
-        // not something this scenario's introduction would fix. Add
-        // a tracking note (see PROGRESS.md slice 79 entry) and
-        // exclude here so the scenario can guard against NEW errors
-        // without being blocked on this one.
-        /fallback-company\.png/i,
-
-        // Next.js dev server may emit hydration-mismatch warnings
-        // for SSR/client divergence when a stub wallet injects
-        // window.ethereum after server render. Tolerated if the
-        // empirical pass shows them; ignored otherwise.
-        /Hydration failed/i,
-    ],
+    // Slice 124: exclusion list moved to the shared
+    // `fixtures/page-error-exclusions.mjs` module. The /companies
+    // surface previously needed only fallback-company + Hydration;
+    // BASELINE includes those plus anvil + Supabase + the slice-80
+    // React warning. The extras are no-ops for /companies (no
+    // anvil/RPC calls there), so using BASELINE is safe and matches
+    // future scenarios that share the same baseline.
+    excludePageErrors: BASELINE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Mounting anchor — proves the page rendered at all.
