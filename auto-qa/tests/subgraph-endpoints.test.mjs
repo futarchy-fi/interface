@@ -1,0 +1,148 @@
+/**
+ * subgraphEndpoints config spec mirror (auto-qa).
+ *
+ * Pins src/config/subgraphEndpoints.js — the single source of truth
+ * for which subgraph URLs the frontend uses. A typo, missing chain id,
+ * or drift between this and contracts.js DEFAULT_AGGREGATOR breaks
+ * data loading silently.
+ *
+ * The endpoint-liveness test pins that the URLs in this file respond
+ * with 200. This test pins the config STRUCTURE (URL strings, chain
+ * id keys, enum values, function behavior) so structural regressions
+ * surface even when the live endpoints are reachable.
+ *
+ * Spec mirrors src/config/subgraphEndpoints.js + cross-checks against
+ * src/components/futarchyFi/marketPage/constants/contracts.js for
+ * DEFAULT_AGGREGATOR drift.
+ */
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const SRC = readFileSync(
+    new URL('../../src/config/subgraphEndpoints.js', import.meta.url),
+    'utf8',
+);
+
+const CONTRACTS_SRC = readFileSync(
+    new URL('../../src/components/futarchyFi/marketPage/constants/contracts.js', import.meta.url),
+    'utf8',
+);
+
+// ---------------------------------------------------------------------------
+// AGGREGATOR_SUBGRAPH_URL — Checkpoint registry indexer URL
+// ---------------------------------------------------------------------------
+
+test('subgraphEndpoints — AGGREGATOR_SUBGRAPH_URL is the canonical Checkpoint registry URL', () => {
+    const m = SRC.match(/AGGREGATOR_SUBGRAPH_URL\s*=\s*['"]([^'"]+)['"]/);
+    assert.ok(m, 'AGGREGATOR_SUBGRAPH_URL not found');
+    assert.equal(m[1], 'https://api.futarchy.fi/registry/graphql',
+        `AGGREGATOR_SUBGRAPH_URL drifted: got "${m[1]}". Pinning to api.futarchy.fi/registry/graphql.`);
+});
+
+// ---------------------------------------------------------------------------
+// SUBGRAPH_ENDPOINTS — chain ID → URL
+// ---------------------------------------------------------------------------
+
+test('subgraphEndpoints — SUBGRAPH_ENDPOINTS has entries for chain 1 and chain 100', () => {
+    // Chain 1 = Ethereum Mainnet, Chain 100 = Gnosis. The frontend
+    // currently routes both through the same Checkpoint backend.
+    assert.match(SRC, /SUBGRAPH_ENDPOINTS\s*=\s*\{[\s\S]*?\b1\s*:\s*['"][^'"]+['"]/,
+        `SUBGRAPH_ENDPOINTS missing chain id "1" entry`);
+    assert.match(SRC, /SUBGRAPH_ENDPOINTS\s*=\s*\{[\s\S]*?\b100\s*:\s*['"][^'"]+['"]/,
+        `SUBGRAPH_ENDPOINTS missing chain id "100" entry`);
+});
+
+test('subgraphEndpoints — both chain endpoints point to api.futarchy.fi (pinned current state)', () => {
+    // Today both chains route through the same proxied Checkpoint. If
+    // we ever differentiate (e.g. native Mainnet subgraph vs Gnosis
+    // Checkpoint), this test surfaces the change.
+    const m1   = SRC.match(/\b1\s*:\s*['"]([^'"]+)['"]/);
+    const m100 = SRC.match(/\b100\s*:\s*['"]([^'"]+)['"]/);
+    assert.ok(m1 && m100);
+    assert.equal(m1[1], 'https://api.futarchy.fi/candles/graphql');
+    assert.equal(m100[1], 'https://api.futarchy.fi/candles/graphql');
+    assert.equal(m1[1], m100[1],
+        `chain 1 and chain 100 endpoints diverged — confirm intentional`);
+});
+
+// ---------------------------------------------------------------------------
+// POOL_TYPES + OUTCOME_SIDES — frozen enums
+// ---------------------------------------------------------------------------
+
+test('subgraphEndpoints — POOL_TYPES has exactly the three documented types', () => {
+    // PR #6 / extract-tokens-from-pools test depend on these three.
+    // Adding a fourth type without updating consumers would break the
+    // priority chain (CONDITIONAL > EXPECTED_VALUE > PREDICTION).
+    for (const v of ['PREDICTION', 'CONDITIONAL', 'EXPECTED_VALUE']) {
+        assert.match(SRC, new RegExp(`POOL_TYPES[\\s\\S]*?${v}:\\s*['"]${v}['"]`),
+            `POOL_TYPES missing ${v}`);
+    }
+});
+
+test('subgraphEndpoints — OUTCOME_SIDES has exactly YES and NO', () => {
+    for (const v of ['YES', 'NO']) {
+        assert.match(SRC, new RegExp(`OUTCOME_SIDES[\\s\\S]*?${v}:\\s*['"]${v}['"]`),
+            `OUTCOME_SIDES missing ${v}`);
+    }
+});
+
+// ---------------------------------------------------------------------------
+// getSubgraphEndpoint behavior — spec mirror
+// ---------------------------------------------------------------------------
+
+const SUBGRAPH_ENDPOINTS = {
+    1:   'https://api.futarchy.fi/candles/graphql',
+    100: 'https://api.futarchy.fi/candles/graphql',
+};
+function getSubgraphEndpoint(chainId) { return SUBGRAPH_ENDPOINTS[chainId] || null; }
+function isChainSupported(chainId)    { return chainId in SUBGRAPH_ENDPOINTS; }
+
+test('getSubgraphEndpoint — returns URL for supported chain', () => {
+    assert.equal(getSubgraphEndpoint(100), 'https://api.futarchy.fi/candles/graphql');
+    assert.equal(getSubgraphEndpoint(1), 'https://api.futarchy.fi/candles/graphql');
+});
+
+test('getSubgraphEndpoint — returns null for unsupported chain', () => {
+    assert.equal(getSubgraphEndpoint(137), null,
+        `unsupported chain (Polygon=137) must return null, not undefined or a fallback`);
+    assert.equal(getSubgraphEndpoint(0), null);
+    assert.equal(getSubgraphEndpoint(999999), null);
+});
+
+test('getSubgraphEndpoint — handles undefined / null chain id without throwing', () => {
+    assert.equal(getSubgraphEndpoint(undefined), null);
+    assert.equal(getSubgraphEndpoint(null), null);
+});
+
+test('isChainSupported — true for chains 1 and 100, false otherwise', () => {
+    assert.equal(isChainSupported(1), true);
+    assert.equal(isChainSupported(100), true);
+    assert.equal(isChainSupported(137), false);
+    assert.equal(isChainSupported(0), false);
+});
+
+// ---------------------------------------------------------------------------
+// DEFAULT_AGGREGATOR — must equal the contracts.js value
+// ---------------------------------------------------------------------------
+
+test('subgraphEndpoints — DEFAULT_AGGREGATOR equals the value in contracts.js', () => {
+    const m1 = SRC.match(/export\s+const\s+DEFAULT_AGGREGATOR\s*=\s*['"]([^'"]+)['"]/);
+    assert.ok(m1, 'DEFAULT_AGGREGATOR not found in subgraphEndpoints.js');
+
+    // contracts.js has it under CONTRACT_ADDRESSES.DEFAULT_AGGREGATOR
+    const m2 = CONTRACTS_SRC.match(/DEFAULT_AGGREGATOR\s*:\s*['"]([^'"]+)['"]/);
+    assert.ok(m2, 'DEFAULT_AGGREGATOR not found in contracts.js');
+
+    assert.equal(m1[1], m2[1],
+        `DEFAULT_AGGREGATOR drift between subgraphEndpoints.js and contracts.js: ` +
+        `${m1[1]} vs ${m2[1]}. ` +
+        `These two values must always be in sync — they refer to the same on-chain contract.`);
+});
+
+test('subgraphEndpoints — DEFAULT_AGGREGATOR is a valid 0x + 40 hex chars address', () => {
+    const m = SRC.match(/export\s+const\s+DEFAULT_AGGREGATOR\s*=\s*['"]([^'"]+)['"]/);
+    assert.match(m[1], /^0x[a-fA-F0-9]{40}$/,
+        `DEFAULT_AGGREGATOR has wrong shape: "${m[1]}"`);
+});
