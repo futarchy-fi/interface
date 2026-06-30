@@ -1,0 +1,41 @@
+{
+    "name": "@futarchy-interface/replay-harness-ui",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "description": "UI-side interaction and fork harness for the Futarchy interface.",
+    "scripts": {
+        "phase-status": "node -e \"console.log('Auto-qa harness: interaction and fork tiers. See auto-qa/harness/README.md');\"",
+        "wallet:demo": "node fixtures/wallet-stub.mjs",
+        "test:wallet": "node --test tests/wallet-stub.test.mjs",
+        "test:contracts": "node --test tests/contract-calls.test.mjs",
+        "contracts:demo": "node scripts/contracts.mjs",
+        "test": "npm run test:unit",
+        "test:unit": "node --test tests/architecture-sync.test.mjs tests/eth-call-inspector.test.mjs tests/fork-state.test.mjs tests/invariants-catalog.test.mjs tests/market-page-fixture.test.mjs tests/scenarios-by-route.test.mjs tests/scenarios-by-tier.test.mjs tests/scenarios-catalog.test.mjs tests/scenarios-chaos-matrix.test.mjs",
+        "test:interaction": "HARNESS_NO_ANVIL=1 HARNESS_SCENARIO_TIER=interaction playwright test flows/scenarios.spec.mjs",
+        "test:fork": "HARNESS_SCENARIO_TIER=fork playwright test flows/scenarios.spec.mjs",
+        "test:all": "npm run test:unit && npm run test:interaction && npm run test:fork",
+        "ui": "HARNESS_NO_WEBSERVER=1 playwright test",
+        "ui:ui": "HARNESS_NO_WEBSERVER=1 playwright test --ui",
+        "ui:full": "playwright test",
+        "ui:full:ui": "playwright test --ui",
+        "ui:prod": "HARNESS_PROD_MODE=1 playwright test --config=playwright.prod.config.mjs",
+        "ui:prod:ui": "HARNESS_PROD_MODE=1 playwright test --config=playwright.prod.config.mjs --ui",
+        "ui:report": "playwright show-report",
+        "ui:prod:report": "playwright show-report playwright-prod-report",
+        "scenarios:catalog": "node scripts/scenarios-catalog.mjs",
+        "scenarios:by-route": "node scripts/scenarios-by-route.mjs",
+        "scenarios:by-tier": "node scripts/scenarios-by-tier.mjs",
+        "scenarios:chaos-matrix": "node scripts/scenarios-chaos-matrix.mjs",
+        "invariants:catalog": "node scripts/invariants-catalog.mjs",
+        "replay": "echo 'TODO Phase 5 — full chain↔api↔ui replay' && exit 1"
+    },
+    "dependencies": {
+        "@noble/curves": "^2.2.0",
+        "@noble/hashes": "^2.2.0",
+        "viem": "^2.48.11"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.59.1"
+    }
+}
