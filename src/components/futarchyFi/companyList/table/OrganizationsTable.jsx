@@ -136,7 +136,7 @@ const OrganizationsTable = ({
                                 Chain
                             </th>
                             <th className="py-3 px-4 text-xs font-medium text-futarchyGray11 dark:text-futarchyGray112 uppercase tracking-wider">
-                                FLM
+                                Liquidity
                             </th>
                         </tr>
                     </thead>
