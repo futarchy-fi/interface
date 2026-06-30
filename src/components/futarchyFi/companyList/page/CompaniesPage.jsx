@@ -18,8 +18,8 @@ import { CONTRACT_ADDRESSES } from "../../marketPage/constants/contracts";
 import { ENABLE_V2_SUBGRAPH } from "../../../../config/featureFlags";
 
 // Configuration flags
-// Recently Resolved now works with V2 subgraph via fetchProposalsFromAggregator
-const HIDE_RECENTLY_RESOLVED = false;
+// Recently Closed works with V2 subgraph via fetchProposalsFromAggregator
+const HIDE_RECENTLY_CLOSED = false;
 
 const CompaniesPage = ({ useStorybookUrl = false }) => {
   const { address: connectedWallet } = useAccount();
@@ -97,11 +97,11 @@ const CompaniesPage = ({ useStorybookUrl = false }) => {
           )}
         </div>
 
-        {/* Recently Resolved Section */}
-        {!HIDE_RECENTLY_RESOLVED && (
+        {/* Recently Closed Section */}
+        {!HIDE_RECENTLY_CLOSED && (
           <div className="mb-12 mt-8 md:mt-10">
             <h2 className="text-2xl font-semibold text-futarchyGray12 dark:text-white mb-6">
-              Recently Resolved
+              Recently Closed
             </h2>
             {isResolvedCarouselLoading ? (
               <div className="flex justify-center items-center h-[200px]">
@@ -111,7 +111,7 @@ const CompaniesPage = ({ useStorybookUrl = false }) => {
               <ResolvedEventsCarousel
                 companyId="all"
                 limit={10}
-                aggregatorAddress={DEFAULT_AGGREGATOR}
+                aggregatorAddress={aggregatorAddress}
                 connectedWallet={connectedWallet}
                 onEditProposal={(proposalMetadataAddress) => {
                   setEditProposalModal({ isOpen: true, proposalMetadataAddress });

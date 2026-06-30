@@ -1,13 +1,14 @@
 import { collectAndFetchPoolPrices, attachPrefetchedPrices } from "../../../../utils/SubgraphBulkPriceFetcher";
 import { fetchProposalsFromAggregator } from "../../../../hooks/useAggregatorProposals";
 import { DEFAULT_AGGREGATOR } from "../../../../config/subgraphEndpoints";
+import { isClosedProposal, isResolvedProposal } from "../../../../utils/proposalStatus";
 
 // Main function to fetch active milestones from the registry subgraph aggregator.
 // Returns proposals filtered by visibility (hidden visible only to owner/editor)
-// and by status (resolved proposals are excluded; they belong in Recently Resolved).
+// and by lifecycle (resolved or ended proposals belong in Recently Closed).
 export const fetchEventHighlightData = async (_companyId = "all", options = {}) => {
-  const aggregatorAddress = DEFAULT_AGGREGATOR;
-  const { connectedWallet } = options;
+  const { connectedWallet, aggregatorAddress: requestedAggregatorAddress } = options;
+  const aggregatorAddress = requestedAggregatorAddress || DEFAULT_AGGREGATOR;
 
   try {
     let subgraphEvents = [];
@@ -44,9 +45,13 @@ export const fetchEventHighlightData = async (_companyId = "all", options = {}) 
       return [];
     }
 
-    // Filter out resolved proposals — they belong in Recently Resolved, not Active Milestones
+    const nowSeconds = Date.now() / 1000;
+
+    // Filter out resolved and ended proposals. Ended proposals may still have
+    // stale/missing resolution metadata, but they should not disappear from the
+    // homepage; Recently Closed owns that state.
     const activeSubgraphEvents = subgraphEvents.filter(p =>
-      p.resolution_status !== 'resolved' && p.resolutionStatus !== 'resolved'
+      !isResolvedProposal(p) && !isClosedProposal(p, nowSeconds)
     );
 
     // Bulk fetch prices for the remaining events
