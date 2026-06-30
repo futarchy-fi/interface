@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/auto-qa.yml'
       - '.github/workflows/auto-qa-live.yml'
+      - '.github/workflows/auto-qa-interactions.yml'
+      - '.github/workflows/auto-qa-fork.yml'
       - 'auto-qa/**'
       - 'package.json'
       - 'src/utils/proposalLifecycle.js'
@@ -14,6 +16,8 @@ on:
     paths:
       - '.github/workflows/auto-qa.yml'
       - '.github/workflows/auto-qa-live.yml'
+      - '.github/workflows/auto-qa-interactions.yml'
+      - '.github/workflows/auto-qa-fork.yml'
       - 'auto-qa/**'
       - 'package.json'
       - 'src/utils/proposalLifecycle.js'
@@ -23,7 +27,7 @@ jobs:
   unit:
     name: Deterministic auto-qa
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
 
     steps:
       - name: Checkout
@@ -33,6 +37,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: auto-qa/harness/package-lock.json
+
+      - name: Install harness dependencies
+        working-directory: auto-qa/harness
+        run: npm ci
 
       - name: Run deterministic auto-qa tests
         run: npm run auto-qa:test:unit
+
+      - name: Run deterministic harness checks
+        run: npm run auto-qa:harness:unit

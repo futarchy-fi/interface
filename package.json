@@ -19,7 +19,12 @@
     "auto-qa:probe-graphql": "node auto-qa/tools/probe-graphql.mjs",
     "auto-qa:test": "npm run auto-qa:test:unit",
     "auto-qa:test:unit": "node --test 'auto-qa/tests/**/*.test.mjs'",
-    "auto-qa:test:live": "node --test 'auto-qa/live/**/*.test.mjs'"
+    "auto-qa:test:live": "node --test 'auto-qa/live/**/*.test.mjs'",
+    "auto-qa:harness:unit": "npm --prefix auto-qa/harness run test:unit",
+    "auto-qa:harness:interaction": "npm --prefix auto-qa/harness run test:interaction",
+    "auto-qa:harness:fork": "npm --prefix auto-qa/harness run test:fork",
+    "auto-qa:harness:scenarios:catalog": "npm --prefix auto-qa/harness run scenarios:catalog",
+    "auto-qa:harness:scenarios:by-tier": "npm --prefix auto-qa/harness run scenarios:by-tier"
   },
   "dependencies": {
     "@balancer-labs/sdk": "^1.1.6",
