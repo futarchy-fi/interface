@@ -1,5 +1,8 @@
 import React from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
+
 import ChainBadge from '../components/ChainBadge';
 
 /**
@@ -13,6 +16,7 @@ const OrgRow = ({
     activeProposals = 0,
     proposalsCount = 0,
     chainId = 100, // Default to Gnosis
+    flmPath = null,
     hasActiveMarket = false,
     isOwner = false,
     onClick,
@@ -71,9 +75,24 @@ const OrgRow = ({
             <td className="py-4 px-4">
                 <ChainBadge chainId={chainId} size="sm" />
             </td>
+
+            {/* FLM */}
+            <td className="py-4 px-4">
+                {flmPath ? (
+                    <Link
+                        href={flmPath}
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex h-9 items-center gap-1 rounded-lg border border-futarchyGray5 bg-white px-3 text-sm font-semibold text-futarchyGray12 hover:bg-futarchyGray3"
+                    >
+                        <span>FLM</span>
+                        <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                    </Link>
+                ) : (
+                    <span className="text-sm text-futarchyGray11">-</span>
+                )}
+            </td>
         </tr>
     );
 };
 
 export default OrgRow;
-
