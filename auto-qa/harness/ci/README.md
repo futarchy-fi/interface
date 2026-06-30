@@ -26,14 +26,17 @@ file from this location (Actions only scans `.github/workflows/`).
 |---------------------------------------------------|-----------------------------|--------------------|--------------|
 | `auto-qa-harness.yml.staged`                      | 3a                          | `workflow_dispatch` | ⏳ awaiting promotion |
 | `auto-qa-harness-smoke.yml.staged`                | 4d-smoke-ci-interface       | `workflow_dispatch` | ⏳ awaiting promotion |
+| `auto-qa-harness-fork.yml.staged`                 | fork/write split            | `workflow_dispatch` | ⏳ awaiting promotion |
 | `auto-qa-harness-architecture-sync.yml.staged`    | 4d-architecture-sync-ci     | `workflow_dispatch` | ⏳ awaiting promotion |
 | `auto-qa-harness-scenarios.yml.staged`            | 3c                          | `workflow_dispatch` | ⏳ awaiting promotion |
 
 **Promote in this order**: `auto-qa-harness.yml.staged` first
 (fast SCENARIOS.md drift check, low risk), smoke-test it via the
-Actions UI, then `auto-qa-harness-smoke.yml.staged` (fast node:test
-suite, daemon-free), then `auto-qa-harness-architecture-sync.yml.staged`
-(single-doc cross-repo diff, ~30s), then
+Actions UI, then `auto-qa-harness-smoke.yml.staged` (fast deterministic
+node:test suite), then `auto-qa-harness-fork.yml.staged` (explicit Anvil
+fork/write tests, manual only), then
+`auto-qa-harness-architecture-sync.yml.staged` (single-doc cross-repo diff,
+~30s), then
 `auto-qa-harness-scenarios.yml.staged` (heavier Playwright run).
 Each is independent — none depend on the others being live — but
 smoke-testing the cheap ones first is the sane sequence.

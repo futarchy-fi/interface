@@ -1,16 +1,13 @@
 name: auto-qa harness smoke tests
 
-# Runs the harness's node:test smoke suite (4 files, 11 tests as
-# of slice 4d-smoke-ci-interface):
+# Runs the harness's deterministic node:test smoke suite:
 #
-#   tests/smoke-wallet-stub.test.mjs       — EIP-1193 wallet stub
-#   tests/smoke-contract-calls.test.mjs    — viem call/sign helpers
-#   tests/smoke-scenarios-catalog.test.mjs — SCENARIOS.md drift
-#   tests/smoke-scenarios-by-route.test.mjs — by-route ergonomics
+#   npm test -> npm run test:unit
 #
-# All four are daemon-free: in-process viem + node:test + script
-# spawns. The full suite finishes in ~5s of test time + Node setup
-# overhead. No browser, no anvil, no compose.
+# This intentionally excludes fork/write checks such as
+# smoke-contract-calls.test.mjs and smoke-wallet-stub.test.mjs. Those start
+# Anvil forks and submit local fork transactions, so they belong in the
+# separate explicit fork workflow.
 #
 # Sister to the api-side `auto-qa-harness-smoke.yml.staged` (slice
 # 3e there) — same shape, different harness. The two together give
@@ -54,13 +51,8 @@ jobs:
         working-directory: auto-qa/harness
         run: npm ci
 
-      - name: Run smoke tests
-        # The full node:test glob `tests/**/*.test.mjs`. Includes
-        # the unit-level scenarios-catalog drift assertion (which
-        # also runs at workflow level via the sister
-        # auto-qa-harness.yml staged file's git-diff check) plus
-        # by-route ergonomics + wallet-stub + contract-calls.
-        # Output is plain node:test format — GitHub Actions parses
-        # pass/fail lines automatically.
+      - name: Run deterministic smoke tests
+        # npm test intentionally maps to npm run test:unit. Fork/write
+        # tests are excluded from this workflow.
         working-directory: auto-qa/harness
         run: npm test
