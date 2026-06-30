@@ -1,0 +1,78 @@
+[
+  {
+    "slug": "kleros",
+    "path": "/flm/kleros",
+    "organizationName": "Kleros",
+    "organizationAddress": "0xaab097ead5c2db1ca7b1e5034224a2118edabe36",
+    "companyId": 10,
+    "chainId": 100,
+    "pair": "PNK/sDAI",
+    "status": "pending-deployment",
+    "managerAddress": "",
+    "proposalSourceAddress": "",
+    "token": {
+      "symbol": "PNK",
+      "address": "0x37b60f4E9A31A64cCc0024dce7D0fD07eAA0F7B3",
+      "decimals": 18
+    },
+    "collateral": {
+      "symbol": "sDAI",
+      "address": "0xaf204776c7245bF4147c2612BF6e5972Ee483701",
+      "decimals": 18
+    },
+    "activeProposal": {
+      "label": "KIP-90",
+      "marketAddress": "0x84412Fe9D088C1D8Dd676a7be9a3d5d0291Ab1Cf",
+      "questionId": "0xe1ef37c96013f3a1e4a9cb00bdb1bf158ecd91be210077316933bb9d5ba5738d",
+      "title": "What will the impact on PNK price be if KIP-90 is passed?",
+      "snapshotId": "0xba2749a4f1283da9d1ca925d9f17bf712fa06a23e6a07d759c54340277820932",
+      "snapshotUrl": "https://snapshot.org/#/s:kleros.eth/proposal/0xba2749a4f1283da9d1ca925d9f17bf712fa06a23e6a07d759c54340277820932",
+      "marketUrl": "/markets/0x84412Fe9D088C1D8Dd676a7be9a3d5d0291Ab1Cf",
+      "closeTimestamp": 1783086060,
+      "metadataAddress": "",
+      "proposalMetadataAddress": ""
+    },
+    "deployment": {
+      "repo": "futarchy-fi/futarchy-liquidity-manager",
+      "config": "config/kleros.kip90.json"
+    }
+  },
+  {
+    "slug": "gnosis",
+    "path": "/flm/gnosis",
+    "organizationName": "Gnosis",
+    "organizationAddress": "0x3fd2e8e71f75eed4b5c507706c413e33e0661bbf",
+    "companyId": 9,
+    "chainId": 100,
+    "pair": "GNO/sDAI",
+    "status": "pending-deployment",
+    "managerAddress": "",
+    "proposalSourceAddress": "",
+    "token": {
+      "symbol": "GNO",
+      "address": "0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb",
+      "decimals": 18
+    },
+    "collateral": {
+      "symbol": "sDAI",
+      "address": "0xaf204776c7245bF4147c2612BF6e5972Ee483701",
+      "decimals": 18
+    },
+    "activeProposal": {
+      "label": "GIP-151",
+      "marketAddress": "0xeCe80208CB8376Be311cE0f5Ea4eF73850a0dcF0",
+      "questionId": "",
+      "title": "What will the impact on GNO price be if GIP-151 is passed?",
+      "snapshotId": "0x657fbf8892200d24e887c68245cee73b59c466394192be1c10673b39814c74c4",
+      "snapshotUrl": "https://snapshot.box/#/s:gnosis.eth/proposal/0x657fbf8892200d24e887c68245cee73b59c466394192be1c10673b39814c74c4",
+      "marketUrl": "/markets/0xeCe80208CB8376Be311cE0f5Ea4eF73850a0dcF0",
+      "closeTimestamp": 1782486884,
+      "metadataAddress": "0x590D470C33beC64c16AAD52cC64C232240547702",
+      "proposalMetadataAddress": "0x590D470C33beC64c16AAD52cC64C232240547702"
+    },
+    "deployment": {
+      "repo": "futarchy-fi/futarchy-liquidity-manager",
+      "config": "config/gnosis.production.json"
+    }
+  }
+]

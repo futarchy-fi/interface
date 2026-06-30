@@ -135,6 +135,9 @@ const OrganizationsTable = ({
                             <th className="py-3 px-4 text-xs font-medium text-futarchyGray11 dark:text-futarchyGray112 uppercase tracking-wider">
                                 Chain
                             </th>
+                            <th className="py-3 px-4 text-xs font-medium text-futarchyGray11 dark:text-futarchyGray112 uppercase tracking-wider">
+                                FLM
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-transparent divide-y divide-futarchyGray4 dark:divide-futarchyGray112/10">
@@ -154,6 +157,7 @@ const OrganizationsTable = ({
                                     activeProposals={org.activeProposals || 0}
                                     proposalsCount={org.proposals || org.proposalsCount || 0}
                                     chainId={org.chainId || 100}
+                                    flmPath={org.flmPath}
                                     hasActiveMarket={(org.activeProposals || 0) > 0}
                                     isOwner={connectedWallet && org.owner?.toLowerCase() === connectedWallet.toLowerCase()}
                                     onClick={() => onOrgClick?.(org)}

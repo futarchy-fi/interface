@@ -12,6 +12,7 @@
 import { useState, useEffect } from 'react';
 
 import { AGGREGATOR_SUBGRAPH_URL as SUBGRAPH_URL } from '../config/subgraphEndpoints';
+import { getFlmPathForOrg } from '../utils/flm';
 import { isProposalActive, isProposalArchived } from '../utils/proposalLifecycle';
 
 // Three flat queries — Checkpoint has no auto-generated reverse fields.
@@ -101,6 +102,7 @@ function transformOrgToCard(org, proposalsForOrg) {
         website: meta.website,
         twitter: meta.twitter,
         metadataURI: org.metadataURI,
+        flmPath: getFlmPathForOrg(org.id),
         // Surface the parsed org metadata so downstream filters can
         // check archived/visibility without re-parsing.
         _orgMetadata: meta,
