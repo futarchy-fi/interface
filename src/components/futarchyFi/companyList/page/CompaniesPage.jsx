@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useAccount } from 'wagmi';
 import RootLayout from "../../../layout/RootLayout";
 import { fetchEventHighlightData } from "./EventsHighlightDataTransformer";
@@ -122,10 +123,16 @@ const CompaniesPage = ({ useStorybookUrl = false }) => {
         )}
 
         {/* Organizations Section Header */}
-        <div className="mb-6 mt-12">
-          <h2 className="text-2xl font-semibold text-futarchyGray12 dark:text-white mb-6">
+        <div className="mb-6 mt-12 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-2xl font-semibold text-futarchyGray12 dark:text-white">
             Organizations
           </h2>
+          <Link
+            href="/markets/new"
+            className="inline-flex h-10 items-center justify-center rounded-md border border-futarchyGray6 px-4 text-sm font-medium text-futarchyGray12 hover:border-futarchyBlue9 hover:text-futarchyBlue10 dark:border-futarchyGray7 dark:text-white"
+          >
+            Create market
+          </Link>
         </div>
 
         {/* Organizations Table (Desktop) */}
