@@ -53,8 +53,10 @@ export const PERMISSIONLESS_TESTNET_DEFAULTS = {
   chainName: 'Gnosis Chiado',
   mode: 'permissionless',
   contracts: {
-    organizationCreator: '',
+    aggregatorFactory: '',
     permissionlessAggregator: '',
+    organizationImplementation: '',
+    proposalImplementation: '',
     futarchyFactory: '',
     liquidityManagerFactory: '',
     snapshotLinkRegistry: '',
@@ -122,27 +124,253 @@ export const PERMISSIONLESS_STACK_STAGES = [
   {
     id: 'deploy-stack',
     title: 'Deploy permissionless stack',
-    summary: 'Deploy creator, public aggregator, market factory, Snapshot linker, indexer hooks, and FLM factory on Chiado.',
+    summary: 'Deploy metadata implementations, public aggregator, market factory, Snapshot linker, indexer hooks, and FLM factory on Chiado.',
+  },
+  {
+    id: 'default-flm',
+    title: 'Create default FLM bundle',
+    summary: 'Create the proposal source, pool adapters, and default FLM bundle that will be attached to the organization.',
+    dependsOn: ['deploy-stack'],
   },
   {
     id: 'create-organization',
     title: 'Create organization',
-    summary: 'Any wallet can create organization metadata; the creator becomes organization owner.',
+    summary: 'Any wallet can create organization metadata with default FLM wiring; the creator becomes organization owner.',
+    dependsOn: ['default-flm'],
   },
   {
     id: 'list-organization',
     title: 'List organization',
     summary: 'Every created organization is added to the permissionless aggregator and appears in listings.',
-  },
-  {
-    id: 'default-flm',
-    title: 'Attach default FLM',
-    summary: 'Each organization gets a default FLM configured onchain at creation time.',
+    dependsOn: ['create-organization'],
   },
   {
     id: 'owner-proposal',
     title: 'Owner creates proposal',
     summary: 'The organization owner can create proposals and point the FLM at the official proposal.',
+    dependsOn: ['list-organization'],
+  },
+];
+
+export const CONTRACT_SOURCES = {
+  registry: {
+    repository: 'futarchy-fi/futarchy',
+    contracts: [
+      'FutarchyAggregatorFactory',
+      'FutarchyAggregatorsMetadata',
+      'FutarchyOrganizationMetadata',
+      'FutarchyProposalMetadata',
+    ],
+  },
+  liquidityManager: {
+    repository: 'futarchy-fi/futarchy-liquidity-manager',
+    contracts: [
+      'FutarchyLiquidityManagerFactory',
+      'FutarchyOfficialProposalSource',
+      'FutarchyLiquidityManager',
+    ],
+  },
+};
+
+export const PERMISSIONLESS_STACK_CONTRACT_ACTIONS = [
+  {
+    id: 'deploy-permissionless-registry',
+    stageId: 'deploy-stack',
+    chainId: CHIADO_CHAIN_ID,
+    source: 'futarchy/script/deploy/DeployPermissionlessRegistry.s.sol',
+    contract: 'DeployPermissionlessRegistry',
+    method: 'run',
+    summary: 'Deploy aggregator, organization, and proposal metadata implementations plus their factories.',
+    produces: ['aggregatorFactory', 'permissionlessAggregator', 'organizationImplementation', 'proposalImplementation'],
+  },
+  {
+    id: 'create-default-flm-bundle',
+    stageId: 'default-flm',
+    chainId: CHIADO_CHAIN_ID,
+    source: 'futarchy-liquidity-manager/src/factories/FutarchyLiquidityManagerFactory.sol',
+    contract: 'FutarchyLiquidityManagerFactory',
+    method: 'createLiquidityManager',
+    summary: 'Deploy proposal source, spot adapter, conditional adapter, and default organization FLM.',
+    produces: ['proposalSource', 'spotAdapter', 'conditionalAdapter', 'manager'],
+    inputs: ['CreateParams.owner', 'CreateParams.proposalManager', 'CreateParams.companyToken', 'CreateParams.officialProposer'],
+    dependsOn: ['deploy-permissionless-registry'],
+  },
+  {
+    id: 'create-and-list-organization',
+    stageId: 'create-organization',
+    chainId: CHIADO_CHAIN_ID,
+    source: 'futarchy/src/registry/FutarchyAggregatorsMetadata.sol',
+    contract: 'FutarchyAggregatorsMetadata',
+    method: 'createAndAddOrganizationMetadataWithDefaultLiquidityManager',
+    summary: 'Create organization metadata, attach the FLM/proposal source, and add it to the aggregator in one call.',
+    produces: ['organizationMetadata'],
+    inputs: ['companyName', 'description', 'metadata', 'metadataURI', 'manager', 'proposalSource', 'liquidityManagerMetadataURI'],
+    dependsOn: ['create-default-flm-bundle'],
+  },
+  {
+    id: 'read-listed-organizations',
+    stageId: 'list-organization',
+    chainId: CHIADO_CHAIN_ID,
+    source: 'futarchy/src/registry/FutarchyAggregatorsMetadata.sol',
+    contract: 'FutarchyAggregatorsMetadata',
+    method: 'getOrganizations',
+    summary: 'Read the aggregator list that backs the companies page.',
+    produces: ['listedOrganization'],
+    dependsOn: ['create-and-list-organization'],
+  },
+  {
+    id: 'owner-create-proposal-metadata',
+    stageId: 'owner-proposal',
+    chainId: CHIADO_CHAIN_ID,
+    source: 'futarchy/src/registry/FutarchyOrganizationMetadata.sol',
+    contract: 'FutarchyOrganizationMetadata',
+    method: 'createAndAddProposalMetadata',
+    summary: 'Organization owner or editor writes proposal metadata after the futarchy proposal exists.',
+    produces: ['proposalMetadata'],
+    inputs: ['proposalAddress', 'displayNameQuestion', 'displayNameEvent', 'description', 'metadata', 'metadataURI'],
+    dependsOn: ['read-listed-organizations'],
+  },
+  {
+    id: 'owner-set-official-proposal',
+    stageId: 'owner-proposal',
+    chainId: CHIADO_CHAIN_ID,
+    source: 'futarchy-liquidity-manager/src/sources/FutarchyOfficialProposalSource.sol',
+    contract: 'FutarchyOfficialProposalSource',
+    method: 'setOfficialProposal',
+    summary: 'Point the default FLM proposal source at the active proposal once the proposal address is known.',
+    produces: ['officialProposal'],
+    inputs: ['proposalId', 'proposalAddress', 'creator'],
+    dependsOn: ['owner-create-proposal-metadata', 'create-default-flm-bundle'],
+  },
+];
+
+export const ONE_STEP_MARKET_CONTRACT_ACTIONS = [
+  {
+    id: 'publish-metadata-json',
+    stageId: 'metadata',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'interface/src/features/marketCreation/marketCreationWorkflow.js',
+    contract: 'MetadataPublisher',
+    method: 'publishProposalJson',
+    summary: 'Build and publish the registry metadata JSON, including Snapshot visibility fields.',
+    produces: ['metadataJson', 'metadataURI'],
+  },
+  {
+    id: 'create-futarchy-proposal',
+    stageId: 'market',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'futarchy/src/interfaces/IFutarchyFactory.sol',
+    contract: 'IFutarchyFactory',
+    method: 'createProposal',
+    summary: 'Create the futarchy proposal market using company token, currency token, bond, and opening time.',
+    produces: ['proposalAddress'],
+    inputs: ['CreateProposalParams.marketName', 'collateralToken1', 'collateralToken2', 'minBond', 'openingTime'],
+    dependsOn: ['publish-metadata-json'],
+  },
+  {
+    id: 'create-proposal-metadata',
+    stageId: 'metadata',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'futarchy/src/registry/FutarchyOrganizationMetadata.sol',
+    contract: 'FutarchyOrganizationMetadata',
+    method: 'createAndAddProposalMetadata',
+    summary: 'Store proposal metadata on the organization after the proposal address exists.',
+    produces: ['proposalMetadata'],
+    inputs: ['proposalAddress', 'displayNameQuestion', 'displayNameEvent', 'description', 'metadata', 'metadataURI'],
+    dependsOn: ['create-futarchy-proposal', 'publish-metadata-json'],
+  },
+  {
+    id: 'create-flm-bundle',
+    stageId: 'liquidity',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'futarchy-liquidity-manager/src/factories/FutarchyLiquidityManagerFactory.sol',
+    contract: 'FutarchyLiquidityManagerFactory',
+    method: 'createLiquidityManager',
+    summary: 'Create or reuse the organization FLM bundle for this token pair.',
+    produces: ['proposalSource', 'spotAdapter', 'conditionalAdapter', 'manager'],
+    inputs: ['CreateParams.organization', 'CreateParams.owner', 'CreateParams.companyToken', 'CreateParams.officialProposer'],
+    dependsOn: ['create-futarchy-proposal'],
+  },
+  {
+    id: 'store-default-flm',
+    stageId: 'liquidity',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'futarchy/src/registry/FutarchyOrganizationMetadata.sol',
+    contract: 'FutarchyOrganizationMetadata',
+    method: 'setDefaultLiquidityManager',
+    summary: 'Store the FLM and proposal source as the organization default used by market pages.',
+    produces: ['defaultLiquidityManager'],
+    inputs: ['manager', 'proposalSource', 'liquidityManagerMetadataURI'],
+    dependsOn: ['create-flm-bundle'],
+  },
+  {
+    id: 'set-official-proposal',
+    stageId: 'liquidity',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'futarchy-liquidity-manager/src/sources/FutarchyOfficialProposalSource.sol',
+    contract: 'FutarchyOfficialProposalSource',
+    method: 'setOfficialProposal',
+    summary: 'Point the FLM proposal source at the newly created proposal before public Snapshot routing.',
+    produces: ['officialProposal'],
+    inputs: ['proposalId', 'proposalAddress', 'creator'],
+    dependsOn: ['create-futarchy-proposal', 'create-flm-bundle'],
+  },
+  {
+    id: 'bootstrap-flm-liquidity',
+    stageId: 'liquidity',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'futarchy-liquidity-manager/src/core/FutarchyLiquidityManager.sol',
+    contract: 'FutarchyLiquidityManager',
+    method: 'initializeFromBootstrap',
+    summary: 'Seed spot liquidity through the FLM before Snapshot sends users to the market.',
+    produces: ['flmAddress', 'liquidityTxHash'],
+    inputs: ['companyAmount', 'spotAddData'],
+    dependsOn: ['store-default-flm', 'set-official-proposal'],
+  },
+  {
+    id: 'link-snapshot-proposal',
+    stageId: 'snapshot',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'snapshot metadata/link registry',
+    contract: 'SnapshotLinkRegistry',
+    method: 'linkSnapshotProposal',
+    summary: 'Link Snapshot after liquidity is present and proposal metadata has been written.',
+    produces: ['snapshotLinkRegistryTxHash'],
+    inputs: ['snapshotSpace', 'snapshotId', 'proposalAddress'],
+    dependsOn: ['bootstrap-flm-liquidity', 'create-proposal-metadata'],
+  },
+  {
+    id: 'verify-registry-and-candles',
+    stageId: 'indexing',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'interface indexers',
+    contract: 'CandleIndexer',
+    method: 'backfillMarket',
+    summary: 'Verify organization/proposal metadata, market candles, and spot price feeds before publish.',
+    produces: ['registryIndexed', 'candlesIndexed'],
+    dependsOn: ['bootstrap-flm-liquidity', 'create-proposal-metadata'],
+  },
+  {
+    id: 'configure-arbitrage',
+    stageId: 'arbitrage',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'arbitrage service',
+    contract: 'FutarchyArbitrageFactory',
+    method: 'configureMarket',
+    summary: 'Configure arb contracts and bot parameters for the YES/NO and spot pools.',
+    produces: ['arbitrageContract', 'botConfig'],
+    dependsOn: ['bootstrap-flm-liquidity'],
+  },
+  {
+    id: 'publish-company-market',
+    stageId: 'publish',
+    chainId: GNOSIS_CHAIN_ID,
+    source: 'interface company pages',
+    contract: 'CompanyMarketRegistry',
+    method: 'publish',
+    summary: 'Expose the market on the company page once Snapshot, candles, metadata, and liquidity are ready.',
+    produces: ['companyPageLink', 'marketUrl', 'flmUrl'],
+    dependsOn: ['link-snapshot-proposal', 'verify-registry-and-candles', 'configure-arbitrage'],
   },
 ];
 
@@ -243,8 +471,55 @@ export function buildMetadataDraft(input = {}) {
     flm: {
       mode: merged.initialLiquidityMode,
       address: merged.flmAddress || '',
+      proposalSource: merged.proposalSource || '',
       officialProposalAfterMarketCreation: true,
     },
+    snapshot: {
+      space: merged.snapshotSpace,
+      proposalId: merged.snapshotId,
+      linkAfterLiquidity: true,
+      visibilityMetadata: {
+        includeOnSnapshotWebsite: true,
+        linkedBy: 'SnapshotLinkRegistry.linkSnapshotProposal',
+      },
+    },
+    registry: {
+      organizationAddress: merged.organizationAddress,
+      proposalCode: merged.proposalCode,
+      proposalMetadataMethod: 'FutarchyOrganizationMetadata.createAndAddProposalMetadata',
+      defaultLiquidityManagerMethod: 'FutarchyOrganizationMetadata.setDefaultLiquidityManager',
+    },
+  };
+}
+
+export function buildContractActionPlan(actions, stages, values = {}) {
+  const stageOrders = new Map(stages.map((stage) => [stage.id, stage.order]));
+
+  return actions.map((action, index) => ({
+    ...action,
+    order: index + 1,
+    stageOrder: stageOrders.get(action.stageId) || index + 1,
+    chainId: action.chainId || values.chainId || GNOSIS_CHAIN_ID,
+    enabled: action.enabled !== false,
+  }));
+}
+
+export function validateContractActionDependencies(actions = []) {
+  const seen = new Set();
+  const missing = [];
+
+  actions.forEach((action) => {
+    action.dependsOn?.forEach((dependency) => {
+      if (!seen.has(dependency)) {
+        missing.push(`${action.id}:${dependency}`);
+      }
+    });
+    seen.add(action.id);
+  });
+
+  return {
+    ok: missing.length === 0,
+    missing,
   };
 }
 
@@ -255,15 +530,17 @@ export function buildOneStepMarketPlan(input = {}) {
   });
   const values = { ...defaults, ...input };
   const metadataDraft = buildMetadataDraft(values);
+  const stages = MARKET_CREATION_STAGES.map((stage, index) => ({
+    ...stage,
+    order: index + 1,
+    enabled: stage.id !== 'snapshot' || values.snapshotLinkAfterLiquidity,
+  }));
 
   return {
     values,
     metadataDraft,
-    stages: MARKET_CREATION_STAGES.map((stage, index) => ({
-      ...stage,
-      order: index + 1,
-      enabled: stage.id !== 'snapshot' || values.snapshotLinkAfterLiquidity,
-    })),
+    stages,
+    contractActions: buildContractActionPlan(ONE_STEP_MARKET_CONTRACT_ACTIONS, stages, values),
   };
 }
 
@@ -284,6 +561,14 @@ export function buildPermissionlessStackPlan(config = {}) {
       order: index + 1,
       includedByDefault: stage.id !== 'deploy-stack',
     })),
+    contractActions: buildContractActionPlan(
+      PERMISSIONLESS_STACK_CONTRACT_ACTIONS,
+      PERMISSIONLESS_STACK_STAGES.map((stage, index) => ({
+        ...stage,
+        order: index + 1,
+      })),
+      values
+    ),
   };
 }
 
@@ -308,6 +593,9 @@ export function validateOneStepMarketPlan(
   }
   if (!values.snapshotLinkAfterLiquidity) {
     errors.push('snapshotLinkAfterLiquidity');
+  }
+  if (!validateContractActionDependencies(plan?.contractActions || []).ok) {
+    errors.push('contractActions.dependencies');
   }
 
   return {

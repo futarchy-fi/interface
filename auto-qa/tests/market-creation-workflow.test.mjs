@@ -17,6 +17,7 @@ const {
   KNOWN_ORGANIZATIONS,
   MARKET_CREATION_STAGES,
   PERMISSIONLESS_STACK_STAGES,
+  validateContractActionDependencies,
   validateOneStepMarketPlan,
 } = workflow;
 
@@ -69,6 +70,15 @@ test('metadata draft includes registry fields needed by market pages and proposa
   assert.equal(draft.companyTokens.base.tokenSymbol, 'PNK');
   assert.equal(draft.currencyTokens.base.tokenSymbol, 'sDAI');
   assert.equal(draft.flm.mode, 'flm');
+  assert.equal(draft.snapshot.visibilityMetadata.includeOnSnapshotWebsite, true);
+  assert.equal(
+    draft.registry.proposalMetadataMethod,
+    'FutarchyOrganizationMetadata.createAndAddProposalMetadata'
+  );
+  assert.equal(
+    draft.registry.defaultLiquidityManagerMethod,
+    'FutarchyOrganizationMetadata.setDefaultLiquidityManager'
+  );
 });
 
 test('permissionless stack plan includes org listing, owner proposals, and default FLM', () => {
@@ -80,7 +90,47 @@ test('permissionless stack plan includes org listing, owner proposals, and defau
   assert.ok(stageIds.includes('list-organization'));
   assert.ok(stageIds.includes('default-flm'));
   assert.ok(stageIds.includes('owner-proposal'));
+  assert.ok(stageIds.indexOf('default-flm') < stageIds.indexOf('create-organization'));
   assert.equal(plan.values.chainId, 10200);
+});
+
+test('permissionless contract actions create FLM before default organization wiring', () => {
+  const plan = buildPermissionlessStackPlan();
+  const actions = plan.contractActions;
+  const actionIds = actions.map((action) => action.id);
+  const createFlm = actions.find((action) => action.id === 'create-default-flm-bundle');
+  const createOrganization = actions.find((action) => action.id === 'create-and-list-organization');
+
+  assert.equal(validateContractActionDependencies(actions).ok, true);
+  assert.equal(createFlm.contract, 'FutarchyLiquidityManagerFactory');
+  assert.equal(createFlm.method, 'createLiquidityManager');
+  assert.equal(createOrganization.contract, 'FutarchyAggregatorsMetadata');
+  assert.equal(createOrganization.method, 'createAndAddOrganizationMetadataWithDefaultLiquidityManager');
+  assert.ok(createOrganization.dependsOn.includes('create-default-flm-bundle'));
+  assert.ok(actionIds.indexOf('create-default-flm-bundle') < actionIds.indexOf('create-and-list-organization'));
+});
+
+test('one-step market contract actions order market, FLM, official proposal, liquidity, and Snapshot', () => {
+  const plan = buildOneStepMarketPlan({ organizationId: 'kleros', nowSeconds: NOW });
+  const actions = plan.contractActions;
+  const actionIds = actions.map((action) => action.id);
+  const createMarket = actions.find((action) => action.id === 'create-futarchy-proposal');
+  const createFlm = actions.find((action) => action.id === 'create-flm-bundle');
+  const setOfficialProposal = actions.find((action) => action.id === 'set-official-proposal');
+  const linkSnapshot = actions.find((action) => action.id === 'link-snapshot-proposal');
+
+  assert.equal(validateContractActionDependencies(actions).ok, true);
+  assert.equal(createMarket.contract, 'IFutarchyFactory');
+  assert.equal(createMarket.method, 'createProposal');
+  assert.equal(createFlm.contract, 'FutarchyLiquidityManagerFactory');
+  assert.equal(createFlm.method, 'createLiquidityManager');
+  assert.equal(setOfficialProposal.contract, 'FutarchyOfficialProposalSource');
+  assert.equal(setOfficialProposal.method, 'setOfficialProposal');
+  assert.ok(setOfficialProposal.dependsOn.includes('create-futarchy-proposal'));
+  assert.ok(linkSnapshot.dependsOn.includes('bootstrap-flm-liquidity'));
+  assert.ok(actionIds.indexOf('create-flm-bundle') < actionIds.indexOf('set-official-proposal'));
+  assert.ok(actionIds.indexOf('set-official-proposal') < actionIds.indexOf('bootstrap-flm-liquidity'));
+  assert.ok(actionIds.indexOf('bootstrap-flm-liquidity') < actionIds.indexOf('link-snapshot-proposal'));
 });
 
 test('validation rejects flows that would link Snapshot before liquidity', () => {

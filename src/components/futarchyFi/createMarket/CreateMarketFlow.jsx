@@ -44,6 +44,33 @@ function StageList({ stages }) {
   );
 }
 
+function ActionList({ actions }) {
+  return (
+    <ol className="divide-y divide-futarchyGray5 dark:divide-futarchyGray7">
+      {actions.map((action) => (
+        <li key={action.id} className="grid gap-2 px-4 py-3 md:grid-cols-[48px_270px_1fr]">
+          <div className="text-sm font-semibold text-futarchyBlue9">{String(action.order).padStart(2, '0')}</div>
+          <div>
+            <div className="break-words font-mono text-xs font-semibold text-futarchyGray12 dark:text-white">
+              {action.contract}.{action.method}
+            </div>
+            <div className="mt-1 text-xs uppercase text-futarchyGray9">Stage: {action.stageId}</div>
+            {action.dependsOn?.length ? (
+              <div className="mt-1 break-words text-xs text-futarchyGray10">After: {action.dependsOn.join(', ')}</div>
+            ) : null}
+          </div>
+          <div>
+            <p className="text-sm text-futarchyGray11 dark:text-futarchyGray11">{action.summary}</p>
+            {action.produces?.length ? (
+              <p className="mt-1 text-xs text-futarchyGray9">Produces: {action.produces.join(', ')}</p>
+            ) : null}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function MetadataPreview({ metadata }) {
   return (
     <pre className="max-h-[420px] overflow-auto rounded-md bg-futarchyGray2 dark:bg-futarchyDarkGray3 border border-futarchyGray6 dark:border-futarchyGray7 p-4 text-xs text-futarchyGray12 dark:text-futarchyGray11">
@@ -113,6 +140,10 @@ export default function CreateMarketFlow() {
               </p>
             </div>
             <StageList stages={permissionlessPlan.stages} />
+            <div className="border-t border-futarchyGray6 px-4 py-3 dark:border-futarchyGray7">
+              <h3 className="text-sm font-semibold text-futarchyGray12 dark:text-white">Contract Actions</h3>
+            </div>
+            <ActionList actions={permissionlessPlan.contractActions} />
           </section>
 
           <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -221,6 +252,10 @@ export default function CreateMarketFlow() {
                 </div>
               </div>
               <StageList stages={marketPlan.stages} />
+              <div className="border-t border-futarchyGray6 px-4 py-3 dark:border-futarchyGray7">
+                <h3 className="text-sm font-semibold text-futarchyGray12 dark:text-white">Contract Actions</h3>
+              </div>
+              <ActionList actions={marketPlan.contractActions} />
             </section>
           </div>
 
