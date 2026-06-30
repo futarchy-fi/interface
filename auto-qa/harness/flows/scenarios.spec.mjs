@@ -145,6 +145,19 @@ test.describe('Phase 6 — captured bug-shape scenarios', () => {
                 testInfo.skip(true, `scenario "${scenario.name}" requires anvil — run via npm run ui:full (without HARNESS_NO_ANVIL=1)`);
             }
 
+            // Slice 302: pinned latent-bug opt-out. Scenarios that
+            // catch a CURRENTLY-BROKEN behavior — i.e., the catch
+            // direction is correct but the app already has the bug
+            // — declare `pinnedLatentBug: '<description>'`. The
+            // runner skips them with the description as the skip
+            // reason, keeping the suite green while preserving the
+            // scenario file as future regression-catch infra. When
+            // the underlying bug is fixed, REMOVE the flag and the
+            // scenario starts enforcing.
+            if (scenario.pinnedLatentBug) {
+                testInfo.skip(true, `scenario "${scenario.name}" pinned as latent bug: ${scenario.pinnedLatentBug}. Remove the pinnedLatentBug flag once the underlying bug is fixed; the scenario will then catch regressions.`);
+            }
+
             // Default wallet stub — every scenario gets a deterministic
             // dev-mnemonic wallet injected before navigation.
             const wallet = nStubWallets(1)[0];

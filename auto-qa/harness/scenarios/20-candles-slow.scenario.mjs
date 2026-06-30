@@ -62,6 +62,7 @@ import {
     makeCandlesMockHandler,
     fakePoolBearingProposal,
 } from '../fixtures/api-mocks.mjs';
+import { BASELINE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 const DELAY_MS = 5000;
 
@@ -98,6 +99,11 @@ export default {
         // standard happy-path response with mocked prices.
         [CANDLES_GRAPHQL_URL]: makeSlowCandlesHandler(),
     },
+
+    // Slice 129: page-error monitor opt-in for chaos scenarios.
+    // /companies surface uses BASELINE exclusions.
+    assertNoPageErrors: true,
+    excludePageErrors: BASELINE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Pre-flight: carousel card mounted (registry path

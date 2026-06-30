@@ -50,6 +50,7 @@ import {
     fakePoolBearingProposal,
     makeGraphqlMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { BASELINE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 const DELAY_MS = 5000;
 
@@ -76,6 +77,15 @@ export default {
     mocks: {
         [REGISTRY_GRAPHQL_URL]: makeSlowRegistryHandler(),
     },
+
+    // Slice 129: extend page-error monitor to chaos scenarios.
+    // /companies surface uses BASELINE exclusions (no anvil/RPC
+    // calls on this page; the baseline still covers Supabase /
+    // hydration / fallback-company.png latent bugs). If the
+    // 5s-per-request slow path triggers a real "request timeout"
+    // log from the page, narrow exclusions follow per-scenario.
+    assertNoPageErrors: true,
+    excludePageErrors: BASELINE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Single canonical assertion: the probe org's name eventually

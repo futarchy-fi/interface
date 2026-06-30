@@ -40,7 +40,96 @@
  * mainnet is out of scope — we'd be reimplementing etherscan.
  */
 
-import { decodeFunctionData, toFunctionSelector, getAddress, isAddress, isHex } from 'viem';
+import {
+    decodeFunctionData,
+    toFunctionSelector,
+    getAddress,
+    isAddress,
+    isHex,
+    encodeAbiParameters,
+    decodeAbiParameters,
+} from 'viem';
+
+// ── Multicall3 — read-batching contract used by wagmi/viem ──────────
+
+/**
+ * Standard Multicall3 contract address. Same on every chain where
+ * Multicall3 is deployed (per the canonical deployment). viem's
+ * `scheduleMulticall` (in `actions/public/call.js`) auto-batches
+ * read-only eth_calls through this contract when
+ * `client.batch.multicall` is enabled — which IS the wagmi default
+ * for `usePublicClient`. So any scenario that intercepts eth_calls
+ * must either (a) match this address with `aggregate3` selector and
+ * return a properly-encoded `Result[]`, or (b) return a 64-byte
+ * (NOT 32-byte) zero buffer so viem's dynamic-array `setPosition(
+ * staticPosition + 32)` doesn't trip on a 32-byte buffer.
+ *
+ * The 32-byte trap was diagnosed in slice 103: viem's
+ * `decodeAbiParameters` for `Result[]` (dynamic) does the
+ * "wonder-restore" pattern `cursor.setPosition(staticPosition + 32)`
+ * after reading the offset pointer. On a 32-byte buffer
+ * (positions 0-31), setPosition(32) trips the cursor's
+ * `assertPosition(position > bytes.length - 1)` check. The
+ * `PositionOutOfBoundsError` bubbles up wrapped as
+ * `CallExecutionError`, which is opaque to the
+ * `.catch(() => 0n)` swallows in the consumer code.
+ */
+export const MULTICALL3_ADDRESS = '0xca11bde05977b3631167028862be2a173976ca11';
+export const MULTICALL3_AGGREGATE3_SELECTOR = '0x82ad56cb';
+
+/**
+ * Decode an aggregate3 input's inner Call3[] array.
+ *
+ * @param {`0x${string}`} aggregateData — the full data field of an
+ *   eth_call to multicall3 (starts with aggregate3 selector).
+ * @returns {Array<{ target: string, allowFailure: boolean, callData: `0x${string}` }> | null}
+ */
+export function decodeMulticall3Aggregate3(aggregateData) {
+    if (
+        typeof aggregateData !== 'string' ||
+        !aggregateData.toLowerCase().startsWith(MULTICALL3_AGGREGATE3_SELECTOR)
+    ) return null;
+    try {
+        // Strip selector (first 4 bytes / 10 hex chars including 0x)
+        const inputs = '0x' + aggregateData.slice(10);
+        const [calls] = decodeAbiParameters(
+            [{
+                type: 'tuple[]',
+                components: [
+                    { name: 'target',       type: 'address' },
+                    { name: 'allowFailure', type: 'bool'    },
+                    { name: 'callData',     type: 'bytes'   },
+                ],
+            }],
+            inputs,
+        );
+        return calls;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Encode a multicall3 aggregate3 RETURN value (Result[] where
+ * Result = { bool success, bytes returnData }). Each inner result
+ * MUST match the inner-call's expected return shape (caller's
+ * responsibility).
+ *
+ * @param {Array<{ success: boolean, returnData: `0x${string}` }>} results
+ * @returns {`0x${string}`}
+ */
+export function encodeMulticall3Returns(results) {
+    return encodeAbiParameters(
+        [{
+            type: 'tuple[]',
+            components: [
+                { name: 'success',    type: 'bool'  },
+                { name: 'returnData', type: 'bytes' },
+            ],
+        }],
+        [results],
+    );
+}
 
 /**
  * Algebra V1 pool — the on-chain contract behind YES/NO conditional

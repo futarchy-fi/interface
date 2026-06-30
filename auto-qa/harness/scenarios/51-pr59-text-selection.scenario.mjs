@@ -63,6 +63,7 @@ import {
     REGISTRY_GRAPHQL_URL,
     makeGraphqlMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { assertTripleClickSelects } from '../fixtures/text-selection.mjs';
 
 export default {
     name:        '51-pr59-text-selection',
@@ -88,36 +89,17 @@ export default {
             ).toBeVisible({ timeout: 30_000 });
         },
 
-        // The PR #59 catch.
+        // The PR #59 catch — slice 296 extracted to shared
+        // helper. Triple-clicks "Active Milestones" heading, then
+        // asserts window.getSelection() captured it. Empty
+        // selection under any user-select:none cascade above the
+        // heading.
         async (page) => {
-            // Clear any inherited selection from page navigation so
-            // our triple-click is the only source of selection state.
-            await page.evaluate(() => window.getSelection()?.removeAllRanges());
-
-            // Triple-click ({clickCount: 3}) on the heading selects
-            // the WHOLE LINE of text within the element — works
-            // even when the click lands on whitespace, unlike
-            // dblclick which only selects a word and can return
-            // empty if it lands between words. Triple-click STILL
-            // respects `user-select: none` — under the regression
-            // the line is not selected.
-            await page.getByText('Active Milestones').first().click({ clickCount: 3 });
-
-            // Read what the browser selected. With the PR #59 fix
-            // applied (no `select-none` on PageLayout root), this
-            // should contain "Active Milestones". With the
-            // regression, it's empty or just whitespace.
-            const selectedText = await page.evaluate(
-                () => window.getSelection()?.toString() ?? '',
+            await assertTripleClickSelects(
+                page,
+                page.getByText('Active Milestones').first(),
+                'Active Milestones',
             );
-
-            // Assertion: must contain the heading text. Using
-            // `toContain` rather than strict equality because
-            // triple-click may capture leading/trailing whitespace
-            // from neighboring inline elements.
-            expect(selectedText, {
-                message: `expected triple-click on "Active Milestones" to select the heading line; got: ${JSON.stringify(selectedText)}`,
-            }).toContain('Active Milestones');
         },
     ],
 

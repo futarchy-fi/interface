@@ -74,83 +74,17 @@ import {
     PROBE_ORG_NAME,
     makeGraphqlMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { A11Y_HEURISTICS, isKnownViolation } from '../fixtures/a11y-heuristics.mjs';
 
-// Inline a11y heuristics evaluated in the page context. Returns
-// an array of violation records. Each record has:
-//   kind:    'img-no-alt' | 'button-no-name' | 'input-no-label'
-//   element: { tag, html, text }
-//   selector: CSS-ish path for human-debugging
-const A11Y_HEURISTICS = () => {
-    const violations = [];
-
-    const isVisible = (el) => {
-        if (!(el instanceof HTMLElement)) return false;
-        if (el.offsetWidth === 0 && el.offsetHeight === 0) return false;
-        const style = window.getComputedStyle(el);
-        if (style.visibility === 'hidden' || style.display === 'none') return false;
-        return true;
-    };
-
-    const briefHtml = (el) => el.outerHTML.slice(0, 200);
-
-    const accessibleName = (el) => {
-        if (el.getAttribute('aria-label')) return el.getAttribute('aria-label').trim();
-        if (el.getAttribute('aria-labelledby')) {
-            const ref = document.getElementById(el.getAttribute('aria-labelledby'));
-            if (ref) return ref.textContent.trim();
-        }
-        return (el.textContent || '').trim();
-    };
-
-    // 1. <img> without alt
-    for (const img of document.querySelectorAll('img')) {
-        if (!isVisible(img)) continue;
-        const alt = img.getAttribute('alt');
-        if (alt == null || alt.trim() === '') {
-            violations.push({
-                kind:     'img-no-alt',
-                src:      img.getAttribute('src') ?? '(no src)',
-                html:     briefHtml(img),
-            });
-        }
-    }
-
-    // 2. <button> with no accessible name
-    for (const btn of document.querySelectorAll('button')) {
-        if (!isVisible(btn)) continue;
-        if (!accessibleName(btn)) {
-            violations.push({
-                kind:     'button-no-name',
-                html:     briefHtml(btn),
-            });
-        }
-    }
-
-    // 3. <input> without label (skip type="hidden" — not displayed)
-    for (const input of document.querySelectorAll('input')) {
-        if (input.type === 'hidden') continue;
-        if (!isVisible(input)) continue;
-        // Check for: aria-label, aria-labelledby, wrapping <label>,
-        // <label for="...">, or a placeholder (technically weak
-        // but commonly accepted).
-        if (input.getAttribute('aria-label')) continue;
-        if (input.getAttribute('aria-labelledby')) continue;
-        if (input.closest('label')) continue;
-        if (input.id) {
-            const associated = document.querySelector(`label[for="${input.id}"]`);
-            if (associated) continue;
-        }
-        if (input.getAttribute('placeholder')) continue; // weak but tolerated
-        violations.push({
-            kind:     'input-no-label',
-            type:     input.getAttribute('type') ?? 'text',
-            name:     input.getAttribute('name') ?? '(no name)',
-            html:     briefHtml(input),
-        });
-    }
-
-    return violations;
-};
+// Slice 293: A11Y_HEURISTICS extracted to a shared fixture.
+// Previously this scenario carried the heuristic inline (slice 92);
+// slice 289 added refinements (skip aria-hidden, accept title) in
+// scenario 67 but didn't back-port; slice 292 (scenario 70) made it
+// 3 inline copies. Slice 293 centralizes — importing here also
+// retroactively picks up the refinements (which are strict
+// improvements: false-positive elimination on aria-hidden imgs and
+// title-bearing icon buttons that this scenario's empirical
+// baseline didn't happen to surface).
 
 export default {
     name:        '52-a11y-heuristics-companies',
@@ -185,13 +119,7 @@ export default {
                 // (populated empirically)
             ];
 
-            const isKnown = (v) => KNOWN_BASELINE.some(
-                (rule) => rule.kind === v.kind && (rule.match instanceof RegExp
-                    ? rule.match.test(v.html ?? '')
-                    : (v.html ?? '').includes(rule.match)),
-            );
-
-            const fresh = violations.filter((v) => !isKnown(v));
+            const fresh = violations.filter((v) => !isKnownViolation(v, KNOWN_BASELINE));
             if (fresh.length > 0) {
                 const summary = fresh.map((v, i) =>
                     `${i + 1}. [${v.kind}] ${v.html}`,

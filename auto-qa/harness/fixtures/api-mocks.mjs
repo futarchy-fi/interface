@@ -102,7 +102,11 @@ export function makeGraphqlMockHandler({
     return async (route) => {
         const body = JSON.parse(route.request().postData() || '{}');
         const q = body.query || '';
-        onCall?.(q);
+        // Pass the full body as a second arg so scenarios that need
+        // to inspect variables (e.g., `useOrganization`'s
+        // `variables: { id: "0x..." }`) can. Existing callbacks
+        // that take only `(query)` continue working.
+        onCall?.(q, body);
 
         let data;
         if (q.includes('aggregator(id:')) {
@@ -125,6 +129,31 @@ export function makeGraphqlMockHandler({
                     owner:        '0x0000000000000000000000000000000000000000',
                     editor:       '0x0000000000000000000000000000000000000000',
                 }],
+            };
+        } else if (q.includes('organization(id:')) {
+            // useOrganization's parameterized singular form
+            // (`organization(id: $id) { ... }`, address in
+            // body.variables.id). Used by /milestones?company_id=<slug>
+            // post-PR-50 (LEGACY_ID_TO_ORG_ADDRESS maps the slug to
+            // an on-chain address, then useOrganization fetches the
+            // org by that address). Without this branch, the
+            // consumer hook's `data?.organization` is undefined and
+            // it throws "Organization not found" — a fixture
+            // limitation, not a real bug. Returning a synthesized
+            // org echoing back the requested id keeps the harness
+            // happy. Scenarios that want to exercise the missing-
+            // org branch can override via `organizations: []` and
+            // an onCall observer (see scenario 63 for the pattern).
+            data = {
+                organization: {
+                    id:           body?.variables?.id ?? PROBE_ORG_ID,
+                    name:         orgName,
+                    description:  'Probe org returned by mocked GraphQL (singular)',
+                    metadata:     orgMetadata,
+                    metadataURI:  null,
+                    owner:        '0x0000000000000000000000000000000000000000',
+                    editor:       '0x0000000000000000000000000000000000000000',
+                },
             };
         } else if (/proposalentities\s*\(/.test(q)) {
             // Matches both single-line ("proposalentities(where:") AND
@@ -668,6 +697,122 @@ export function makeMarketCandlesMockHandler(opts = {}) {
             contentType: 'application/json',
             body: JSON.stringify({ data }),
         });
+    };
+}
+
+/**
+ * Wrap `makeMarketCandlesMockHandler` to enrich the
+ * `fetchProposalFromSubgraph` (subgraphConfigAdapter) discovery query
+ * with the data the adapter needs to populate
+ * `metadata.conditional_pools.yes/no.address` AND
+ * `metadata.currencyTokens.{base,yes,no}` AND
+ * `metadata.companyTokens.{base,yes,no}` — which in turn populate
+ * `POOL_CONFIG_YES/NO.address` + `MERGE_CONFIG.currencyPositions/
+ * companyPositions` + `BASE_TOKENS_CONFIG.currency/company.address` in
+ * `useContractConfig`.
+ *
+ * The shared `makeMarketCandlesMockHandler`'s discovery branch
+ * matches the lighter `proposal` + `whitelistedtokens` shape used by
+ * `usePoolData` and friends; it does NOT cover the richer three-field
+ * shape (`proposal` + `whitelistedtokens` + `pools`) emitted by
+ * `subgraphConfigAdapter.fetchProposalFromSubgraph` — so token roles
+ * default to bare `YES`/`NO`/`CURRENCY` and `pools` is omitted, making
+ * the adapter's `findRole('YES_COMPANY')` / `findPool('CONDITIONAL',
+ * 'YES')` lookups return null. Result: pool addresses + token configs
+ * stay null in useContractConfig and any DOM surface gated on them
+ * (TwapCountdown's value section, Prediction Market badge,
+ * ShowcaseSwapComponent's quote panel, etc.) stays hidden.
+ *
+ * This wrapper intercepts ONLY the three-field discovery query
+ * (matching `pools(where:` in addition to the other two), returns a
+ * complete shape with:
+ *   - `proposal` carrying `marketName`, `companyToken`, `currencyToken`
+ *   - `whitelistedtokens` with the four expected roles
+ *     (`YES_COMPANY` / `NO_COMPANY` / `YES_CURRENCY` / `NO_CURRENCY`)
+ *   - `pools` with `type: 'CONDITIONAL'` and
+ *     `outcomeSide: 'YES'` / `'NO'` keyed on `MARKET_PROBE_YES_POOL` /
+ *     `_NO_POOL` addresses
+ * and falls through to the shared base handler for every other
+ * query shape (per-pool detail, candles, pool-batch, etc.).
+ *
+ * **Why scenario-opt-in rather than baked into the shared
+ * handler**: scenarios 10-43 + 53-57 currently get pool addresses =
+ * null and trust the page to render the page-shell + their specific
+ * assertion surface. Flipping pool addresses to set values across all
+ * of them at once would trigger additional RPC traffic (swap quoting,
+ * balance reading, etc.) against MARKET_PROBE pool addresses that
+ * have no contract deployment — possibly tripping the page-error
+ * monitor in scenarios that opt in (10, 11, etc.). Scenarios that
+ * NEED the rich data path opt in by importing this wrapper.
+ *
+ * @param {object} opts
+ * @param {string} [opts.marketName] override the proposal's marketName
+ * @returns {(route: import('@playwright/test').Route) => Promise<void>}
+ */
+export function makeSubgraphAwareCandlesHandler({
+    marketName = 'Harness probe market',
+} = {}) {
+    const baseHandler = makeMarketCandlesMockHandler();
+    const proposalLower = MARKET_PROBE_ADDRESS.toLowerCase();
+    const yesPoolLower = MARKET_PROBE_YES_POOL.toLowerCase();
+    const noPoolLower  = MARKET_PROBE_NO_POOL.toLowerCase();
+
+    return async (route) => {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const q = body.query || '';
+
+        if (
+            q.includes('proposal(id:') &&
+            q.includes('whitelistedtokens(where:') &&
+            q.includes('pools(where:')
+        ) {
+            const data = {
+                proposal: {
+                    id:            proposalLower,
+                    marketName,
+                    currencyToken: MARKET_PROBE_CURRENCY_TKN,
+                    companyToken:  MARKET_PROBE_COMPANY_TKN,
+                },
+                whitelistedtokens: [
+                    // Use full 20-byte addresses so consumers
+                    // (useContractConfig → MERGE_CONFIG) pass them
+                    // unchanged to viem-backed calls, which strictly
+                    // validate address shape. The 1-byte dummies
+                    // we used through slice 100 worked because no
+                    // consumer ever passed them to a contract read,
+                    // but scenarios that drive ConfirmSwapModal's
+                    // hide-approval useEffect (e.g., scenario 65)
+                    // route the addresses through viem's
+                    // readContract.address, which rejects anything
+                    // < 20 bytes pre-flight.
+                    { id: '0x1010101010101010101010101010101010101010',
+                      address: '0x1010101010101010101010101010101010101010',
+                      symbol: 'YES_GNO', decimals: 18, role: 'YES_COMPANY' },
+                    { id: '0x2020202020202020202020202020202020202020',
+                      address: '0x2020202020202020202020202020202020202020',
+                      symbol: 'NO_GNO', decimals: 18, role: 'NO_COMPANY' },
+                    { id: '0x3030303030303030303030303030303030303030',
+                      address: '0x3030303030303030303030303030303030303030',
+                      symbol: 'YES_sDAI', decimals: 18, role: 'YES_CURRENCY' },
+                    { id: '0x4040404040404040404040404040404040404040',
+                      address: '0x4040404040404040404040404040404040404040',
+                      symbol: 'NO_sDAI', decimals: 18, role: 'NO_CURRENCY' },
+                ],
+                pools: [
+                    { id: yesPoolLower, name: `harness-pool-${yesPoolLower.slice(2, 10)}`,
+                      type: 'CONDITIONAL', outcomeSide: 'YES', price: '0.5' },
+                    { id: noPoolLower,  name: `harness-pool-${noPoolLower.slice(2, 10)}`,
+                      type: 'CONDITIONAL', outcomeSide: 'NO',  price: '0.5' },
+                ],
+            };
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ data }),
+            });
+        }
+
+        return baseHandler(route);
     };
 }
 

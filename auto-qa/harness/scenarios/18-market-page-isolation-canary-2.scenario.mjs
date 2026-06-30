@@ -52,6 +52,7 @@ import {
     makeGraphqlMockHandler,
     makeMarketCandlesMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { MARKET_PAGE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '18-market-page-isolation-canary-2',
@@ -67,6 +68,15 @@ export default {
     },
 
     useAnvilRpcProxy: true,
+
+    // Slice 126: extend page-error monitor opt-in to the second
+    // isolation canary. Same rationale as #16 — a runner-side
+    // isolation regression for ERC1155 mutations might emit
+    // console.error logs (e.g., "snapshot diff missing nested
+    // mapping write") before the DOM-text "1100 sDAI" line
+    // surfaces the user-visible symptom.
+    assertNoPageErrors: true,
+    excludePageErrors: MARKET_PAGE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         async (page) => {

@@ -63,6 +63,7 @@ import {
     makeGraphqlMockHandler,
     makeMarketCandlesMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { MARKET_PAGE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '16-market-page-isolation-canary',
@@ -78,6 +79,17 @@ export default {
     },
 
     useAnvilRpcProxy: true,
+
+    // Slice 126: extend page-error monitor opt-in to the isolation
+    // canary. The canary's purpose is to surface state-pollution
+    // regressions cleanly (#15's mutation didn't revert), but a
+    // RUNNER-side regression that broke isolation could ALSO emit
+    // console.error logs (e.g., "snapshot id mismatch", "revert
+    // returned false"). The monitor catches those silently while
+    // the DOM-text "1100 sDAI" assertion focuses on the
+    // user-visible symptom.
+    assertNoPageErrors: true,
+    excludePageErrors: MARKET_PAGE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         async (page) => {

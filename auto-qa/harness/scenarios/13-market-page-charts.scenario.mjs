@@ -62,6 +62,7 @@ import {
     makeGraphqlMockHandler,
     makeMarketCandlesMockHandler,
 } from '../fixtures/api-mocks.mjs';
+import { MARKET_PAGE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '13-market-page-charts',
@@ -75,6 +76,17 @@ export default {
         }),
         [CANDLES_GRAPHQL_URL]: makeMarketCandlesMockHandler(),
     },
+
+    // Slice 125: extend page-error monitor opt-in to the charts
+    // feature-area scenario. TripleChart + ChartParameters mount
+    // through useChartData → indexer queries → applyRateToCandles
+    // (the same transform whose regression PR #9 fixed). A silent
+    // numeric error in that pipeline (NaN propagation, undefined
+    // close in a candle row) would log a console.error from the
+    // chart library; the monitor catches it where DOM-text
+    // assertions ("Yes Price" / "No Price") wouldn't.
+    assertNoPageErrors: true,
+    excludePageErrors: MARKET_PAGE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // **Live-validated assertions** (pass 2). The original

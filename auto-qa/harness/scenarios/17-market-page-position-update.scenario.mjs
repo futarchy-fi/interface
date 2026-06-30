@@ -63,6 +63,7 @@ import {
     makeMarketCandlesMockHandler,
 } from '../fixtures/api-mocks.mjs';
 import { setConditionalPosition, HOOK_FALLBACK_POSITION_IDS } from '../fixtures/fork-state.mjs';
+import { MARKET_PAGE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 const NEW_POSITION_AMOUNT_WEI = 200n * 10n ** 18n;
 
@@ -80,6 +81,17 @@ export default {
     },
 
     useAnvilRpcProxy: true,
+
+    // Slice 126: extend page-error monitor opt-in to the ERC1155
+    // position-mutation scenario. setConditionalPosition writes
+    // directly to the CT contract's _balances slot via setStorageAt
+    // — the page's ERC1155 balanceOf reads pick up the change after
+    // the auto-refresh tick. A regression in balanceOfBatch caching,
+    // min(YES, NO) aggregation, or the formatter for non-100-aligned
+    // values may emit console.error from React or the formatter
+    // before the DOM "Available 1200 sDAI" line locks in.
+    assertNoPageErrors: true,
+    excludePageErrors: MARKET_PAGE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Step 1: pre-mutation baseline. Same assertion as #11 + #16.

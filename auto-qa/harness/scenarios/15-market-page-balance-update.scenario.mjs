@@ -79,6 +79,7 @@ import {
     setErc20Balance,
     SDAI_TOKEN_GNOSIS_ADDRESS,
 } from '../fixtures/fork-state.mjs';
+import { MARKET_PAGE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '15-market-page-balance-update',
@@ -94,6 +95,18 @@ export default {
     },
 
     useAnvilRpcProxy: true,
+
+    // Slice 125: extend page-error monitor opt-in to the
+    // fork-mutating balance-update scenario. The 15s auto-refresh
+    // tick + setErc20Balance round-trip exercises useBalanceManager's
+    // interval mechanics — bug shapes like cleared intervals,
+    // memo'd-against-stale-deps, or de-duped cached promises don't
+    // throw but emit telltale console.error logs from React or
+    // wagmi's internal warnings. The monitor catches them where
+    // the value-flow assertion ("Available 100 sDAI") only catches
+    // a wrong final value.
+    assertNoPageErrors: true,
+    excludePageErrors: MARKET_PAGE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Step 1: wait for the pre-mutation state. If this assertion

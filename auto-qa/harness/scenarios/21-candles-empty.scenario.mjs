@@ -45,6 +45,7 @@ import {
     makeGraphqlMockHandler,
     fakePoolBearingProposal,
 } from '../fixtures/api-mocks.mjs';
+import { BASELINE_PAGE_ERROR_EXCLUSIONS } from '../fixtures/page-error-exclusions.mjs';
 
 export default {
     name:        '21-candles-empty',
@@ -78,6 +79,11 @@ export default {
             });
         },
     },
+
+    // Slice 129: page-error monitor opt-in for chaos scenarios.
+    // /companies surface uses BASELINE exclusions.
+    assertNoPageErrors: true,
+    excludePageErrors: BASELINE_PAGE_ERROR_EXCLUSIONS,
 
     assertions: [
         // Pre-flight: carousel card mounted (registry path
