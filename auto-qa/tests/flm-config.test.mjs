@@ -67,6 +67,10 @@ test('liquidity manager helpers pin Swapr adapter calldata and manager overloads
     );
     assert.match(pageSource, /depositToSpot\(uint256,uint256,bytes\)/);
     assert.match(pageSource, /encodeDualExitParams\(yesExitData, noExitData\)/);
+    assert.doesNotMatch(utilsSource, /conditionalLiquidity\(\)/);
+    assert.doesNotMatch(utilsSource, /totalManagedLiquidity\(\)/);
+    assert.match(pageSource, /Deposits are paused while this manager is in conditional mode/);
+    assert.match(pageSource, /Cannot deposit while the manager is in conditional mode/);
 });
 
 test('companies table links configured organizations to their liquidity page', async () => {
