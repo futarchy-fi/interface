@@ -1,14 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { createClient } from '@supabase/supabase-js';
 import { PRECISION_CONFIG } from '../components/futarchyFi/marketPage/constants/contracts';
 import { fetchMarketEventData, parseContractSource } from '../adapters/subgraphConfigAdapter';
 import { fetchProposalMetadataFromRegistry, extractChainFromMetadata, extractSpotPriceFromMetadata, extractStartCandleFromMetadata, extractCloseTimestampFromMetadata, extractTwapFromMetadata, extractResolutionFromMetadata, extractDisplayConfigFromMetadata, extractSnapshotIdFromMetadata } from '../adapters/registryAdapter';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Public RPCs for the on-chain resolution fallback check
 const RESOLUTION_RPC_BY_CHAIN = {
@@ -59,7 +53,7 @@ async function fetchOnChainResolution(proposalAddress, conditionalTokensAddress,
 }
 
 /**
- * Hook to fetch and manage contract configuration data from Supabase
+ * Hook to fetch and manage contract configuration data from the Registry/subgraph
  * @param {string} proposalId - The proposal ID to fetch configuration for
  * @param {boolean} forceTestPools - Force use of test pool addresses (default: false)
  * @returns {Object} - Contains loading state, error state, contract configuration data, and refetch function
@@ -143,10 +137,15 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
           if (detectedChain) {
             useContractSource = `subgraph-${detectedChain}`;
             console.log('🔍 Auto-detected chain from Registry:', detectedChain, '→', useContractSource);
-            // Store registry data to enrich subgraph response
-            registryMetadata = registryData;
           } else {
-            console.log('🔍 No chain in Registry metadata, falling back to Supabase');
+            // The legacy Supabase market_event backend is permanently gone; default
+            // to the Gnosis subgraph (with its on-chain fallback) when Registry has no chain.
+            useContractSource = 'subgraph-100';
+            console.log('🔍 No chain in Registry metadata, defaulting to', useContractSource);
+          }
+          // Store registry data (if any) to enrich the subgraph response
+          if (registryData) {
+            registryMetadata = { ...registryData, ...(registryMetadata || {}) };
           }
 
           if (detectedSpotPrice) {
@@ -240,50 +239,7 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
               };
             }
           } else {
-            console.warn('⚠️ Subgraph fetch failed, falling back to Supabase');
-          }
-        }
-
-        // Fall back to Supabase if no subgraph data or subgraph not specified
-        if (!data) {
-          console.log('📊 Fetching from Supabase...');
-          const { data: supabaseData, error: supabaseError } = await supabase
-            .from('market_event')
-            .select('*')
-            .eq('id', extractedProposalId)
-            .single();
-
-          if (supabaseError) {
-            console.error('Error fetching market event:', supabaseError);
-            throw supabaseError;
-          }
-
-          data = supabaseData;
-
-          // Also enrich Supabase data with Registry metadata if available
-          if (data && (registryMetadata || registrySpotPrice || registryStartCandle || registryCloseTimestamp || registryTwap || registryResolution || registrySnapshotId)) {
-            console.log('📝 Enriching Supabase data with Registry metadata');
-            data._registryMetadata = {
-              displayNameQuestion: registryMetadata?.displayNameQuestion,
-              displayNameEvent: registryMetadata?.displayNameEvent,
-              description: registryMetadata?.description,
-              title: registryMetadata?.title,
-              organization: registryMetadata?.organization,
-              coingecko_ticker: registrySpotPrice,
-              startCandleUnix: registryStartCandle,
-              closeTimestamp: registryCloseTimestamp,
-              owner: registryMetadata?.owner,
-              proposalMetadataAddress: registryMetadata?.id,
-              twapDurationHours: registryTwap?.twapDurationHours || null,
-              twapStartTimestamp: registryTwap?.twapStartTimestamp || null,
-              twapDescription: registryTwap?.twapDescription || null,
-              invertTwapPoolYes: registryTwap?.invertTwapPoolYes || false,
-              invertTwapPoolNo: registryTwap?.invertTwapPoolNo || false,
-              resolution_status: registryResolution?.resolution_status || null,
-              resolution_outcome: registryResolution?.resolution_outcome || null,
-              display: registryMetadata?._displayConfig || null,
-              snapshot_id: registrySnapshotId || null
-            };
+            console.warn('⚠️ Subgraph fetch failed and no fallback backend is available');
           }
         }
 

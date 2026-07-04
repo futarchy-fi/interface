@@ -136,7 +136,7 @@ export const MOCK_MARKETS = [
             "futarchyAdapter": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
             "proposalAddress": "0xa28614aa999117C555757D56A8178F271C24d7BA",
             "twapDescription": "The Gnosis DAO Futarchy serves to advise delegates and community members on voting decisions, but the results are non-binding.",
-            "background_image": "https://nvhqdqtlsdboctqjcelq.supabase.co/storage/v1/object/public/market-images/market-backgrounds/1759351073623_0epecp.webp",
+            "background_image": null,
             "eventProbability": 0.5,
             "prediction_pools": {
                 "no": {
@@ -287,7 +287,7 @@ export const MOCK_MARKETS = [
             "display_title_1": "if its price is >= 130 sDAI?",
             "futarchyAdapter": "0x7495a583ba85875d59407781b4958ED6e0E1228f",
             "proposalAddress": "0x7e9Fc0C3d6C1619d4914556ad2dEe6051Ce68418",
-            "background_image": "https://nvhqdqtlsdboctqjcelq.supabase.co/storage/v1/object/public/market-images/market-backgrounds/1759351073623_0epecp.webp",
+            "background_image": null,
             "eventProbability": 0.25,
             "prediction_pools": {
                 "no": {

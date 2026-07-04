@@ -1,15 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { createClient } from '@supabase/supabase-js';
 import { MOCK_MARKETS } from '../../lib/newDesignMockData';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Head from 'next/head';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function NewDesignPage() {
   const [markets, setMarkets] = useState([]);
@@ -17,36 +11,10 @@ export default function NewDesignPage() {
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    async function fetchMarkets() {
-      try {
-        setLoading(true);
-        // Attempt to fetch from Supabase
-        const { data, error } = await supabase
-          .from('market_events') // Assuming table name based on context, usually 'markets' or 'proposals'
-          .select('*')
-          .limit(20);
-
-        if (error || !data || data.length === 0) {
-          console.warn("Supabase fetch failed or empty, using mock data:", error);
-          setMarkets(MOCK_MARKETS);
-        } else {
-            // Map supabase data to match structure if needed, or just use it
-            // For now, mixing in mock data if fetch returns very few to ensure UI looks good
-            if (data.length < 5) {
-                 setMarkets([...data, ...MOCK_MARKETS]);
-            } else {
-                 setMarkets(data);
-            }
-        }
-      } catch (err) {
-        console.error("Error fetching markets:", err);
-        setMarkets(MOCK_MARKETS);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchMarkets();
+    // The Supabase market_events backend is permanently gone; this design
+    // prototype renders from local mock data only.
+    setMarkets(MOCK_MARKETS);
+    setLoading(false);
   }, []);
 
   const filteredMarkets = markets.filter(m => {

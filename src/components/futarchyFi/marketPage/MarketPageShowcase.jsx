@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, memo, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import Image from "next/image";
 import RootLayout from "../../../components/layout/RootLayout";
 import { ENABLE_SUBGRAPH_FOR_ALL_PROPOSALS } from '../../../config/featureFlags';
@@ -63,11 +62,6 @@ import { createSubgraphPoolFetcher } from "../../../utils/SubgraphPoolFetcher";
 //lets import from contract.js 
 import { UNISWAP_V3_POOL_ABI } from "./constants/contracts";
 // Swap Configuration
-
-// Initialize Supabase client for realtime and fetching
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Subgraph pool fetcher instance for latest prices
 const subgraphPoolFetcher = createSubgraphPoolFetcher();
@@ -2788,92 +2782,9 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     };
   }, [config?.POOL_CONFIG_YES?.address, config?.POOL_CONFIG_NO?.address, config?.POOL_CONFIG_THIRD?.address, config?.BASE_POOL_CONFIG?.address]); // Only depend on pool addresses
 
-  // Set up realtime WebSocket subscription for instant price updates
-  useEffect(() => {
-    // Don't set up realtime if we don't have pool addresses yet
-    if (!config?.POOL_CONFIG_YES?.address || !config?.POOL_CONFIG_NO?.address) {
-      console.log('[MarketPageShowcase] Waiting for pool addresses before setting up realtime');
-      return;
-    }
-
-    console.log('[MarketPageShowcase] Setting up realtime subscription for pool_candles');
-
-    const poolAddresses = [
-      config.POOL_CONFIG_YES.address.toLowerCase(),
-      config.POOL_CONFIG_NO.address.toLowerCase(),
-      ...(config.POOL_CONFIG_THIRD?.address ? [config.POOL_CONFIG_THIRD.address.toLowerCase()] : []),
-      ...(config.BASE_POOL_CONFIG?.address ? [config.BASE_POOL_CONFIG.address.toLowerCase()] : [])
-    ];
-
-    const channel = supabase
-      .channel('market-showcase-pool-candles')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'pool_candles',
-        filter: `interval=eq.3600000` // 1 hour interval
-      }, async (payload) => {
-        console.log('[MarketPageShowcase] Realtime pool_candles update:', payload);
-
-        if (!payload.new || !payload.new.address || !payload.new.price) return;
-
-        const poolAddress = payload.new.address.toLowerCase();
-        const newPrice = payload.new.price;
-        const timestamp = payload.new.timestamp;
-
-        // Check if this update is for one of our pools
-        if (!poolAddresses.includes(poolAddress)) {
-          return;
-        }
-
-        console.log(`[MarketPageShowcase] Realtime price update for pool ${poolAddress}: ${newPrice}`);
-
-        // Update the appropriate price based on which pool was updated
-        if (poolAddress === config.POOL_CONFIG_YES.address.toLowerCase()) {
-          // Backend now handles token slot inversion, use raw price directly
-          let adjustedPrice = newPrice;
-
-          setNewYesPrice(adjustedPrice);
-        } else if (poolAddress === config.POOL_CONFIG_NO.address.toLowerCase()) {
-          // Backend now handles token slot inversion, use raw price directly
-          let adjustedPrice = newPrice;
-
-          setNewNoPrice(adjustedPrice);
-          console.log('[MarketPageShowcase] Realtime NO price updated:', adjustedPrice);
-        } else if (config.POOL_CONFIG_THIRD?.address && poolAddress === config.POOL_CONFIG_THIRD.address.toLowerCase()) {
-          // Event probability should use raw price without inversion
-          setNewThirdPrice(newPrice);
-          setThirdCandles((prev) => {
-            const next = prev.filter((candle) => candle.time !== timestamp);
-            next.push({ time: timestamp, value: Number(newPrice) });
-            return next.sort((a, b) => a.time - b.time);
-          });
-          console.log('[MarketPageShowcase] Realtime THIRD price (event probability) updated:', newPrice);
-        } else if (config.BASE_POOL_CONFIG?.address && poolAddress === config.BASE_POOL_CONFIG.address.toLowerCase()) {
-          // Backend now handles currency slot inversion, use raw price directly
-          setNewBasePrice(newPrice);
-          console.log('[MarketPageShowcase] Realtime BASE price updated:', newPrice);
-
-        }
-      })
-      .subscribe((status) => {
-        console.log('[MarketPageShowcase] Realtime subscription status:', status);
-      });
-
-    return () => {
-      console.log('[MarketPageShowcase] Cleaning up realtime subscription');
-      supabase.removeChannel(channel);
-    };
-  }, [
-    config?.POOL_CONFIG_YES?.address,
-    config?.POOL_CONFIG_YES?.tokenCompanySlot,
-    config?.POOL_CONFIG_NO?.address,
-    config?.POOL_CONFIG_NO?.tokenCompanySlot,
-    config?.POOL_CONFIG_THIRD?.address,
-    config?.POOL_CONFIG_THIRD?.tokenCompanySlot,
-    config?.BASE_POOL_CONFIG?.address,
-    config?.BASE_POOL_CONFIG?.currencySlot
-  ]);
+  // NOTE: The Supabase realtime pool_candles subscription that lived here was
+  // removed — the Supabase backend is permanently gone. Prices refresh via the
+  // 30s subgraph polling above.
 
   // Fallback: use subgraph-derived prices when Supabase pool_candles aren't available
   // (e.g., AAVE market has no POOL_CONFIG_YES/NO so Supabase fetch never runs)
@@ -3083,6 +2994,18 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       fetchMarketData();
     }
   }, [config]);
+
+  // Surface config failures instead of leaving the hero stuck on
+  // "Loading badges…" / "Loading description…" forever
+  useEffect(() => {
+    if (!configLoading && configError) {
+      setMarketData(prev => ({
+        ...prev,
+        isLoading: false,
+        error: configError.message || 'Market data unavailable'
+      }));
+    }
+  }, [configLoading, configError]);
 
   const handleConnectWallet = async () => {
     try {
@@ -4794,11 +4717,6 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     // Optional: Refresh balances after closing the swap modal
     refetchBalances();
   };
-
-  // Initialize Supabase client for fetching market data
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co';
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  const supabase = createClient(supabaseUrl, supabaseKey);
 
   // Extract hero content for RootLayout
   const marketHero = (
