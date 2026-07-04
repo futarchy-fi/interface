@@ -25,7 +25,6 @@ import { SubgraphRefreshProvider } from '../contexts/SubgraphRefreshContext';
 const GNOSIS_RPCS = [
   "https://gnosis.drpc.org",
   "https://rpc.gnosischain.com",
-  "https://gnosis-mainnet.public.blastapi.io",
   "https://gnosis-rpc.publicnode.com",
   "https://1rpc.io/gnosis"
 ];

@@ -3,7 +3,6 @@ import { ethers } from 'ethers';
 // List of reliable Gnosis Chain RPC endpoints
 const GNOSIS_RPCS = [
   "https://rpc.ankr.com/gnosis",
-  "https://gnosis-mainnet.public.blastapi.io",
   "https://gnosis.drpc.org",
   "https://gnosis-rpc.publicnode.com",
   "https://1rpc.io/gnosis"
@@ -15,7 +14,6 @@ const ETHEREUM_RPCS = [
   "https://ethereum-rpc.publicnode.com",
   "https://1rpc.io/eth",
   "https://rpc.ankr.com/eth",
-  "https://eth-mainnet.public.blastapi.io"
 ];
 
 /**

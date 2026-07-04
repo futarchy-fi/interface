@@ -25,14 +25,16 @@ async function fetchOnChainResolution(proposalAddress, conditionalTokensAddress,
   try {
     const rpcUrl = RESOLUTION_RPC_BY_CHAIN[Number(chainId)] || RESOLUTION_RPC_BY_CHAIN[100];
     const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    // URL-sourced addresses may carry a bad EIP-55 checksum; lowercase so
+    // ethers doesn't throw before the read.
     const proposal = new ethers.Contract(
-      proposalAddress,
+      proposalAddress.toLowerCase(),
       ['function conditionId() view returns (bytes32)'],
       provider
     );
     const conditionId = await proposal.conditionId();
     const conditionalTokens = new ethers.Contract(
-      conditionalTokensAddress,
+      conditionalTokensAddress.toLowerCase(),
       [
         'function payoutDenominator(bytes32) view returns (uint256)',
         'function payoutNumerators(bytes32, uint256) view returns (uint256)'

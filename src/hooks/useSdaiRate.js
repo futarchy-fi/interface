@@ -10,7 +10,6 @@ import {
 // List of reliable Gnosis Chain RPC endpoints (same as getAlgebraPoolPrice)
 const GNOSIS_RPCS = [
   "https://rpc.ankr.com/gnosis",
-  "https://gnosis-mainnet.public.blastapi.io", 
   "https://gnosis.drpc.org",
   "https://gnosis-rpc.publicnode.com",
   "https://1rpc.io/gnosis"

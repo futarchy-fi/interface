@@ -4,7 +4,6 @@ import { ethers } from "ethers";
 const GNOSIS_RPCS = [
 
   "https://rpc.ankr.com/gnosis",
-  "https://gnosis-mainnet.public.blastapi.io",
   "https://gnosis.drpc.org",
   "https://gnosis-rpc.publicnode.com",
   "https://1rpc.io/gnosis"
