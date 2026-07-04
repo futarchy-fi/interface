@@ -15,7 +15,6 @@ const { ethers } = require('ethers');
 const RPC_LISTS = {
     1: [ // Ethereum Mainnet
         'https://ethereum-rpc.publicnode.com',
-        'https://eth-mainnet.public.blastapi.io',
         'https://1rpc.io/eth',
         'https://rpc.ankr.com/eth'
     ],
