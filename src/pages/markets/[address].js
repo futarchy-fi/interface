@@ -1,8 +1,6 @@
 import dynamic from 'next/dynamic';
 import Head from 'next/head';
-import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { 
+import {
   getStaticMarketAddresses, 
   getMarketConfig, 
   generateMarketSEO 
@@ -14,39 +12,7 @@ const MarketPageShowcase = dynamic(
   { ssr: false }
 );
 
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 export default function DynamicMarketPage({ address, seoData, marketConfig }) {
-  const [marketData, setMarketData] = useState(null);
-
-  useEffect(() => {
-    const fetchMarketData = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('market_event')
-          .select('*')
-          .eq('id', address)
-          .single();
-        
-        if (error) {
-          console.error('Error fetching market data:', error);
-          return;
-        }
-        
-        setMarketData(data);
-      } catch (err) {
-        console.error('Failed to fetch market data:', err);
-      }
-    };
-
-    if (address) {
-      fetchMarketData();
-    }
-  }, [address]);
-
   // If no config exists, show 404 or redirect
   if (!marketConfig) {
     return (
@@ -141,38 +107,16 @@ export async function getStaticProps({ params }) {
     };
   }
 
-  // Generate SEO data
+  // Generate SEO data from the static market config (the Supabase market_event
+  // backend that used to enrich this at build time is permanently gone)
   const seoData = generateMarketSEO(address);
-  
-  // Optional: Fetch additional market data at build time
-  let marketData = null;
-  try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co',
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-    );
-    
-    const { data } = await supabase
-      .from('market_event')
-      .select('*')
-      .eq('id', address)
-      .single();
-    
-    marketData = data;
-  } catch (error) {
-    console.warn(`Failed to fetch market data for ${address} at build time:`, error);
-  }
-
-  // Regenerate SEO data with actual market data if available
-  const finalSeoData = generateMarketSEO(address, marketData);
 
   // Note: revalidate is not supported with output: export
   return {
     props: {
       address,
-      seoData: finalSeoData,
-      marketConfig,
-      marketData
+      seoData,
+      marketConfig
     }
   };
-} 
+}

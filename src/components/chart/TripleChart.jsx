@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, LineSeries } from 'lightweight-charts';
-import { createClient } from '@supabase/supabase-js';
 import { PRECISION_CONFIG } from '../futarchyFi/marketPage/constants/contracts';
 
 const computeRightOffset = (...seriesList) => {
@@ -19,9 +18,10 @@ const DEFAULT_BASE_POOL = '0xd1d7fa8871d84d0e77020fc28b7cd5718c446522';
 const IMPACT_POSITIVE_COLOR = '#00A89D'; // futarchyTeal7
 const IMPACT_NEGATIVE_COLOR = '#ED91B2'; // futarchyCrimson7
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''; // Use the public anon key
-const supabase = createClient(supabaseUrl, supabaseKey);
+// The Supabase candles backend is permanently gone; the chart renders from
+// prop data only. `supabase` is a stub so the (disabled) legacy code paths
+// below never crash if re-enabled by mistake.
+const supabase = null;
 
 const INTERVAL_OPTIONS = [
   { label: '1 Minute', value: '60000' },
@@ -39,8 +39,6 @@ const TripleChart = ({
   sdaiRate = null,
   isLoadingRate = false,
   rateError = null,
-  usingSupabaseRealtime = true,
-  useBaseFromSupabase = true, // <-- NEW FLAG
   yesPoolAddress = DEFAULT_YES_POOL,
   noPoolAddress = DEFAULT_NO_POOL,
   basePoolAddress = DEFAULT_BASE_POOL,
@@ -49,6 +47,11 @@ const TripleChart = ({
   chartFilters = { spot: true, yes: true, no: true, impact: false }, // Spot price shown as semi-transparent dashed line
   cropSpot = true, // Only show spot data points that have corresponding YES/NO data at the same timestamp
 }) => {
+  // Supabase realtime candle fetching is permanently disabled (backend gone);
+  // these flags stay hardcoded off so the chart only renders prop data.
+  const usingSupabaseRealtime = false;
+  const useBaseFromSupabase = false;
+
   // Get dynamic pool addresses from config - PRIORITIZE CONDITIONAL POOLS
   // POOL_CONFIG_YES/NO are mapped to conditional_pools in useContractConfig (the prediction market pools)
   // PREDICTION_POOLS are fallback pools if conditional pools not available

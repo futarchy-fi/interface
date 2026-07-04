@@ -28,79 +28,9 @@ const DynamicShareCard = ({ isOpen, onClose }) => {
     const [isAutoCycling, setIsAutoCycling] = useState(false);
     const [exportCounter, setExportCounter] = useState(0);
 
-    // Fetch companies on mount
-    useEffect(() => {
-        const fetchCompanies = async () => {
-            try {
-                const response = await fetch(
-                    `https://nvhqdqtlsdboctqjcelq.supabase.co/rest/v1/company?select=*&order=name.asc`,
-                    {
-                        headers: {
-                            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-                            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`
-                        }
-                    }
-                );
-
-                if (!response.ok) throw new Error('Failed to fetch companies');
-
-                const data = await response.json();
-                setCompanies(data);
-                if (data.length > 0) {
-                    setSelectedCompany(data[0]);
-                }
-            } catch (err) {
-                console.error('Error fetching companies:', err);
-                setError('Failed to load companies');
-            }
-        };
-
-        if (isOpen) { // Only fetch when open or on mount
-            fetchCompanies();
-        }
-    }, [isOpen]);
-
-    // Fetch markets when company changes
-    useEffect(() => {
-        if (selectedCompany) {
-            setLoading(true);
-            setError(null);
-            setSelectedMarket(null);
-
-            const fetchMarkets = async () => {
-                try {
-                    const response = await fetch(
-                        `https://nvhqdqtlsdboctqjcelq.supabase.co/rest/v1/market_event?select=*&company_id=eq.${selectedCompany.id}&order=created_at.desc`,
-                        {
-                            headers: {
-                                'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-                                'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`
-                            }
-                        }
-                    );
-
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch markets');
-                    }
-
-                    const data = await response.json();
-                    setMarkets(data);
-
-                    // Auto-select first market if available
-                    if (data.length > 0) {
-                        setSelectedMarket(data[0]);
-                        setCurrentMarketIndex(0);
-                    }
-                } catch (err) {
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            fetchMarkets();
-        }
-    }, [selectedCompany]);
+    // The Supabase company/market_event backend that used to feed these dropdowns
+    // is permanently gone. The card degrades to its empty state ("No markets
+    // available") until a replacement data source is wired up.
 
     // Auto-cycling functionality
     useEffect(() => {

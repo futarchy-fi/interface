@@ -1,17 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { createClient } from '@supabase/supabase-js';
 import { MOCK_MARKETS } from '../../lib/newDesignMockData';
 import Link from 'next/link';
 import Head from 'next/head';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { motion } from 'framer-motion';
 import NewSwapInterface from '../../components/new-design/NewSwapInterface';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function MarketDetailPage() {
   const router = useRouter();
@@ -22,53 +16,17 @@ export default function MarketDetailPage() {
   useEffect(() => {
     if (!marketId) return;
 
-    async function fetchMarket() {
-      setLoading(true);
-      try {
-        console.log("Fetching market from Supabase:", marketId);
-        
-        // Fetch from Supabase first
-        const { data, error } = await supabase
-          .from('market_event')
-          .select('*')
-          .eq('id', marketId)
-          .single();
+    // The Supabase market_event backend is permanently gone; this design
+    // prototype resolves markets from local mock data only.
+    const mockMarket = MOCK_MARKETS.find(m => m.id === marketId || m.proposal_markdown?.includes(marketId));
 
-        if (data) {
-            console.log("Market found in Supabase:", data);
-            setMarket(data);
-            setLoading(false);
-            return;
-        }
-
-        if (error) {
-            console.warn("Supabase fetch error:", error);
-        }
-
-        console.log("Market not found in Supabase, checking mock data...");
-
-        // Fallback to mock data
-        const mockMarket = MOCK_MARKETS.find(m => m.id === marketId || m.proposal_markdown?.includes(marketId));
-        
-        if (mockMarket) {
-            console.log("Market found in mock data:", mockMarket);
-            setMarket(mockMarket);
-        } else {
-            console.warn("Market not found in mock data either.");
-            // Optional: setMarket(MOCK_MARKETS[0]) if you still want a default fallback, 
-            // but user asked to stop mocking, so maybe just leave it null or show error.
-            // For now, keeping the "default to first mock" behavior as a last resort to prevent blank page during dev
-            // setMarket(MOCK_MARKETS[0]); 
-        }
-
-      } catch (err) {
-        console.error("Error fetching market:", err);
-      } finally {
-        setLoading(false);
-      }
+    if (mockMarket) {
+        setMarket(mockMarket);
+    } else {
+        console.warn("Market not found in mock data.");
     }
 
-    fetchMarket();
+    setLoading(false);
   }, [marketId]);
 
   if (loading) {
