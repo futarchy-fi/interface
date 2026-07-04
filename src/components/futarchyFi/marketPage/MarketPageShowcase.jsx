@@ -74,7 +74,8 @@ const subgraphPoolFetcher = createSubgraphPoolFetcher();
 
 const GNOSIS_DEFAULT_RPC = process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com';
 const ALGEBRA_TWAP_ABI = [
-  "function getTimepoints(uint32[] secondsAgos) external view returns (int56[] tickCumulatives, uint160[] secondsPerLiquidityCumulatives, uint112[] volatilityCumulatives, uint256[] volumePerAvgLiquiditys)"
+  "function getTimepoints(uint32[] secondsAgos) external view returns (int56[] tickCumulatives, uint160[] secondsPerLiquidityCumulatives, uint112[] volatilityCumulatives, uint256[] volumePerAvgLiquiditys)",
+  "function token0() external view returns (address)"
 ];
 const DEFAULT_TWAP_DESCRIPTION = "The Futarchy Test is considered passed if the time-weighted average price (TWAP) of the \u201cpass\u201d (yes) outcome over the final 24 hours of the Issuance KIP\u2019s voting period is greater than or equal to that of the \u201cfail\u201d (no) outcome. If not, the proposal fails the futarchy test, regardless of the Kleros DAO vote result.";
 const TWAP_REFRESH_INTERVAL_MS = 30000; // refresh every 30 seconds while active
@@ -512,7 +513,9 @@ const TwapCountdown = ({
   yesPoolConfig,
   noPoolConfig,
   invertTwapPoolYes = false,
-  invertTwapPoolNo = false
+  invertTwapPoolNo = false,
+  yesCompanyTokenAddress = null,
+  noCompanyTokenAddress = null
 }) => {
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [timeUntilStart, setTimeUntilStart] = useState(null);
@@ -526,6 +529,7 @@ const TwapCountdown = ({
   const [twapError, setTwapError] = useState(null);
   const [lastTwapUpdate, setLastTwapUpdate] = useState(null);
   const providerRef = useRef(null);
+  const poolToken0CacheRef = useRef({});
 
   const twapDurationSeconds = useMemo(() => Math.max(1, Math.floor(twapDurationHours * 60 * 60)), [twapDurationHours]);
 
@@ -536,7 +540,7 @@ const TwapCountdown = ({
     return providerRef.current;
   }, []);
 
-  const fetchPoolTwap = useCallback(async (poolConfig, secondsAgoStart, shouldInvert = null, secondsAgoEnd = 0) => {
+  const fetchPoolTwap = useCallback(async (poolConfig, secondsAgoStart, shouldInvert = null, secondsAgoEnd = 0, companyTokenAddress = null) => {
     if (!poolConfig?.address) {
       throw new Error('Missing pool address');
     }
@@ -556,16 +560,48 @@ const TwapCountdown = ({
       throw new Error('Invalid price data');
     }
 
-    // Priority: explicit inversion flag from metadata > tokenCompanySlot from pool config
+    // Authoritative inversion check: read token0 from the pool and compare it to the
+    // conditional company token. Raw pool price = 1.0001^tick = token1/token0, so when
+    // the company token is token0 the raw price is already currency-per-company and
+    // must NOT be inverted. Metadata flags have been wrong before (Kleros KIP markets
+    // shipped invertTwapPoolYes/No=true while PNK was token0), so on-chain token order
+    // wins whenever we can determine it.
+    let onChainInvert = null;
+    if (companyTokenAddress) {
+      try {
+        const poolKey = poolConfig.address.toLowerCase();
+        let token0 = poolToken0CacheRef.current[poolKey];
+        if (!token0) {
+          token0 = (await poolContract.token0()).toLowerCase();
+          poolToken0CacheRef.current[poolKey] = token0;
+        }
+        onChainInvert = token0 !== companyTokenAddress.toLowerCase();
+      } catch (err) {
+        console.warn('[TWAP] token0() read failed, falling back to configured inversion:', err?.message);
+      }
+    }
+
+    // Priority: on-chain token order > explicit inversion flag from metadata > tokenCompanySlot from pool config
     // shouldInvert is null when not set, so we can distinguish between "not set" and "set to false"
-    const useInversion = shouldInvert !== null
-      ? shouldInvert
-      : (typeof poolConfig.tokenCompanySlot === 'number' && poolConfig.tokenCompanySlot === 1);
+    const useInversion = onChainInvert !== null
+      ? onChainInvert
+      : (shouldInvert !== null
+        ? shouldInvert
+        : (typeof poolConfig.tokenCompanySlot === 'number' && poolConfig.tokenCompanySlot === 1));
+
+    if (onChainInvert !== null && shouldInvert !== null && onChainInvert !== shouldInvert) {
+      console.warn('[TWAP] Metadata inversion flag contradicts on-chain token order; using on-chain value', {
+        pool: poolConfig.address,
+        metadataInvert: shouldInvert,
+        onChainInvert
+      });
+    }
 
     console.log('[TWAP] fetchPoolTwap:', {
       pool: poolConfig.address?.slice(0, 10),
       rawPrice: rawPrice.toFixed(4),
       shouldInvert,
+      onChainInvert,
       tokenCompanySlot: poolConfig.tokenCompanySlot,
       useInversion
     });
@@ -636,8 +672,8 @@ const TwapCountdown = ({
         const secondsAgoEnd = hasEnded ? Math.max(0, now - twapEndTimestamp) : 0;
 
         const [yesPrice, noPrice] = await Promise.all([
-          fetchPoolTwap(yesPoolConfig, secondsAgoStart, invertTwapPoolYes, secondsAgoEnd),
-          fetchPoolTwap(noPoolConfig, secondsAgoStart, invertTwapPoolNo, secondsAgoEnd)
+          fetchPoolTwap(yesPoolConfig, secondsAgoStart, invertTwapPoolYes, secondsAgoEnd, yesCompanyTokenAddress),
+          fetchPoolTwap(noPoolConfig, secondsAgoStart, invertTwapPoolNo, secondsAgoEnd, noCompanyTokenAddress)
         ]);
 
         if (cancelled) return;
@@ -669,7 +705,7 @@ const TwapCountdown = ({
       cancelled = true;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [isActive, hasEnded, twapStartTimestamp, twapDurationSeconds, yesPoolConfig, noPoolConfig, invertTwapPoolYes, invertTwapPoolNo, fetchPoolTwap]);
+  }, [isActive, hasEnded, twapStartTimestamp, twapDurationSeconds, yesPoolConfig, noPoolConfig, invertTwapPoolYes, invertTwapPoolNo, yesCompanyTokenAddress, noCompanyTokenAddress, fetchPoolTwap]);
 
   const { leaderboardText, percentDiff, leaderTheme } = useMemo(() => {
     if (twapResults.yes === null || twapResults.no === null) return { leaderboardText: null, percentDiff: null, leaderTheme: 'neutral' };
@@ -5086,6 +5122,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                 noPoolConfig={config.POOL_CONFIG_NO}
                 invertTwapPoolYes={config.marketInfo.invertTwapPoolYes || false}
                 invertTwapPoolNo={config.marketInfo.invertTwapPoolNo || config.marketInfo.invertTwapPoolNO || false}
+                yesCompanyTokenAddress={config.metadata?.companyTokens?.yes?.wrappedCollateralTokenAddress || null}
+                noCompanyTokenAddress={config.metadata?.companyTokens?.no?.wrappedCollateralTokenAddress || null}
               />
             )}
           </div>

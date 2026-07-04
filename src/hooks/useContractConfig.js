@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { ethers } from 'ethers';
 import { createClient } from '@supabase/supabase-js';
 import { PRECISION_CONFIG } from '../components/futarchyFi/marketPage/constants/contracts';
 import { fetchMarketEventData, parseContractSource } from '../adapters/subgraphConfigAdapter';
@@ -8,6 +9,54 @@ import { fetchProposalMetadataFromRegistry, extractChainFromMetadata, extractSpo
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nvhqdqtlsdboctqjcelq.supabase.co';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Public RPCs for the on-chain resolution fallback check
+const RESOLUTION_RPC_BY_CHAIN = {
+  1: 'https://eth.llamarpc.com',
+  100: process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com'
+};
+
+/**
+ * Check resolution directly on-chain via ConditionalTokens payouts.
+ * Registry metadata can lag behind the actual on-chain resolution (e.g. Kleros KIP-88
+ * resolved on-chain but its metadata was never updated with resolution_status),
+ * which hid the Redeem tab. payoutDenominator > 0 is the authoritative signal that
+ * redemption is possible.
+ * @param {string} proposalAddress - FutarchyProposal contract address
+ * @param {string} conditionalTokensAddress - ConditionalTokens contract address
+ * @param {number|string} chainId - Chain the proposal lives on
+ * @returns {Promise<{resolved: boolean, outcome: string|null}|null>} null when the check fails
+ */
+async function fetchOnChainResolution(proposalAddress, conditionalTokensAddress, chainId) {
+  try {
+    const rpcUrl = RESOLUTION_RPC_BY_CHAIN[Number(chainId)] || RESOLUTION_RPC_BY_CHAIN[100];
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const proposal = new ethers.Contract(
+      proposalAddress,
+      ['function conditionId() view returns (bytes32)'],
+      provider
+    );
+    const conditionId = await proposal.conditionId();
+    const conditionalTokens = new ethers.Contract(
+      conditionalTokensAddress,
+      [
+        'function payoutDenominator(bytes32) view returns (uint256)',
+        'function payoutNumerators(bytes32, uint256) view returns (uint256)'
+      ],
+      provider
+    );
+    const denominator = await conditionalTokens.payoutDenominator(conditionId);
+    if (denominator.isZero()) {
+      return { resolved: false, outcome: null };
+    }
+    // Outcome slot 0 = Yes, slot 1 = No for futarchy proposals
+    const yesNumerator = await conditionalTokens.payoutNumerators(conditionId, 0);
+    return { resolved: true, outcome: yesNumerator.gt(0) ? 'Yes' : 'No' };
+  } catch (error) {
+    console.warn('[Config] On-chain resolution check failed:', error?.message);
+    return null;
+  }
+}
 
 /**
  * Hook to fetch and manage contract configuration data from Supabase
@@ -283,6 +332,25 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
           console.log('🎯 Using proposal-specific base pool override:', proposalSpecificBasePool, 'for proposal:', extractedProposalId);
         }
 
+        // Resolution status: prefer metadata, but fall back to the on-chain
+        // ConditionalTokens payout state when metadata says unresolved/missing.
+        const metadataResolved = (data.resolution_outcome !== null && data.resolution_outcome !== undefined)
+          || data.resolution_status === 'resolved'
+          || data._registryMetadata?.resolution_status === 'resolved'
+          || (data._registryMetadata?.resolution_outcome !== null && data._registryMetadata?.resolution_outcome !== undefined);
+
+        let onChainResolution = null;
+        if (!metadataResolved && metadata?.contractInfos?.conditionalTokens) {
+          onChainResolution = await fetchOnChainResolution(
+            extractedProposalId,
+            metadata.contractInfos.conditionalTokens,
+            metadata?.chain || 100
+          );
+          if (onChainResolution?.resolved) {
+            console.log('[Config] Market resolved on-chain but not in metadata; enabling redemption UI', onChainResolution);
+          }
+        }
+
         // Transform API data into the format needed by the application
         const transformedConfig = {
           // Proposal/Market identification (these are the same thing)
@@ -491,13 +559,13 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
             // Include question link from metadata (check both nested and direct paths)
             questionLink: metadata?.metadata?.question_link || metadata?.questionLink || null,
             // Add resolved status - only resolved if there's an actual outcome or resolution_status indicates completion
-            // Fall back to _registryMetadata for resolution fields (market subgraph doesn't have these)
-            resolved: (data.resolution_outcome !== null && data.resolution_outcome !== undefined)
-              || data.resolution_status === 'resolved'
-              || data._registryMetadata?.resolution_status === 'resolved'
-              || (data._registryMetadata?.resolution_outcome !== null && data._registryMetadata?.resolution_outcome !== undefined),
-            resolutionStatus: data.resolution_status || data._registryMetadata?.resolution_status || null,
-            finalOutcome: data.resolution_outcome || data._registryMetadata?.resolution_outcome || metadata?.finalOutcome || null,
+            // Fall back to _registryMetadata for resolution fields (market subgraph doesn't have these),
+            // then to the on-chain ConditionalTokens payout state (metadata can lag behind resolution)
+            resolved: metadataResolved || onChainResolution?.resolved === true,
+            resolutionStatus: data.resolution_status || data._registryMetadata?.resolution_status
+              || (onChainResolution?.resolved ? 'resolved' : null),
+            finalOutcome: data.resolution_outcome || data._registryMetadata?.resolution_outcome || metadata?.finalOutcome
+              || onChainResolution?.outcome || null,
             // TWAP configuration (prioritize Registry metadata, then direct metadata)
             twapStartTimestamp: data._registryMetadata?.twapStartTimestamp || metadata?.twapStartTimestamp || null,
             twapDurationHours: data._registryMetadata?.twapDurationHours || metadata?.twapDurationHours || 24,
