@@ -29,7 +29,6 @@ import PositionsTable from "./PositionsTable";
 import { useSnapshotData } from '../../../hooks/useSnapshotData';
 import MarketBalancePanel from "./MarketBalancePanel";
 import PoolDataDisplay from "./PoolDataDisplay";
-import RecentTradesDataLayer from "./RecentTradesDataLayer";
 import SubgraphTradesDataLayer from "./SubgraphTradesDataLayer";
 import { useYesNoPoolData } from '../../../hooks/usePoolData';
 import dayjs from 'dayjs'; // Added dayjs import
@@ -5288,40 +5287,22 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                           )}
                           {activeTab === 'recent-trades-sdk' && (
                             <div className="rounded-2xl border border-futarchyGray62 dark:border-futarchyDarkGray42 bg-futarchyGray2 dark:bg-futarchyDarkGray3">
-                              {useSubgraphTrades ? (
-                                <SubgraphTradesDataLayer
-                                  tokenImages={tokenImages}
-                                  config={config}
-                                  showMyTrades={false}
-                                  limit={tradesLimit}
-                                />
-                              ) : (
-                                <RecentTradesDataLayer
-                                  tokenImages={tokenImages}
-                                  config={config}
-                                  showMyTrades={showMyTrades}
-                                  limit={tradesLimit}
-                                />
-                              )}
+                              <SubgraphTradesDataLayer
+                                tokenImages={tokenImages}
+                                config={config}
+                                showMyTrades={false}
+                                limit={tradesLimit}
+                              />
                             </div>
                           )}
                           {activeTab === 'my-trades-sdk' && (
                             <div className="rounded-2xl border border-futarchyGray62 dark:border-futarchyDarkGray42 bg-futarchyGray2 dark:bg-futarchyDarkGray3">
-                              {useSubgraphTrades ? (
-                                <SubgraphTradesDataLayer
-                                  tokenImages={tokenImages}
-                                  config={config}
-                                  showMyTrades={true}
-                                  limit={tradesLimit}
-                                />
-                              ) : (
-                                <RecentTradesDataLayer
-                                  tokenImages={tokenImages}
-                                  config={config}
-                                  showMyTrades={true}
-                                  limit={tradesLimit}
-                                />
-                              )}
+                              <SubgraphTradesDataLayer
+                                tokenImages={tokenImages}
+                                config={config}
+                                showMyTrades={true}
+                                limit={tradesLimit}
+                              />
                             </div>
                           )}
                           {activeTab === 'redeem-tokens' && (
