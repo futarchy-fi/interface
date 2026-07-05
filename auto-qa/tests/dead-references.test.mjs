@@ -68,13 +68,13 @@ test('PR #43 — no tickspread.com URLs remain in src/', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────
-// PR #47 — Remove dead Supabase code (cleanup is PARTIAL)
+// PR #47 — Remove dead Supabase code (cleanup COMPLETE as of PR #90)
 //
 // Baseline = the count of imports as of this iteration. If new ones get
 // added: test fails (regression). If real-fix work removes some: test
 // fails (forces the baseline to be lowered, ratcheting the cleanup).
 // ────────────────────────────────────────────────────────────────────────
-const SUPABASE_IMPORT_BASELINE = 10;
+const SUPABASE_IMPORT_BASELINE = 0;
 
 test('PR #47 — supabase import count matches baseline', () => {
     const hits = findHits("from\\s+['\"]@supabase/supabase-js['\"]");

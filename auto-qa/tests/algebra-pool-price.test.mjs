@@ -16,7 +16,7 @@
  *      This file targets the newer Algebra Integral shape. A regression
  *      that flips them silently mis-decodes globalState in production.
  *
- *   2. GNOSIS_RPCS — 5 endpoints, HTTPS-only, deduplicated. Cross-pin
+ *   2. GNOSIS_RPCS — 4 endpoints, HTTPS-only, deduplicated. Cross-pin
  *      vs the canonical lists in getRpcUrl.js / providers.jsx (already
  *      covered in rpc-config.test.mjs but here as a third occurrence
  *      worth pinning so the duplication is visible).
@@ -121,15 +121,15 @@ test('cross-file divergence — algebraQuoter.js POOL_ABI uses the OLDER V3 7-fi
 });
 
 // ---------------------------------------------------------------------------
-// GNOSIS_RPCS — 5 endpoints, HTTPS-only, deduplicated
+// GNOSIS_RPCS — 4 endpoints, HTTPS-only, deduplicated
 // ---------------------------------------------------------------------------
 
-test('GNOSIS_RPCS — has exactly 5 entries (drift surfaces as more/fewer fallback options)', () => {
+test('GNOSIS_RPCS — has exactly 4 entries (drift surfaces as more/fewer fallback options)', () => {
     const m = SRC.match(/GNOSIS_RPCS\s*=\s*\[([\s\S]*?)\]/);
     assert.ok(m);
     const urls = [...m[1].matchAll(/['"]([^'"]+)['"]/g)].map(x => x[1]);
-    assert.equal(urls.length, 5,
-        `GNOSIS_RPCS drifted from 5 entries; got ${urls.length}. ` +
+    assert.equal(urls.length, 4,
+        `GNOSIS_RPCS drifted from 4 entries; got ${urls.length}. ` +
         `Compare against rpc-config.test.mjs canonical list.`);
 });
 
