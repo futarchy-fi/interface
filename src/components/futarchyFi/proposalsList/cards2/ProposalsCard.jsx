@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { CheckIcon, CancelIcon, NewspaperIcon, EyeIcon } from "./Resources";
 import Image from 'next/image';
+import { getMarketUrl } from "../../../../utils/urlUtils";
 
 // Move statusColors to the top level, after imports
 const statusColors = {
@@ -150,7 +151,7 @@ const Proposals = ({
         </a>
         <span className={`text-2xl ${statusClasses.separator}`}></span>
         <a
-          href={`/markets/${proposalID}`}
+          href={getMarketUrl(proposalID)}
           className="border-2 border-futarchyGray4 rounded-xl w-1/2 py-3 px-[14px] text-center flex flex-row justify-center gap-[6px]"
           
         >
@@ -372,7 +373,7 @@ export const ProposalsCard = ({
             </div>
           </div>
           <a
-            href={`/markets/${proposalID}`}
+            href={getMarketUrl(proposalID)}
             className="py-2 px-4 bg-black dark:bg-white text-white dark:text-black rounded-lg text-sm font-medium hover:bg-black/90 dark:hover:bg-white/90 transition-colors"
           >
             View Details
@@ -473,7 +474,7 @@ export const MobileProposalsCard = ({
             </div>
           </div>
           <a
-            href={`/markets/${proposalID}`}
+            href={getMarketUrl(proposalID)}
             className="py-2 px-4 bg-black dark:bg-white text-white dark:text-black rounded-lg text-sm font-medium hover:bg-black/90 dark:hover:bg-white/90 transition-colors"
           >
             View Details
