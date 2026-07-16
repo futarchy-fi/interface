@@ -393,7 +393,11 @@ export function createMarketWizardDefaults({
   const organization = getOrganizationDefaults(organizationId);
   const proposalNumber = organization.id === 'kleros' ? '90' : '151';
   const closeTimestamp = addDaysUnix(nowSeconds, 7);
-  const twapStartTimestamp = closeTimestamp - (48 * 60 * 60);
+  // 0xAlex standard for high-stakes markets: TWAP live from proposal start, a
+  // 5-day (120h) window, ending 48h before vote close so the msig can act on the
+  // signal while voting is still open.
+  const twapDurationHours = 120;
+  const twapStartTimestamp = closeTimestamp - (48 * 60 * 60) - (twapDurationHours * 60 * 60);
 
   return {
     mode: 'existing-org',
@@ -414,7 +418,7 @@ export function createMarketWizardDefaults({
     closeDateTimeLocal: toDateTimeLocal(closeTimestamp),
     startCandleUnix: twapStartTimestamp - (60 * 60),
     twapStartTimestamp,
-    twapDurationHours: 24,
+    twapDurationHours,
     minBondWei: '1000000000000000000',
     eventProbability: 0.5,
     initialLiquidityMode: 'flm',
