@@ -11,17 +11,19 @@ export const FLOOR_TRADE_USD = 100;
 export const FLOOR_MAX_IMPACT = 0.03; // 3%
 
 /**
- * Constant-product price impact of swapping amountIn of the input reserve.
- * impact = 1 - (executionPrice / spotPrice), all in output-per-input terms.
- * @returns {number} fractional price impact (0.03 = 3%)
+ * Post-trade SPOT price move of swapping amountIn into a constant-product pool.
+ * After the swap the marginal price (output per input) goes from ro/ri to
+ * ro'/ri' = (ro·ri)/(ri+ai)², so the move is 1 − (ri/(ri+ai))². This is what
+ * "a $100 trade moves price < 3%" means — the execution-price impact
+ * ai/(ri+ai) is roughly HALF of it and let markets go LIVE at half the
+ * intended depth.
+ * @returns {number} fractional spot-price move (0.03 = 3%)
  */
 export function priceImpactConstantProduct(reserveIn, reserveOut, amountIn) {
   const ri = Number(reserveIn), ro = Number(reserveOut), ai = Number(amountIn);
   if (!(ri > 0 && ro > 0 && ai > 0)) return 1; // no/unknown liquidity => max impact => DRAFT
-  const spot = ro / ri;                          // output per input at rest
-  const out = (ro * ai) / (ri + ai);             // x*y=k output for amountIn
-  const exec = out / ai;                         // realized output per input
-  return Math.max(0, 1 - exec / spot);
+  const remain = ri / (ri + ai);
+  return Math.max(0, 1 - remain * remain);
 }
 
 /**
