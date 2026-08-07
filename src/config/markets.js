@@ -1303,7 +1303,7 @@ export const MARKETS_CONFIG = {
     "openGraph": {
       "title": "TEST4-Will 'GIP-133: Should Gnosis DAO extend the Gnosis Pay Cashback budget (GIP-110) by 2,000 GNO?' be approved ('Yes') or rejected ('No') by GnosisDAO? If unresolved by 2025-09-30 23:59 UTC, it resolves to 'No'. | Futarchy.fi",
       "description": "Live futarchy prediction market by Gnosis: TEST4-Will 'GIP-133: Should Gnosis DAO extend the Gnosis Pay Cashback budget (GIP-110) by 2,000 GNO?' be approved ...",
-      "image": "/assets/futarchy-logo-gray.png",
+      "image": "https://futarchy.fi/assets/futarchy-logo-gray.png",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -1311,7 +1311,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "TEST4-Will 'GIP-133: Should Gnosis DAO extend the Gnosis Pay Cashback budget (GIP-110) by 2,000 GNO?' be approved ('Yes') or rejected ('No') by GnosisDAO? If unresolved by 2025-09-30 23:59 UTC, it resolves to 'No'. | Futarchy.fi",
       "description": "Live futarchy prediction market by Gnosis: TEST4-Will 'GIP-133: Should Gnosis DAO extend the Gnosis Pay Cashback budget (GIP-110) by 2,000 GNO?' be approved ...",
-      "image": "https://app.futarchy.fi/assets/futarchy-logo-gray.png"
+      "image": "https://futarchy.fi/assets/futarchy-logo-gray.png"
     },
     "keywords": [
       "futarchy",
@@ -1384,7 +1384,7 @@ export const MARKETS_CONFIG = {
     "openGraph": {
       "title": "What will the impact on ETH price be if EIP-8363 is Scheduled for Inclusion in Hegotá? | Futarchy.fi",
       "description": "Resolves YES if, at any time before 2026-10-24 00:00 UTC, EIP-8363 is listed under the 'Scheduled for Inclusion' section of EIP-8081 (Hardfork Meta - Hegotá) as merged in the master branch of the ethereum/EIPs GitHub repository. If EIP-8081 is renumbered or replaced, the successor Hardfork Meta EIP for the same network upgrade counts. Listing under any other section does not count. Later removal after listing does not change a YES. Only EIP number 8363 counts. Otherwise resolves NO.",
-      "image": "/assets/eth-eip8363-market-card.png",
+      "image": "https://futarchy.fi/assets/eth-eip8363-market-card.png",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -1392,7 +1392,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "What will the impact on ETH price be if EIP-8363 is Scheduled for Inclusion in Hegotá? | Futarchy.fi",
       "description": "Resolves YES if, at any time before 2026-10-24 00:00 UTC, EIP-8363 is listed under the 'Scheduled for Inclusion' section of EIP-8081 (Hardfork Meta - Hegotá) as merged in the master branch of the ethereum/EIPs GitHub repository. If EIP-8081 is renumbered or replaced, the successor Hardfork Meta EIP for the same network upgrade counts. Listing under any other section does not count. Later removal after listing does not change a YES. Only EIP number 8363 counts. Otherwise resolves NO.",
-      "image": "https://app.futarchy.fi/assets/eth-eip8363-market-card.png"
+      "image": "https://futarchy.fi/assets/eth-eip8363-market-card.png"
     },
     "keywords": [
       "futarchy",
@@ -1545,7 +1545,7 @@ export const MARKETS_CONFIG = {
     "openGraph": {
       "title": "What impact will be on GNO if GIP-XX pass? | Futarchy.fi",
       "description": "GIP-XX is lorem ipsum",
-      "image": "/assets/futarchy-logo-gray.png",
+      "image": "https://futarchy.fi/assets/futarchy-logo-gray.png",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -1553,7 +1553,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "What impact will be on GNO if GIP-XX pass? | Futarchy.fi",
       "description": "GIP-XX is lorem ipsum",
-      "image": "https://app.futarchy.fi/assets/futarchy-logo-gray.png"
+      "image": "https://futarchy.fi/assets/futarchy-logo-gray.png"
     },
     "keywords": [
       "futarchy",
@@ -1665,7 +1665,7 @@ export const MARKETS_CONFIG = {
     "openGraph": {
       "title": "What will the impact on PNK price be if KIP-86 is approved? | Futarchy.fi",
       "description": "Will KIP-86 (Exclude PNK held by the Kleros Cooperative from KIP-66) be approved ('Yes') or rejected ('No') by Kleros Governance? If proposal is not approved by the end of March 2026, results as ('No').",
-      "image": "/assets/futarchy-logo-gray.png",
+      "image": "https://futarchy.fi/assets/futarchy-logo-gray.png",
       "type": "website",
       "siteName": "Futarchy.fi"
     },
@@ -1673,7 +1673,7 @@ export const MARKETS_CONFIG = {
       "card": "summary_large_image",
       "title": "What will the impact on PNK price be if KIP-86 is approved? | Futarchy.fi",
       "description": "Will KIP-86 (Exclude PNK held by the Kleros Cooperative from KIP-66) be approved ('Yes') or rejected ('No') by Kleros Governance? If proposal is not approved by the end of March 2026, results as ('No').",
-      "image": "https://app.futarchy.fi/assets/futarchy-logo-gray.png"
+      "image": "https://futarchy.fi/assets/futarchy-logo-gray.png"
     },
     "keywords": [
       "futarchy",
@@ -1780,13 +1780,13 @@ export function generateMarketSEO(address, marketData = null) {
     title: `${title} | Futarchy.fi`,
     description,
     image,
-    url: `https://app.futarchy.fi${config.path}`,
+    url: `https://futarchy.fi${config.path}`,
     openGraph: {
       ...config.openGraph,
       title: marketData?.seoTitle ? `${marketData.seoTitle} | Futarchy.fi` : config.openGraph.title,
       description: marketData?.seoDescription || config.openGraph.description,
       image: marketData?.seoImage || config.openGraph.image,
-      url: `https://app.futarchy.fi${config.path}`
+      url: `https://futarchy.fi${config.path}`
     },
     twitter: {
       ...config.twitter,

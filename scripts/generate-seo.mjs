@@ -43,7 +43,7 @@ import path from 'path';
 const REGISTRY_GRAPHQL_URL =
   process.env.REGISTRY_GRAPHQL_URL || 'https://api.futarchy.fi/registry/graphql';
 const DEFAULT_AGGREGATOR = '0xc5eb43d53e2fe5fdde5faf400cc4167e5b5d4fc1';
-const SITE_ORIGIN = 'https://app.futarchy.fi';
+const SITE_ORIGIN = 'https://futarchy.fi';
 const DEFAULT_IMAGE = '/assets/futarchy-logo-gray.png';
 
 const LEGACY_SEO_PATH = path.join(process.cwd(), 'src', 'config', 'legacy-seo.json');
@@ -269,7 +269,7 @@ function buildRegistryEntry({ addressKey, entity, org, mappedSeoByAddress, nowSe
     openGraph: {
       title: `${title} | Futarchy.fi`,
       description,
-      image,
+      image: image.startsWith('http') ? image : `${SITE_ORIGIN}${image}`,
       type: 'website',
       siteName: 'Futarchy.fi',
     },
