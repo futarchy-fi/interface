@@ -386,6 +386,27 @@ export function getOrganizationDefaults(organizationId = 'gnosis') {
   return KNOWN_ORGANIZATIONS[organizationId] || KNOWN_ORGANIZATIONS.gnosis;
 }
 
+// 0xAlex standard for high-stakes markets: TWAP live from proposal start, a
+// 5-day (120h) window, ending 48h before vote close so the msig can act on the
+// signal while voting is still open. The ONLY place these three fields are
+// derived — the close-date edit path and the defaults must agree (the 24h-era
+// copy of this formula in the UI shipped windows ending 72h after close).
+export const TWAP_BUFFER_SECONDS = 48 * 60 * 60;
+
+// Reality.eth openingTime must fall after the Snapshot vote closes, with
+// buffer, so answers only open once the result is known. Coincidentally also
+// 48h — a distinct concept from the TWAP-end buffer above.
+export const REALITY_OPENING_BUFFER_SECONDS = 48 * 60 * 60;
+
+export function deriveTwapTiming(closeTimestamp, twapDurationHours = 120) {
+  const twapStartTimestamp = closeTimestamp - TWAP_BUFFER_SECONDS - (twapDurationHours * 3600);
+  return {
+    twapDurationHours,
+    twapStartTimestamp,
+    startCandleUnix: twapStartTimestamp - 3600,
+  };
+}
+
 export function createMarketWizardDefaults({
   organizationId = 'gnosis',
   nowSeconds = Math.floor(Date.now() / 1000),
@@ -393,11 +414,7 @@ export function createMarketWizardDefaults({
   const organization = getOrganizationDefaults(organizationId);
   const proposalNumber = organization.id === 'kleros' ? '90' : '151';
   const closeTimestamp = addDaysUnix(nowSeconds, 7);
-  // 0xAlex standard for high-stakes markets: TWAP live from proposal start, a
-  // 5-day (120h) window, ending 48h before vote close so the msig can act on the
-  // signal while voting is still open.
-  const twapDurationHours = 120;
-  const twapStartTimestamp = closeTimestamp - (48 * 60 * 60) - (twapDurationHours * 60 * 60);
+  const { twapDurationHours, twapStartTimestamp, startCandleUnix } = deriveTwapTiming(closeTimestamp);
 
   return {
     mode: 'existing-org',
@@ -416,7 +433,7 @@ export function createMarketWizardDefaults({
     currencyToken: organization.currencyToken,
     closeTimestamp,
     closeDateTimeLocal: toDateTimeLocal(closeTimestamp),
-    startCandleUnix: twapStartTimestamp - (60 * 60),
+    startCandleUnix,
     twapStartTimestamp,
     twapDurationHours,
     minBondWei: '1000000000000000000',
