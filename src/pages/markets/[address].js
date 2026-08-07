@@ -63,7 +63,7 @@ export default function DynamicMarketPage({ address, seoData, marketConfig }) {
             "publisher": {
               "@type": "Organization",
               "name": "Futarchy.fi",
-              "url": "https://app.futarchy.fi"
+              "url": "https://futarchy.fi"
             },
             "category": marketConfig.category,
             "keywords": marketConfig.keywords?.join(', ')
