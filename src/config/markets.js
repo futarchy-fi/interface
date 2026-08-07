@@ -6,8 +6,8 @@
  * legacy Supabase-era SEO content is preserved via
  * src/config/legacy-seo.json.
  *
- * Total markets: 38
- * Active markets: 3
+ * Total markets: 40
+ * Active markets: 5
  */
 
 export const MARKETS_CONFIG = {
@@ -1374,6 +1374,85 @@ export const MARKETS_CONFIG = {
       "resolutionOutcome": null,
       "visibility": "public",
       "closeTimestamp": 1780660800
+    }
+  },
+  "0x0d78b95fca9f3e1b588271a330b0d6f731ec38aa": {
+    "title": "What will the impact on ETH price be if EIP-8363 is Scheduled for Inclusion in Hegotá?",
+    "description": "Resolves YES if, at any time before 2026-10-24 00:00 UTC, EIP-8363 is listed under the 'Scheduled for Inclusion' section of EIP-8081 (Hardfork Meta - Hegotá) as merged in the master branch of the ethereum/EIPs GitHub repository. If EIP-8081 is renumbered or replaced, the successor Hardfork Meta EIP for the same network upgrade counts. Listing under any other section does not count. Later removal after listing does not change a YES. Only EIP number 8363 counts. Otherwise resolves NO.",
+    "image": "/assets/eth-eip8363-market-card.png",
+    "path": "/markets/0x0d78b95fca9f3e1b588271a330b0d6f731ec38aa",
+    "openGraph": {
+      "title": "What will the impact on ETH price be if EIP-8363 is Scheduled for Inclusion in Hegotá? | Futarchy.fi",
+      "description": "Resolves YES if, at any time before 2026-10-24 00:00 UTC, EIP-8363 is listed under the 'Scheduled for Inclusion' section of EIP-8081 (Hardfork Meta - Hegotá) as merged in the master branch of the ethereum/EIPs GitHub repository. If EIP-8081 is renumbered or replaced, the successor Hardfork Meta EIP for the same network upgrade counts. Listing under any other section does not count. Later removal after listing does not change a YES. Only EIP number 8363 counts. Otherwise resolves NO.",
+      "image": "/assets/eth-eip8363-market-card.png",
+      "type": "website",
+      "siteName": "Futarchy.fi"
+    },
+    "twitter": {
+      "card": "summary_large_image",
+      "title": "What will the impact on ETH price be if EIP-8363 is Scheduled for Inclusion in Hegotá? | Futarchy.fi",
+      "description": "Resolves YES if, at any time before 2026-10-24 00:00 UTC, EIP-8363 is listed under the 'Scheduled for Inclusion' section of EIP-8081 (Hardfork Meta - Hegotá) as merged in the master branch of the ethereum/EIPs GitHub repository. If EIP-8081 is renumbered or replaced, the successor Hardfork Meta EIP for the same network upgrade counts. Listing under any other section does not count. Later removal after listing does not change a YES. Only EIP number 8363 counts. Otherwise resolves NO.",
+      "image": "https://app.futarchy.fi/assets/eth-eip8363-market-card.png"
+    },
+    "keywords": [
+      "futarchy",
+      "prediction market",
+      "governance",
+      "blockchain",
+      "Ethereum"
+    ],
+    "category": "trading",
+    "isActive": true,
+    "metadata": {
+      "source": "registry",
+      "organization": "Ethereum",
+      "organizationId": "0xe27f436c4ca24944bda49d18020aec44cc769396",
+      "chainId": 1,
+      "resolutionStatus": null,
+      "resolutionOutcome": null,
+      "visibility": "public",
+      "closeTimestamp": 1792800000
+    }
+  },
+  "0x1d1f3b43f3c61b815041e9092b1ba7ca37c63262": {
+    "title": "What will the impact on GNO price be if GIP-153 is passed?",
+    "description": "GIP-153: Should Gnosis Chain transition into the Ethereum Economic Zone?",
+    "image": "https://www.cryptoninjas.net/wp-content/uploads/gnosis-crypto-ninjas.jpg",
+    "path": "/markets/0x1d1f3b43f3c61b815041e9092b1ba7ca37c63262",
+    "openGraph": {
+      "title": "What will the impact on GNO price be if GIP-153 is passed? | Futarchy.fi",
+      "description": "GIP-153: Should Gnosis Chain transition into the Ethereum Economic Zone?",
+      "image": "https://www.cryptoninjas.net/wp-content/uploads/gnosis-crypto-ninjas.jpg",
+      "type": "website",
+      "siteName": "Futarchy.fi"
+    },
+    "twitter": {
+      "card": "summary_large_image",
+      "title": "What will the impact on GNO price be if GIP-153 is passed? | Futarchy.fi",
+      "description": "GIP-153: Should Gnosis Chain transition into the Ethereum Economic Zone?",
+      "image": "https://www.cryptoninjas.net/wp-content/uploads/gnosis-crypto-ninjas.jpg"
+    },
+    "keywords": [
+      "futarchy",
+      "prediction market",
+      "governance",
+      "blockchain",
+      "GNO",
+      "Gnosis",
+      "GnosisDAO",
+      "Gnosis DAO"
+    ],
+    "category": "trading",
+    "isActive": true,
+    "metadata": {
+      "source": "registry",
+      "organization": "Gnosis DAO",
+      "organizationId": "0x3fd2e8e71f75eed4b5c507706c413e33e0661bbf",
+      "chainId": 100,
+      "resolutionStatus": null,
+      "resolutionOutcome": null,
+      "visibility": "public",
+      "closeTimestamp": null
     }
   },
   "0x47c80f5f701ebc5f25cab64e660f0577890729c2": {
