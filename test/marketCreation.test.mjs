@@ -123,3 +123,48 @@ test('buildProposalParams: epoch openingTimeUnix is authoritative, no Date round
   assert.equal(p[6], 1790172800); // exact epoch, immune to operator timezone
   assert.throws(() => buildProposalParams({ ...base, openingTimeUnix: NaN, openingTime: '' }), /Invalid opening time/);
 });
+
+// ---- increment C pure helpers ----
+const { buildProposalMetadataArgs, buildInvertContext, buildInvertPatch } =
+  await import('../src/features/marketCreation/orgMetadataWrite.js');
+
+test('org metadata write args match the OrganizationManagerModal tuple', () => {
+  const args = buildProposalMetadataArgs({
+    proposalAddress: OTHER, question: 'Q?', event: 'E', description: 'D', metadata: { a: 1 },
+  });
+  assert.deepEqual(args, [OTHER, 'Q?', 'E', 'D', '{"a":1}', '']);
+});
+
+test('invert context pairs each pool token0 with its conditional company token', () => {
+  const ctx = buildInvertContext({
+    yesCompanyToken: COND_YES, noCompanyToken: COND_NO,
+    yesPoolToken0: COND_YES, noPoolToken0: OTHER,
+  });
+  assert.deepEqual(ctx.pools.yes, { token0: COND_YES, conditionalCompanyToken: COND_YES });
+  assert.deepEqual(ctx.pools.no, { token0: OTHER, conditionalCompanyToken: COND_NO });
+  // partial data → that side omitted, validator defers
+  assert.deepEqual(buildInvertContext({ yesCompanyToken: COND_YES }).pools, {});
+});
+
+test('invert patch contains ONLY changed flags; null when nothing changed', () => {
+  const original = { invertTwapPoolYes: false, invertTwapPoolNo: true, keep: 'x' };
+  const corrected = { ...original, invertTwapPoolYes: true };
+  assert.deepEqual(buildInvertPatch(original, corrected), { invertTwapPoolYes: true });
+  assert.equal(buildInvertPatch(original, null), null);
+  assert.equal(buildInvertPatch(original, { ...original }), null);
+});
+
+test('end-to-end invert verification: wrong flags produce a flags-only merge', () => {
+  const onChain = { ...GOOD, invertTwapPoolYes: false, invertTwapPoolNo: false, precious: 'keep-me' };
+  const ctx = buildInvertContext({
+    yesCompanyToken: COND_YES, noCompanyToken: COND_NO,
+    yesPoolToken0: OTHER, noPoolToken0: COND_NO, // YES pool ordered the other way
+  });
+  const result = validateMetadata(onChain, ctx);
+  const patch = buildInvertPatch(onChain, result.corrected);
+  assert.deepEqual(patch, { invertTwapPoolYes: true });
+  const merged = mergeMetadataForUpdate(JSON.stringify(onChain), patch);
+  assert.equal(merged.precious, 'keep-me');
+  assert.equal(merged.invertTwapPoolYes, true);
+  assert.equal(merged.invertTwapPoolNo, false);
+});

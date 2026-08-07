@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import {
   buildOneStepMarketPlan,
@@ -12,6 +13,7 @@ import {
 import { validateMetadata } from '../../../features/marketCreation/validateMetadata';
 import { evaluateFloor, ZERO_TRADE_NOTICE, FLOOR_TRADE_USD, FLOOR_MAX_IMPACT } from '../../../features/marketCreation/liquidityFloor';
 import useCreateProposal, { simulateProposal } from '../../debug/hooks/useCreateProposal';
+import WizardSteps23 from './WizardSteps23';
 import RootLayout from '../../layout/RootLayout';
 import PageLayout from '../../layout/PageLayout';
 
@@ -151,8 +153,11 @@ function ReadinessPanel({ metadataDraft, bootstrap }) {
 
 // Real, wallet-connected proposal creation. Simulate-first (no broadcast) so the
 // flow is demoable end-to-end without minting a market; Broadcast sends the tx.
-function ExecutePanel({ form, organization }) {
+function ExecutePanel({ form, organization, onProposalCreated }) {
   const { isConnected, isSubmitting, status, transactionHash, proposalAddress, createProposal } = useCreateProposal();
+  useEffect(() => {
+    if (proposalAddress) onProposalCreated(proposalAddress);
+  }, [proposalAddress, onProposalCreated]);
   const [mode, setMode] = useState('simulate');
   const [simResult, setSimResult] = useState(null);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -247,7 +252,19 @@ function ExecutePanel({ form, organization }) {
 }
 
 export default function CreateMarketFlow() {
+  const router = useRouter();
   const [organizationId, setOrganizationId] = useState('kleros');
+  // Steps 2–3 unlock once a proposal exists; ?proposal=0x… resumes after a
+  // refresh instead of losing progress.
+  const [proposalAddress, setProposalAddress] = useState(null);
+  useEffect(() => {
+    const q = router.query?.proposal;
+    if (typeof q === 'string' && /^0x[a-fA-F0-9]{40}$/.test(q)) setProposalAddress(q);
+  }, [router.query]);
+  const onProposalCreated = (address) => {
+    setProposalAddress(address);
+    router.replace({ query: { ...router.query, proposal: address } }, undefined, { shallow: true });
+  };
   // Defaults are Date.now()-derived, and wallet panels use wagmi hooks — both
   // must stay out of the static export. form stays null until client mount, so
   // the exported HTML carries the page frame but no build-time timestamps
@@ -321,13 +338,25 @@ export default function CreateMarketFlow() {
             </div>
           ) : (
           <>
+          <div className="mb-2 text-xs text-futarchyGray10">
+            Step 1 {proposalAddress ? '✓' : '·'} create proposal → Step 2 · metadata → Step 3 · pools + invert check
+          </div>
           <div className="grid gap-6 lg:grid-cols-2 mb-6">
-            <ExecutePanel form={form} organization={selectedOrganization} />
+            <ExecutePanel form={form} organization={selectedOrganization} onProposalCreated={onProposalCreated} />
             <ReadinessPanel
               metadataDraft={marketPlan.metadataDraft}
               bootstrap={form.initialLiquidityBudget}
             />
           </div>
+
+          {proposalAddress && (
+            <WizardSteps23
+              proposalAddress={proposalAddress}
+              form={form}
+              organization={selectedOrganization}
+              organizationId={organizationId}
+            />
+          )}
 
           <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
             <section className={`${panelClass} p-4`}>
