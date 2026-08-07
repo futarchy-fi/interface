@@ -4,12 +4,14 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import {
   buildOneStepMarketPlan,
   createMarketWizardDefaults,
+  deriveTwapTiming,
   KNOWN_ORGANIZATIONS,
   GNOSIS_CHAIN_ID,
+  REALITY_OPENING_BUFFER_SECONDS,
 } from '../../../features/marketCreation/marketCreationWorkflow';
 import { validateMetadata } from '../../../features/marketCreation/validateMetadata';
 import { evaluateFloor, ZERO_TRADE_NOTICE, FLOOR_TRADE_USD, FLOOR_MAX_IMPACT } from '../../../features/marketCreation/liquidityFloor';
-import useCreateProposal from '../../debug/hooks/useCreateProposal';
+import useCreateProposal, { simulateProposal } from '../../debug/hooks/useCreateProposal';
 import RootLayout from '../../layout/RootLayout';
 import PageLayout from '../../layout/PageLayout';
 
@@ -95,10 +97,12 @@ const badge = (ok) => ok
 // evaluated against the planned bootstrap seed (the honest lower bound): a
 // pinhead seed correctly reads as DRAFT, which is the whole point — a wizard
 // that mints dead markets would be worse than no wizard.
-function ReadinessPanel({ metadataDraft, companyTokenAddress, bootstrap }) {
+function ReadinessPanel({ metadataDraft, bootstrap }) {
+  // Pool data doesn't exist at step 1 — invert checks defer with a warning.
+  // nowUnix arms the window-starts-in-the-past gate against stale drafts.
   const validation = useMemo(
-    () => validateMetadata(metadataDraft, { companyTokenAddress }),
-    [metadataDraft, companyTokenAddress]
+    () => validateMetadata(metadataDraft, { nowUnix: Math.floor(Date.now() / 1000) }),
+    [metadataDraft]
   );
   // Treat the currency seed (~sDAI ≈ $1) as the input reserve; company seed as output.
   const floor = useMemo(() => evaluateFloor({
@@ -151,8 +155,12 @@ function ExecutePanel({ form, organization }) {
   const { isConnected, isSubmitting, status, transactionHash, proposalAddress, createProposal } = useCreateProposal();
   const [mode, setMode] = useState('simulate');
   const [simResult, setSimResult] = useState(null);
+  const [isSimulating, setIsSimulating] = useState(false);
 
-  const formData = {
+  // Epoch seconds end-to-end: an ISO string re-parsed as local time shifted the
+  // on-chain openingTime by the operator's UTC offset.
+  const closeValid = Number.isFinite(form.closeTimestamp);
+  const formData = closeValid ? {
     chainId: GNOSIS_CHAIN_ID,
     marketName: form.proposalCode,
     companyToken: organization.companyToken.address,
@@ -160,34 +168,22 @@ function ExecutePanel({ form, organization }) {
     category: 'crypto',
     language: 'en',
     minBond: form.minBondWei,
-    openingTime: new Date((Number(form.closeTimestamp) + 48 * 3600) * 1000).toISOString().slice(0, 16),
-  };
+    openingTimeUnix: form.closeTimestamp + REALITY_OPENING_BUFFER_SECONDS,
+  } : null;
 
   const onRun = async () => {
+    if (!formData) return;
     setSimResult(null);
     if (mode === 'broadcast') {
       await createProposal(formData);
       return;
     }
-    // Simulate: static-call the factory, no broadcast.
+    setIsSimulating(true);
     try {
-      const { ethers } = await import('ethers');
-      const { CHAIN_CONFIG } = await import('../../debug/constants/chainConfig');
-      const cfg = CHAIN_CONFIG[GNOSIS_CHAIN_ID];
-      const provider = new ethers.providers.JsonRpcProvider(
-        process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com'
-      );
-      const abi = ['function createProposal((string,address,address,string,string,uint256,uint32)) returns (address)'];
-      const factory = new ethers.Contract(cfg.factoryAddress, abi, provider);
-      const openingUnix = Math.floor(new Date(formData.openingTime).getTime() / 1000);
-      const params = [formData.marketName, formData.companyToken, formData.currencyToken,
-        formData.category, formData.language, formData.minBond, openingUnix];
-      const predicted = await factory.callStatic.createProposal(params, {
-        from: '0x000000000000000000000000000000000000dEaD',
-      });
-      setSimResult({ ok: true, msg: `Would succeed — new proposal ${predicted}` });
-    } catch (e) {
-      setSimResult({ ok: false, msg: e.reason || e.shortMessage || e.message });
+      const result = await simulateProposal(formData);
+      setSimResult({ ok: result.ok, msg: result.message });
+    } finally {
+      setIsSimulating(false);
     }
   };
 
@@ -219,12 +215,15 @@ function ExecutePanel({ form, organization }) {
         </div>
         <button
           onClick={onRun}
-          disabled={isSubmitting || (mode === 'broadcast' && !isConnected)}
+          disabled={!closeValid || isSubmitting || isSimulating || (mode === 'broadcast' && !isConnected)}
           className="inline-flex h-9 items-center rounded-md bg-futarchyBlue9 px-4 text-sm font-medium text-white disabled:opacity-50"
         >
-          {isSubmitting ? 'Working…' : mode === 'simulate' ? 'Simulate createProposal' : 'Create proposal'}
+          {(isSubmitting || isSimulating) ? 'Working…' : mode === 'simulate' ? 'Simulate createProposal' : 'Create proposal'}
         </button>
-        {mode === 'broadcast' && !isConnected && (
+        {!closeValid && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">Pick a valid close date.</span>
+        )}
+        {closeValid && mode === 'broadcast' && !isConnected && (
           <span className="text-xs text-amber-600 dark:text-amber-400">Connect a wallet to broadcast.</span>
         )}
       </div>
@@ -248,19 +247,21 @@ function ExecutePanel({ form, organization }) {
 }
 
 export default function CreateMarketFlow() {
-  // Wallet-connected panels use wagmi hooks that must not run during static
-  // export — render them only after client mount.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   const [organizationId, setOrganizationId] = useState('kleros');
-  const defaults = useMemo(
-    () => createMarketWizardDefaults({ organizationId }),
-    [organizationId]
-  );
-  const [form, setForm] = useState(defaults);
+  // Defaults are Date.now()-derived, and wallet panels use wagmi hooks — both
+  // must stay out of the static export. form stays null until client mount, so
+  // the exported HTML carries the page frame but no build-time timestamps
+  // (which caused React 18 hydration mismatches and days-stale dates).
+  const [form, setForm] = useState(null);
+  useEffect(() => {
+    setForm(createMarketWizardDefaults({ organizationId: 'kleros' }));
+  }, []);
 
   const selectedOrganization = KNOWN_ORGANIZATIONS[organizationId];
-  const marketPlan = useMemo(() => buildOneStepMarketPlan({ ...form, organizationId }), [form, organizationId]);
+  const marketPlan = useMemo(
+    () => (form ? buildOneStepMarketPlan({ ...form, organizationId }) : null),
+    [form, organizationId]
+  );
 
   const updateOrganization = (nextOrganizationId) => {
     setOrganizationId(nextOrganizationId);
@@ -273,13 +274,18 @@ export default function CreateMarketFlow() {
 
   const updateCloseDate = (value) => {
     const nextTimestamp = Math.floor(new Date(value).getTime() / 1000);
-    setForm((previous) => ({
-      ...previous,
-      closeDateTimeLocal: value,
-      closeTimestamp: nextTimestamp,
-      twapStartTimestamp: nextTimestamp - (48 * 60 * 60),
-      startCandleUnix: nextTimestamp - (49 * 60 * 60),
-    }));
+    setForm((previous) => {
+      if (!value || !Number.isFinite(nextTimestamp)) {
+        // Cleared/invalid input: never store NaN — ExecutePanel disables on null.
+        return { ...previous, closeDateTimeLocal: value, closeTimestamp: null };
+      }
+      return {
+        ...previous,
+        closeDateTimeLocal: value,
+        closeTimestamp: nextTimestamp,
+        ...deriveTwapTiming(nextTimestamp, previous.twapDurationHours),
+      };
+    });
   };
 
   return (
@@ -302,18 +308,23 @@ export default function CreateMarketFlow() {
             </Link>
           </div>
 
+          {!form ? (
+            // Static-export frame: real wizard markup (headings, copy) but no
+            // timestamps — the interactive panels mount client-side.
+            <div className="grid gap-6 lg:grid-cols-2">
+              {['Create proposal', 'Readiness gate', 'Market Defaults', 'One-Step Execution Plan'].map((title) => (
+                <section key={title} className={`${panelClass} p-4`}>
+                  <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">{title}</h2>
+                  <p className="mt-1 text-sm text-futarchyGray11">Loading…</p>
+                </section>
+              ))}
+            </div>
+          ) : (
+          <>
           <div className="grid gap-6 lg:grid-cols-2 mb-6">
-            {mounted ? (
-              <ExecutePanel form={form} organization={selectedOrganization} />
-            ) : (
-              <section className={`${panelClass} p-4`}>
-                <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Create proposal</h2>
-                <p className="mt-1 text-sm text-futarchyGray11">Loading wallet…</p>
-              </section>
-            )}
+            <ExecutePanel form={form} organization={selectedOrganization} />
             <ReadinessPanel
               metadataDraft={marketPlan.metadataDraft}
-              companyTokenAddress={selectedOrganization.companyToken.address}
               bootstrap={form.initialLiquidityBudget}
             />
           </div>
@@ -449,6 +460,8 @@ export default function CreateMarketFlow() {
             </div>
             <MetadataPreview metadata={marketPlan.metadataDraft} />
           </section>
+          </>
+          )}
         </div>
       </PageLayout>
     </RootLayout>

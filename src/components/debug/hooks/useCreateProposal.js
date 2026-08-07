@@ -3,13 +3,53 @@ import { ethers } from 'ethers';
 import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClient } from 'wagmi';
 import { CHAIN_CONFIG, getExplorerTxUrl, getExplorerAddressUrl } from '../constants/chainConfig';
 import { getEthersSigner } from '../../../utils/ethersAdapters';
+import { FUTARCHY_FACTORY_ABI, buildProposalParams } from '../../../features/marketCreation/proposalCalldata';
+import { getRpcUrls } from '../../../utils/getRpcUrl';
 
-// Futarchy Factory ABI
-const FUTARCHY_FACTORY_ABI = [
-    'function createProposal((string,address,address,string,string,uint256,uint32)) returns (address)',
-    'function proposals(uint256) view returns (address)',
-    'function marketsCount() view returns (uint256)'
-];
+// ethers v5 error codes that mean the RPC transport failed (try the next
+// endpoint) rather than the call itself reverting (a real simulation result).
+const TRANSPORT_ERROR_CODES = new Set(['NETWORK_ERROR', 'TIMEOUT', 'SERVER_ERROR']);
+
+/**
+ * Signerless createProposal simulation via callStatic, iterating the app's
+ * multi-RPC list. Shares ABI + param assembly with the broadcast path so the
+ * two provably encode identical calldata.
+ * @returns {{ok:boolean, message:string, proposalAddress?:string}}
+ */
+export async function simulateProposal(formData) {
+    const chainId = formData.chainId || 100;
+    const chainConfig = CHAIN_CONFIG[chainId];
+    if (!chainConfig) return { ok: false, message: `Invalid chain: ${chainId}` };
+
+    let params;
+    try {
+        params = buildProposalParams(formData);
+    } catch (e) {
+        return { ok: false, message: e.message };
+    }
+
+    let lastTransportError = null;
+    for (const rpcUrl of getRpcUrls(chainId)) {
+        const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+        const factory = new ethers.Contract(chainConfig.factoryAddress, FUTARCHY_FACTORY_ABI, provider);
+        try {
+            const predicted = await factory.callStatic.createProposal(params, {
+                from: '0x000000000000000000000000000000000000dEaD',
+            });
+            return { ok: true, message: `Would succeed — new proposal ${predicted}`, proposalAddress: predicted };
+        } catch (e) {
+            if (TRANSPORT_ERROR_CODES.has(e.code)) {
+                lastTransportError = e;
+                continue; // RPC problem, not a verdict on the call — try the next endpoint
+            }
+            return { ok: false, message: `Would revert: ${e.reason || e.shortMessage || e.message}` };
+        }
+    }
+    return {
+        ok: false,
+        message: `All RPC endpoints unreachable — try again (${lastTransportError?.message || 'no endpoints'})`,
+    };
+}
 
 /**
  * Hook for creating Futarchy proposals with multi-chain support
@@ -62,7 +102,7 @@ export const useCreateProposal = () => {
         if (!formData.currencyToken || !/^0x[a-fA-F0-9]{40}$/.test(formData.currencyToken)) {
             return { isValid: false, error: 'Invalid currency token address' };
         }
-        if (!formData.openingTime) {
+        if (!formData.openingTime && !Number.isFinite(formData.openingTimeUnix)) {
             return { isValid: false, error: 'Opening time is required' };
         }
         return { isValid: true };
@@ -139,19 +179,8 @@ export const useCreateProposal = () => {
                 freshSigner
             );
 
-            // Convert opening time to unix timestamp
-            const openingTimeUnix = Math.floor(new Date(formData.openingTime).getTime() / 1000);
-
-            // Prepare proposal parameters (tuple)
-            const params = [
-                formData.marketName,
-                formData.companyToken,
-                formData.currencyToken,
-                formData.category,
-                formData.language,
-                formData.minBond,
-                openingTimeUnix
-            ];
+            // Shared with simulateProposal — one calldata builder for both paths.
+            const params = buildProposalParams(formData);
 
             console.log('Creating proposal with params:', params);
             console.log('Factory address:', chainConfig.factoryAddress);
