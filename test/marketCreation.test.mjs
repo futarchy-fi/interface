@@ -168,3 +168,21 @@ test('end-to-end invert verification: wrong flags produce a flags-only merge', (
   assert.equal(merged.invertTwapPoolYes, true);
   assert.equal(merged.invertTwapPoolNo, false);
 });
+
+// ---- increment D: Snapshot vote-timing autofill ----
+const { fetchSnapshotVoteEnd } = await import('../src/features/marketCreation/snapshotTiming.js');
+const SNAP_ID = '0x' + 'ab'.repeat(32);
+
+test('snapshot vote end fetched and returned as epoch seconds', async () => {
+  const mockFetch = async () => ({
+    ok: true,
+    json: async () => ({ data: { proposal: { end: 1790000000, state: 'active' } } }),
+  });
+  assert.deepEqual(await fetchSnapshotVoteEnd(SNAP_ID, mockFetch), { end: 1790000000, state: 'active' });
+});
+
+test('snapshot autofill fails closed: bad id, unknown proposal, hub down', async () => {
+  assert.equal(await fetchSnapshotVoteEnd('not-a-hash', async () => { throw new Error('should not fetch'); }), null);
+  assert.equal(await fetchSnapshotVoteEnd(SNAP_ID, async () => ({ ok: true, json: async () => ({ data: { proposal: null } }) })), null);
+  assert.equal(await fetchSnapshotVoteEnd(SNAP_ID, async () => { throw new Error('offline'); }), null);
+});

@@ -11,6 +11,7 @@ import {
   REALITY_OPENING_BUFFER_SECONDS,
 } from '../../../features/marketCreation/marketCreationWorkflow';
 import { validateMetadata } from '../../../features/marketCreation/validateMetadata';
+import { fetchSnapshotVoteEnd } from '../../../features/marketCreation/snapshotTiming';
 import { evaluateFloor, ZERO_TRADE_NOTICE, FLOOR_TRADE_USD, FLOOR_MAX_IMPACT } from '../../../features/marketCreation/liquidityFloor';
 import useCreateProposal, { simulateProposal } from '../../debug/hooks/useCreateProposal';
 import WizardSteps23 from './WizardSteps23';
@@ -285,8 +286,28 @@ export default function CreateMarketFlow() {
     setForm(createMarketWizardDefaults({ organizationId: nextOrganizationId }));
   };
 
+  const [snapshotNote, setSnapshotNote] = useState(null);
+
   const updateField = (field, value) => {
     setForm((previous) => ({ ...previous, [field]: value }));
+    // Increment D: a pasted Snapshot hash autofills the close time from the
+    // real vote end, anchoring the whole TWAP window to it.
+    if (field === 'snapshotId') {
+      setSnapshotNote(null);
+      fetchSnapshotVoteEnd(value).then((vote) => {
+        if (!vote) return;
+        setForm((previous) => {
+          if (previous?.snapshotId !== value) return previous; // stale response
+          return {
+            ...previous,
+            closeTimestamp: vote.end,
+            closeDateTimeLocal: new Date(vote.end * 1000).toISOString().slice(0, 16),
+            ...deriveTwapTiming(vote.end, previous.twapDurationHours),
+          };
+        });
+        setSnapshotNote(`Close time autofilled from the Snapshot vote end (${vote.state}).`);
+      });
+    }
   };
 
   const updateCloseDate = (value) => {
@@ -422,6 +443,9 @@ export default function CreateMarketFlow() {
                     value={form.snapshotId}
                     onChange={(event) => updateField('snapshotId', event.target.value)}
                   />
+                  {snapshotNote && (
+                    <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">{snapshotNote}</p>
+                  )}
                 </div>
 
                 <div>
