@@ -49,7 +49,7 @@ import { useContractConfig } from '../../../hooks/useContractConfig';
 import DebugToast from './DebugToast';
 import { formatBalance, formatPrice, formatPercentage } from '../../../utils/formatters';
 import { Decimal } from 'decimal.js';
-import { formatWith } from '../../../utils/precisionFormatter';
+import { formatTokenAmount, formatWith } from '../../../utils/precisionFormatter';
 import { getEthersSigner, getEthersProvider, isSafeWallet } from '../../../utils/ethersAdapters';
 import { waitForSafeTxReceipt } from '../../../utils/waitForSafeTxReceipt';
 import { useSubgraphRefresh } from '../../../contexts/SubgraphRefreshContext';
@@ -3908,7 +3908,7 @@ const ConfirmSwapModal = memo(({
                                                     <>
                                                         {(() => {
                                                             const amountFormatted = ethers.utils.formatUnits(swapRouteData.data.buyAmount, 18);
-                                                            return formatWith(parseFloat(amountFormatted), 'amount');
+                                                            return formatTokenAmount(amountFormatted);
                                                         })()} {transactionData.receiveToken ||
                                                             (transactionData.action === 'Buy'
                                                                 ? (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).company.symbol
@@ -3940,7 +3940,7 @@ const ConfirmSwapModal = memo(({
                                                         {(() => {
                                                             const amountFormatted = ethers.utils.formatUnits(swapRouteData.data.buyAmount, 18);
                                                             const minReceive = parseFloat(amountFormatted) * (1 - getSafeSlippageTolerance() / 100);
-                                                            return formatWith(minReceive, 'amount');
+                                                            return formatTokenAmount(minReceive);
                                                         })()} {transactionData.receiveToken ||
                                                             (transactionData.action === 'Buy'
                                                                 ? (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).company.symbol
@@ -4094,7 +4094,7 @@ const ConfirmSwapModal = memo(({
                                                     <>
                                                         {(() => {
                                                             const amountFormatted = ethers.utils.formatUnits(swapRouteData.data.buyAmount, 18);
-                                                            return formatWith(parseFloat(amountFormatted), 'amount');
+                                                            return formatTokenAmount(amountFormatted);
                                                         })()} {transactionData.receiveToken ||
                                                             (transactionData.action === 'Buy'
                                                                 ? (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).company.symbol
@@ -4118,7 +4118,7 @@ const ConfirmSwapModal = memo(({
                                                     '-'
                                                 ) : swapRouteData.data?.minimumReceivedFormatted ? (
                                                     <>
-                                                        {formatWith(parseFloat(swapRouteData.data.minimumReceivedFormatted), 'amount')} {transactionData.receiveToken ||
+                                                        {formatTokenAmount(swapRouteData.data.minimumReceivedFormatted)} {transactionData.receiveToken ||
                                                             (transactionData.action === 'Buy'
                                                                 ? (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).company.symbol
                                                                 : (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).currency.symbol)}
@@ -4231,7 +4231,7 @@ const ConfirmSwapModal = memo(({
                                         <div className="flex justify-between">
                                             <span className="text-futarchyGray11 dark:text-futarchyGray112/80">Expected Receive</span>
                                             <span className="text-futarchyGray12 dark:text-futarchyGray3 font-medium">
-                                                {formatWith(parseFloat(transactionData.expectedReceiveAmount), 'amount')} {transactionData.receiveToken ||
+                                                {formatTokenAmount(transactionData.expectedReceiveAmount)} {transactionData.receiveToken ||
                                                     (transactionData.action === 'Buy'
                                                         ? (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).company.symbol
                                                         : (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).currency.symbol)}
@@ -4245,7 +4245,7 @@ const ConfirmSwapModal = memo(({
                                                 )}
                                             </span>
                                             <span className="text-futarchyGray12 dark:text-futarchyGray3 font-medium">
-                                                {formatWith(parseFloat(transactionData.expectedReceiveAmount) * (1 - getSafeSlippageTolerance() / 100), 'amount')} {transactionData.receiveToken ||
+                                                {formatTokenAmount(parseFloat(transactionData.expectedReceiveAmount) * (1 - getSafeSlippageTolerance() / 100))} {transactionData.receiveToken ||
                                                     (transactionData.action === 'Buy'
                                                         ? (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).company.symbol
                                                         : (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).currency.symbol)}
@@ -4626,7 +4626,7 @@ const ConfirmSwapModal = memo(({
                                     <div className="flex justify-between text-sm">
                                         <span className="text-futarchyGreen11/70 dark:text-futarchyGreenDark11/70">You received</span>
                                         <span className="text-futarchyGreen11 dark:text-futarchyGreenDark11 font-medium">
-                                            ~{formatWith(parseFloat(transactionData.expectedReceiveAmount), 'amount')} {transactionData.receiveToken ||
+                                            ~{formatTokenAmount(transactionData.expectedReceiveAmount)} {transactionData.receiveToken ||
                                                 (transactionData.action === 'Buy'
                                                     ? (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).company.symbol
                                                     : (BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG).currency.symbol)}

@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
 import { getSubgraphEndpoint } from '../config/subgraphEndpoints';
 import { ENABLE_SUBGRAPH_FOR_ALL_PROPOSALS } from '../config/featureFlags';
+import { getBestRpcProvider } from '../utils/getBestRpc';
+
+const ERC20_BALANCE_ABI = ['function balanceOf(address account) view returns (uint256)'];
 
 // Pool data subgraph endpoints are now dynamic per chain - see getSubgraphEndpoint(chainId)
 
@@ -72,8 +76,8 @@ const buildTokensForPoolQuery = (proposalId) => `{
 }`;
 
 // Helper to format a raw subgraph pool into our app's data structure
-const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
-  if (!pool) return { volume: 0, liquidity: { amount: 0, isRaw: true } };
+const formatSubgraphPoolData = async (pool, proposalCurrencySymbol, provider) => {
+  if (!pool) return { volume: 0, liquidity: null, price: null };
 
   // Intelligent Volume Aggregation using ROLES or Currency Symbol
   let volumeTotal = 0;
@@ -92,7 +96,7 @@ const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
   // Fallback: Check symbol if role is missing/ambiguous
   const isCurrencySymbol = (t) => {
     if (!proposalCurrencySymbol) return false;
-    return t.symbol?.toLowerCase() === proposalCurrencySymbol.toLowerCase();
+    return t.symbol?.replace(/^(YES|NO)_/i, '').toLowerCase() === proposalCurrencySymbol.toLowerCase();
   };
 
   // Checkpoint stores volumeToken0/1 as raw token-decimal strings (e.g.
@@ -116,7 +120,9 @@ const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
 
   // Fallback if no clear currency
   if (volumeTotal === 0 && !currencyIsToken0 && !currencyIsToken1) {
-    const isCommonStable = (s) => s?.includes('DAI') || s?.includes('USDC');
+    const isCommonStable = (s) => s?.toUpperCase().includes('DAI') ||
+      s?.toUpperCase().includes('USDC') ||
+      s?.toUpperCase().includes('USDS');
     if (isCommonStable(t0.symbol)) { volumeTotal += vol0; currencyIsToken0 = true; }
     else if (isCommonStable(t1.symbol)) { volumeTotal += vol1; currencyIsToken1 = true; }
     else {
@@ -124,43 +130,6 @@ const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
       volumeTotal += vol1;
       currencyIsToken1 = true;
     }
-  }
-
-  // Convert Algebra V3 raw L to a currency-denominated TVL approximation.
-  //
-  // For a full-range position at the current price, the underlying token
-  // reserves are roughly amount0 ≈ L / sqrtPrice and amount1 ≈ L × sqrtPrice
-  // (in raw 1e18-scaled units when both tokens have 18 decimals). The total
-  // TVL valued in the currency token is therefore:
-  //
-  //   TVL_currency_wei ≈ amount_currency + amount_company × price
-  //                    = L × sqrtPrice + (L / sqrtPrice) × price
-  //                    = 2 × L × sqrtPrice         (since price = sqrtPrice²)
-  //
-  // We then divide by 1e18 to express it in currency-token units.
-  let adjustedLiquidity = parseFloat(pool.liquidity || 0);
-
-  try {
-    if (pool.tick) {
-      const tick = parseFloat(pool.tick);
-      const sqrtPrice = Math.pow(1.0001, tick / 2);
-      if (sqrtPrice > 0) {
-        const liquidityScaled = currencyIsToken0
-          ? adjustedLiquidity / sqrtPrice
-          : adjustedLiquidity * sqrtPrice;
-        // Both reserves at center → roughly 2× the single-side estimate;
-        // /1e18 to convert from raw token-scaled wei to currency units.
-        adjustedLiquidity = (liquidityScaled * 2) / 1e18;
-      } else {
-        adjustedLiquidity = 0;
-      }
-    } else {
-      // No tick available — fall back to raw-L /1e18 (best effort).
-      adjustedLiquidity = adjustedLiquidity / 1e18;
-    }
-  } catch (e) {
-    console.warn('Error calculating tick-adjusted liquidity:', e);
-    adjustedLiquidity = 0;
   }
 
   // Derive company-token price from tick (price of company token in currency units)
@@ -182,14 +151,35 @@ const formatSubgraphPoolData = (pool, proposalCurrencySymbol) => {
     console.warn('Error calculating price from tick:', e);
   }
 
+  // A V3 pool's ERC20 balances are its real reserves (including uncollected fees).
+  // This works for both Uniswap V3 and Algebra pools without interpreting virtual L.
+  let liquidity = null;
+  try {
+    const normalizeAddress = (address) => address?.replace(/^\d+-/, '');
+    const poolAddress = normalizeAddress(pool.id);
+    const [balance0, balance1] = await Promise.all([
+      new ethers.Contract(normalizeAddress(t0.id), ERC20_BALANCE_ABI, provider).balanceOf(poolAddress),
+      new ethers.Contract(normalizeAddress(t1.id), ERC20_BALANCE_ABI, provider).balanceOf(poolAddress)
+    ]);
+
+    liquidity = {
+      token0: normalizeAddress(t0.id),
+      symbol0: t0.symbol,
+      kind0: currencyIsToken0 ? 'currency' : 'company',
+      amount0: ethers.utils.formatUnits(balance0, Number(t0.decimals ?? 18)),
+      token1: normalizeAddress(t1.id),
+      symbol1: t1.symbol,
+      kind1: currencyIsToken1 ? 'currency' : 'company',
+      amount1: ethers.utils.formatUnits(balance1, Number(t1.decimals ?? 18)),
+      isRaw: false
+    };
+  } catch (e) {
+    console.warn('[Pool Data] Failed to read real pool reserves:', e.message);
+  }
+
   return {
     volume: volumeTotal,
-    liquidity: {
-      // Currency-denominated TVL (already normalized to token units, not wei).
-      amount: adjustedLiquidity.toString(),
-      token: proposalCurrencySymbol || 'sDAI',
-      isRaw: false
-    },
+    liquidity,
     price
   };
 };
@@ -292,13 +282,16 @@ const fetchBestPoolsForProposal = async (proposalId, chainId = 100) => {
       }
     };
 
-    const [yesCandlePrice, noCandlePrice] = await Promise.all([
+    const [yesCandlePrice, noCandlePrice, provider] = await Promise.all([
       yesPool ? fetchLatestCandlePrice(yesPool.id) : Promise.resolve(null),
-      noPool ? fetchLatestCandlePrice(noPool.id) : Promise.resolve(null)
+      noPool ? fetchLatestCandlePrice(noPool.id) : Promise.resolve(null),
+      getBestRpcProvider(chainId)
     ]);
 
-    const yesData = formatSubgraphPoolData(yesPool, currencySymbol);
-    const noData = formatSubgraphPoolData(noPool, currencySymbol);
+    const [yesData, noData] = await Promise.all([
+      formatSubgraphPoolData(yesPool, currencySymbol, provider),
+      formatSubgraphPoolData(noPool, currencySymbol, provider)
+    ]);
 
     // Override tick-derived price with candle price when available
     if (yesCandlePrice != null) {
@@ -380,11 +373,12 @@ const fetchSubgraphPoolData = async (poolId, chainId = 100) => {
       return { id: lc, ...meta };
     };
 
+    const provider = await getBestRpcProvider(chainId);
     return formatSubgraphPoolData({
       ...pool,
       token0: enrichToken(pool.token0),
       token1: enrichToken(pool.token1),
-    });
+    }, null, provider);
 
 
   } catch (error) {

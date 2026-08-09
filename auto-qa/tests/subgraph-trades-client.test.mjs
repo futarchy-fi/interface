@@ -43,8 +43,8 @@
  *   8. Event side detection — outcomeSide first (lowercased), then
  *      symbol startsWith YES/NO fallback. Default 'neutral'.
  *
- *   9. Format tiers — formatAmount has 6 tiers; formatPrice branches
- *      on poolType === 'PREDICTION' for percentage display.
+ *   9. Amount units — raw 18-decimal values are converted from wei and
+ *      rendered with adaptive precision, never scientific notation.
  *
  *  10. Sort order — fetchFormattedTrades sorts trades DESCENDING by
  *      date (b.date - a.date). Comment notes pool_in queries don't
@@ -66,18 +66,35 @@ const SRC = readFileSync(
 
 // ───── spec mirrors (private functions in source) ─────
 
+function formatTokenAmount(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num === 0) return '0.00';
+    const absolute = Math.abs(num);
+    const fractionDigits = absolute < 1
+        ? Math.min(8, Math.max(4, 3 - Math.floor(Math.log10(absolute))))
+        : 2;
+    return num.toLocaleString('en-US', {
+        useGrouping: false,
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+    });
+}
+
+function formatUnits18(value) {
+    const raw = BigInt(value);
+    const negative = raw < 0n;
+    const digits = (negative ? -raw : raw).toString().padStart(19, '0');
+    const whole = digits.slice(0, -18);
+    const fraction = digits.slice(-18).replace(/0+$/, '') || '0';
+    return `${negative ? '-' : ''}${whole}.${fraction}`;
+}
+
 function formatAmount(value) {
-    const num = parseFloat(value);
-    if (isNaN(num) || num === 0) return '0';
-
-    const absNum = Math.abs(num);
-
-    if (absNum < 0.000001) return num.toExponential(2);
-    if (absNum < 0.001) return num.toPrecision(3);
-    if (absNum < 1) return num.toFixed(6);
-    if (absNum < 1000) return num.toFixed(4);
-    if (absNum < 1000000) return num.toFixed(2);
-    return num.toExponential(2);
+    try {
+        return formatTokenAmount(formatUnits18(value || '0'));
+    } catch {
+        return formatTokenAmount(value);
+    }
 }
 
 function formatPrice(price, poolType) {
@@ -218,12 +235,12 @@ test('stitched swap fallback preserves {id,name:null,type:null,outcomeSide:null}
 
 test('UI tokenIN comes FROM swap.tokenOut (user receives) — inversion preserved', () => {
     assert.match(SRC, /tokenIN:\s*\{[^}]*symbol:\s*swap\.tokenOut\?\.symbol/);
-    assert.match(SRC, /tokenIN:\s*\{[^}]*value:\s*formatAmount\(swap\.amountOut\)/);
+    assert.match(SRC, /tokenIN:\s*\{[^}]*value:\s*formatAmount\(swap\.amountOut,[^)]+\)/);
 });
 
 test('UI tokenOUT comes FROM swap.tokenIn (user gives) — inversion preserved', () => {
     assert.match(SRC, /tokenOUT:\s*\{[^}]*symbol:\s*swap\.tokenIn\?\.symbol/);
-    assert.match(SRC, /tokenOUT:\s*\{[^}]*value:\s*formatAmount\(swap\.amountIn\)/);
+    assert.match(SRC, /tokenOUT:\s*\{[^}]*value:\s*formatAmount\(swap\.amountIn,[^)]+\)/);
 });
 
 test('inversion explainer comment is present (load-bearing for new contributors)', () => {
@@ -343,43 +360,23 @@ test('classifyEventSide: default neutral when nothing matches', () => {
     );
 });
 
-// ───── 9. Format tiers ─────
+// ───── 9. Raw amount units + adaptive display ─────
 
-test('formatAmount: 0/NaN/empty → "0"', () => {
-    assert.equal(formatAmount(0), '0');
-    assert.equal(formatAmount('0'), '0');
-    assert.equal(formatAmount('not-a-number'), '0');
-    assert.equal(formatAmount(NaN), '0');
+test('formatAmount: converts raw 18-decimal values before display', () => {
+    assert.equal(formatAmount('520500000000000000'), '0.5205');
+    assert.equal(formatAmount('1000000000000000000'), '1.00');
+    assert.equal(formatAmount('123456789000000000000'), '123.46');
 });
 
-test('formatAmount: <0.000001 → exponential(2)', () => {
-    assert.equal(formatAmount('0.0000005'), '5.00e-7');
+test('formatAmount: tiny raw wei never renders in exponent notation', () => {
+    const formatted = formatAmount('261000000000');
+    assert.equal(formatted, '0.00000026');
+    assert.doesNotMatch(formatted, /e/i);
 });
 
-test('formatAmount: <0.001 → toPrecision(3)', () => {
-    assert.equal(formatAmount('0.000234'), '0.000234');
-    assert.equal(formatAmount('0.0001234'), '0.000123');
-});
-
-test('formatAmount: <1 → toFixed(6)', () => {
-    assert.equal(formatAmount('0.123456789'), '0.123457');
-});
-
-test('formatAmount: <1000 → toFixed(4)', () => {
-    assert.equal(formatAmount('123.4567890'), '123.4568');
-});
-
-test('formatAmount: <1000000 → toFixed(2)', () => {
-    assert.equal(formatAmount('12345.6789'), '12345.68');
-});
-
-test('formatAmount: ≥1000000 → exponential(2)', () => {
-    assert.equal(formatAmount('1234567.89'), '1.23e+6');
-});
-
-test('formatAmount: handles negatives via Math.abs in tier check', () => {
-    // Negative within <1 tier → toFixed(6) preserves sign
-    assert.equal(formatAmount('-0.5'), '-0.500000');
+test('formatAmount: production source uses decimals-aware ethers formatUnits and shared formatter', () => {
+    assert.match(SRC, /ethers\.utils\.formatUnits\(value \|\| '0', Number\(decimals\) \|\| 18\)/);
+    assert.match(SRC, /return formatTokenAmount\(/);
 });
 
 test('formatPrice: PREDICTION pool → percentage with 2-decimal precision', () => {

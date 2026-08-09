@@ -5,6 +5,7 @@ import { createChart, LineSeries } from 'lightweight-charts';
 import { useSubgraphData } from '../../hooks/useSubgraphData';
 import { formatWith } from '../../utils/precisionFormatter';
 import { useSubgraphRefresh } from '../../contexts/SubgraphRefreshContext';
+import { SHOW_DATA_DEBUG } from '../../config/featureFlags';
 
 /**
  * SubgraphChart - A chart component that fetches data from The Graph subgraphs
@@ -527,7 +528,9 @@ const SubgraphChart = ({
     const impactColorClass = impact >= 0 ? '!text-futarchyTeal7' : '!text-futarchyCrimson7';
 
     // Get currency from config
-    const currency = config?.BASE_TOKENS_CONFIG?.currency?.symbol || 'sDAI';
+    const currency = config?.BASE_TOKENS_CONFIG?.currency?.symbol ||
+        config?.metadata?.currencyTokens?.base?.tokenSymbol ||
+        (Number(chainId) === 1 ? 'USDS' : 'sDAI');
     const companySymbol = config?.BASE_TOKENS_CONFIG?.company?.symbol || 'TOKEN';
     const tradingPair = `${companySymbol}/${currency}`;
 
@@ -542,7 +545,7 @@ const SubgraphChart = ({
                     <div className="flex-1 flex flex-col items-center justify-center text-center border-r-2 border-futarchyGray62 dark:border-futarchyGray112/40 first:rounded-tl-3xl px-1">
                         <span className="text-[9px] md:text-xs text-futarchyGray11 dark:text-white/70 font-medium flex items-center gap-1">
                             Trading Pair
-                            <span className="text-[8px] bg-futarchyViolet9/20 dark:bg-futarchyViolet7/20 text-futarchyViolet9 dark:text-futarchyViolet7 px-1 rounded">SUBGRAPH</span>
+                            {SHOW_DATA_DEBUG && <span className="text-[8px] bg-futarchyViolet9/20 dark:bg-futarchyViolet7/20 text-futarchyViolet9 dark:text-futarchyViolet7 px-1 rounded">SUBGRAPH</span>}
                         </span>
                         <span className="text-[9px] md:text-sm font-bold text-futarchyGray12 dark:text-white">{tradingPair}</span>
                     </div>
@@ -599,7 +602,7 @@ const SubgraphChart = ({
                     </div>
 
                     {/* Resync Button with Countdown */}
-                    <div className="flex-1 flex flex-col items-center justify-center text-center px-2 last:rounded-tr-3xl">
+                    {SHOW_DATA_DEBUG && <div className="flex-1 flex flex-col items-center justify-center text-center px-2 last:rounded-tr-3xl">
                         <button
                             onClick={() => {
                                 refetch(false); // Manual click shows loading
@@ -623,7 +626,7 @@ const SubgraphChart = ({
                             </svg>
                             {loading ? 'Syncing...' : `Resync (${countdown}s)`}
                         </button>
-                    </div>
+                    </div>}
                 </div>
             </div>
 
@@ -635,7 +638,7 @@ const SubgraphChart = ({
                         <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-black/50 z-10">
                             <div className="flex items-center gap-2">
                                 <div className="w-5 h-5 border-2 border-futarchyViolet9 dark:border-futarchyViolet7 border-t-transparent rounded-full animate-spin" />
-                                <span className="text-sm text-gray-600 dark:text-gray-400 font-oxanium">Loading from subgraph...</span>
+                                <span className="text-sm text-gray-600 dark:text-gray-400 font-oxanium">{SHOW_DATA_DEBUG ? 'Loading from subgraph...' : 'Loading chart...'}</span>
                             </div>
                         </div>
                     )}
@@ -678,7 +681,7 @@ const SubgraphChart = ({
             </div>
 
             {/* Footer with pool info and data stats */}
-            <div className="px-4 py-2 border-t border-futarchyGray62 dark:border-futarchyGray11/70 bg-futarchyGray2/50 dark:bg-futarchyDarkGray2/50">
+            {SHOW_DATA_DEBUG && <div className="px-4 py-2 border-t border-futarchyGray62 dark:border-futarchyGray11/70 bg-futarchyGray2/50 dark:bg-futarchyDarkGray2/50">
                 <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 font-oxanium">
                     <span className="flex items-center gap-4">
                         {yesPool && <span>YES: {yesPool.name}</span>}
@@ -689,7 +692,7 @@ const SubgraphChart = ({
                         {lastUpdated && <span>Updated: {lastUpdated.toLocaleDateString([], { month: 'short', day: 'numeric' })} {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>}
                     </span>
                 </div>
-            </div>
+            </div>}
         </div>
     );
 };

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useYesNoPoolData } from '../../../hooks/usePoolData';
 import { ethers } from 'ethers';
+import { SHOW_DATA_DEBUG } from '../../../config/featureFlags';
 
 const PoolDataDisplay = ({ config }) => {
   const { data, loading, error } = useYesNoPoolData(config);
@@ -136,7 +137,7 @@ const PoolDataDisplay = ({ config }) => {
       </div>
 
       {/* Source Indicator Badge - Always Show if source is determined */}
-      {data.source && data.source !== 'loading' && (
+      {SHOW_DATA_DEBUG && data.source && data.source !== 'loading' && (
         <div className="flex justify-end w-full mt-2">
           <div
             className={`text-[10px] uppercase font-bold tracking-wider ${sourceColor} border border-white/10 px-2 py-0.5 rounded cursor-help`}

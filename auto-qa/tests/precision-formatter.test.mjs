@@ -84,6 +84,23 @@ function getPrecision(type = 'default', config = null) {
     return precisionConfig?.display?.[type] ?? precisionConfig?.display?.default ?? 2;
 }
 
+function formatTokenAmount(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num === 0) return '0.00';
+
+    const absolute = Math.abs(num);
+    let fractionDigits = 2;
+    if (absolute < 1) {
+        fractionDigits = Math.min(8, Math.max(4, 3 - Math.floor(Math.log10(absolute))));
+    }
+
+    return num.toLocaleString('en-US', {
+        useGrouping: false,
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+    });
+}
+
 // ---------------------------------------------------------------------------
 // formatWith — invalid input handling
 // ---------------------------------------------------------------------------
@@ -176,6 +193,28 @@ test('formatWith — smart-precision strips trailing zeros after bump', () => {
 test('formatWith — accepts string and number forms equivalently', () => {
     assert.equal(formatWith(1.5, 'price'), formatWith('1.5', 'price'));
     assert.equal(formatWith(0.001, 'amount'), formatWith('0.001', 'amount'));
+});
+
+// ---------------------------------------------------------------------------
+// formatTokenAmount — adaptive receive/outcome precision
+// ---------------------------------------------------------------------------
+
+test('formatTokenAmount — always shows at least two decimals', () => {
+    assert.equal(formatTokenAmount(0), '0.00');
+    assert.equal(formatTokenAmount(1), '1.00');
+    assert.equal(formatTokenAmount(12.345), '12.35');
+});
+
+test('formatTokenAmount — values below one retain four significant digits', () => {
+    assert.equal(formatTokenAmount(0.5205), '0.5205');
+    assert.equal(formatTokenAmount(0.5), '0.5000');
+    assert.equal(formatTokenAmount(0.05205), '0.05205');
+});
+
+test('formatTokenAmount — tiny values use at most eight decimals and never exponent notation', () => {
+    const formatted = formatTokenAmount(0.000000261);
+    assert.equal(formatted, '0.00000026');
+    assert.doesNotMatch(formatted, /e/i);
 });
 
 // ---------------------------------------------------------------------------
