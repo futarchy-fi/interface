@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { approvalAmountFor } from "../utils/approvalAmount.js";
 // Import from our local wrapper instead of the original contracts file
 import { ERC20_ABI } from "./contractWrapper.js";
 
@@ -67,7 +68,7 @@ export const checkTokenBalance = async (tokenAddress, amount, userAddress, provi
  * @param {Object} callbacks - Callback functions
  * @returns {Promise<Object>} Approval result
  */
-export const handleTokenApproval = async (tokenAddress, spenderAddress, amount, signer, callbacks = {}) => {
+export const handleTokenApproval = async (tokenAddress, spenderAddress, amount, signer, callbacks = {}, useUnlimitedApproval = false) => {
   const userAddress = await signer.getAddress();
   const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
   const allowance = await tokenContract.allowance(userAddress, spenderAddress);
@@ -88,10 +89,9 @@ export const handleTokenApproval = async (tokenAddress, spenderAddress, amount, 
       await resetTx.wait();
     }
     
-    // Create approval transaction with MaxUint256 for unlimited approval
     const approveTx = await tokenContract.approve(
       spenderAddress,
-      ethers.constants.MaxUint256, // Approve max amount to save gas on future transactions
+      approvalAmountFor(amount, useUnlimitedApproval),
       { 
         gasLimit: 100000,
         type: 2,
@@ -435,4 +435,4 @@ export const getTokenInfoFromMarket = async (marketAddress, provider, companyTok
     console.error("Error getting token info from market:", error);
     throw error;
   }
-}; 
+};

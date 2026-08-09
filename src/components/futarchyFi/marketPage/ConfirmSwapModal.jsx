@@ -22,7 +22,6 @@ import {
     executeSwapForUniswapSDK,
     getUniswapV3QuoteWithPriceImpact,
     getPoolSqrtPrice,
-    calculatePriceImpactFromSqrtPrice,
     sqrtPriceX96ToPrice as uniswapSqrtPriceX96ToPrice
 } from '../../../utils/uniswapSdk';
 import {
@@ -54,6 +53,7 @@ import { formatWith } from '../../../utils/precisionFormatter';
 import { getEthersSigner, getEthersProvider, isSafeWallet } from '../../../utils/ethersAdapters';
 import { waitForSafeTxReceipt } from '../../../utils/waitForSafeTxReceipt';
 import { useSubgraphRefresh } from '../../../contexts/SubgraphRefreshContext';
+import { approvalAmountFor } from '../../../utils/approvalAmount';
 
 // Define ERC20 ABI in viem-compatible format
 const ERC20_ABI_VIEM = [
@@ -541,8 +541,18 @@ const ConfirmSwapModal = memo(({
 
     // Approval preference state (for Uniswap SDK on mainnet)
     const [useUnlimitedApproval, setUseUnlimitedApproval] = useState(false);
+    const [tradeAnywayAcknowledged, setTradeAnywayAcknowledged] = useState(Boolean(transactionData?.tradeAnywayAcknowledged));
+
+    // A high-impact acknowledgment is only valid for the quote it was given on.
+    // Re-quotes (slippage change, refresh) can change impact materially — require
+    // a fresh acknowledgment whenever the live quote data changes.
+    useEffect(() => {
+        if (swapRouteData?.data) {
+            setTradeAnywayAcknowledged(false);
+        }
+    }, [swapRouteData?.data]);
     // True when input-token allowances for the spenders this swap will hit
-    // are already at (effectively) MaxUint256, so the approval section is moot.
+    // are already effectively unlimited, so the approval section is moot.
     const [hideApprovalSection, setHideApprovalSection] = useState(false);
 
     // ---> Add State for UI-controlled explorer config <---
@@ -625,6 +635,13 @@ const ConfirmSwapModal = memo(({
         }
         return slippageTolerance;
     }, [slippageTolerance]);
+
+    const minimumFromQuote = useCallback((quotedAmountOutRaw) => {
+        const quotedAmountOut = ethers.BigNumber.from(quotedAmountOutRaw || 0);
+        if (quotedAmountOut.isZero()) throw new Error('A non-zero on-chain quote is required for minOut');
+        const slippageBps = Math.round(getSafeSlippageTolerance() * 100);
+        return quotedAmountOut.mul(10000 - slippageBps).div(10000);
+    }, [getSafeSlippageTolerance]);
 
     // Replace useMetaMask with wagmi hooks
     const { address: account, isConnected, chain } = useAccount();
@@ -903,7 +920,7 @@ const ConfirmSwapModal = memo(({
             inputs: [{ name: '', type: 'address' }, { name: '', type: 'address' }],
             outputs: [{ type: 'uint256' }],
         }];
-        const HALF_MAX = ethers.constants.MaxUint256.div(2);
+        const EFFECTIVELY_UNLIMITED = ethers.BigNumber.from(2).pow(255);
 
         (async () => {
             try {
@@ -915,7 +932,7 @@ const ConfirmSwapModal = memo(({
                         args: [account, p.spender],
                     }).catch(() => 0n)
                 ));
-                const allMax = allowances.every(a => ethers.BigNumber.from(a.toString()).gte(HALF_MAX));
+                const allMax = allowances.every(a => ethers.BigNumber.from(a.toString()).gte(EFFECTIVELY_UNLIMITED));
                 if (!cancelled) setHideApprovalSection(allMax);
             } catch {
                 if (!cancelled) setHideApprovalSection(false);
@@ -1069,9 +1086,7 @@ const ConfirmSwapModal = memo(({
                     console.log('Allowance insufficient, requesting approval...');
 
                     // Use unlimited or exact amount based on user preference
-                    const approvalAmount = useUnlimitedApproval
-                        ? ethers.constants.MaxUint256.toString()
-                        : amount.toString();
+                    const approvalAmount = approvalAmountFor(amount, useUnlimitedApproval).toString();
                     console.log(`Approval amount: ${useUnlimitedApproval ? 'MaxUint256 (unlimited)' : 'exact amount'}`);
 
                     // Send approval transaction using viem
@@ -1126,7 +1141,7 @@ const ConfirmSwapModal = memo(({
                     console.log(`Current allowance insufficient (${allowance.toString()}), requesting approval...`);
 
                     // Use unlimited or exact amount based on user preference
-                    const approvalAmount = useUnlimitedApproval ? ethers.constants.MaxUint256 : amount;
+                    const approvalAmount = approvalAmountFor(amount, useUnlimitedApproval);
                     console.log(`Approval amount: ${useUnlimitedApproval ? 'MaxUint256 (unlimited)' : 'exact amount'}`);
 
                     try {
@@ -1474,6 +1489,14 @@ const ConfirmSwapModal = memo(({
     const handleConfirmSwap = async () => {
         // --- Basic Setup and Validation ---
         if (isProcessing) return;
+        if (quoteUnavailableForExecution) {
+            setError('A current on-chain pool quote is required before this swap can be submitted.');
+            return;
+        }
+        if (priceImpactTooHigh && !tradeAnywayAcknowledged) {
+            setError('Price impact too high — pool depth insufficient for this size');
+            return;
+        }
         if (!isConnected || !account || !walletClient) {
             alert('Please connect your wallet first!');
             return;
@@ -1618,19 +1641,9 @@ const ConfirmSwapModal = memo(({
                         permit2Address: PERMIT2_ADDRESS
                     });
 
-                    // Prepare args for completeSwap
-                    // Note: UniswapRouterCartridge.completeSwap expects { tokenIn, tokenOut, amountIn, minAmountOut, recipient }
-                    // We need to calculate minAmountOut based on slippage
-                    const amountInBN = ethers.BigNumber.from(amountInWei.toString());
-                    const slippageBps = Math.round(getSafeSlippageTolerance() * 100);
-                    const minAmountOutBN = amountInBN.mul(10000 - slippageBps).div(10000); // Rough estimate if we don't have quote
-
-                    // Better: Use expectedReceiveAmount if available
-                    let minAmountOut = minAmountOutBN;
-                    if (transactionData.expectedReceiveAmount) {
-                        const expectedBN = ethers.utils.parseUnits(transactionData.expectedReceiveAmount, 18); // Assuming 18 decimals for now, ideally use token decimals
-                        minAmountOut = expectedBN.mul(10000 - slippageBps).div(10000);
-                    }
+                    const minAmountOut = minimumFromQuote(
+                        swapRouteData.data?.buyAmount || transactionData.amountOutRaw
+                    );
 
                     generator = cartridge.completeSwap({
                         tokenIn,
@@ -1828,7 +1841,8 @@ const ConfirmSwapModal = memo(({
                         tokenIn, // Position token
                         tokenOut, // Currency token
                         amount: amountInWei,
-                        slippageBps: 50, // Allow 0.5% slippage for redemption
+                        slippageBps: Math.round(getSafeSlippageTolerance() * 100),
+                        minOutputAmount: minimumFromQuote(swapRouteData.data?.buyAmount || transactionData.amountOutRaw),
                         options: { gasLimit: 500000, gasPrice: ethers.utils.parseUnits("0.97", "gwei") }
                     });
 
@@ -1940,17 +1954,23 @@ const ConfirmSwapModal = memo(({
                     // Execute swap using SDK flow
                     console.log('[ConfirmSwapCow Debug - Toggle] Executing via Uniswap SDK');
 
+                    const quotedAmountOutRaw = swapRouteData.data?.buyAmount || transactionData.amountOutRaw;
+                    if (!quotedAmountOutRaw || ethers.BigNumber.from(quotedAmountOutRaw).isZero()) {
+                        throw new Error('A non-zero on-chain quote is required for minOut');
+                    }
+
                     redeemTx = await executeSwapForUniswapSDK(
                         tokenIn,
                         tokenOut,
                         amount, // Use the original string amount
-                        "0", // min output - SDK handles slippage
+                        quotedAmountOutRaw,
                         account,
                         signer,
                         slippageTolerance / 100,
                         walletClient,
                         publicClient,
-                        account
+                        account,
+                        transactionData.outputDecimals || 18
                     );
 
                     if (!redeemTx || !redeemTx.hash) throw new Error("Failed to get transaction hash from Uniswap SDK execution.");
@@ -2047,13 +2067,15 @@ const ConfirmSwapModal = memo(({
                             }
                         },
                         publicClient: publicClient,
-                        walletClient: walletClient
+                        walletClient: walletClient,
+                        useUnlimitedApproval
                     });
                     if (!needsApprovalUniswap) markSubstepCompleted(2, 1);
                     setCurrentSubstep({ step: 2, substep: 2 });
 
                     // Get currency token address for tokenOut
                     const tokenOut = baseTokenConfig.currency.address;
+                    const amountOutMinimum = minimumFromQuote(swapRouteData.data?.buyAmount || transactionData.amountOutRaw);
 
                     // --- Uniswap V3 Execution ---
                     console.log('[ConfirmSwapCow Debug - Toggle] Executing via Uniswap V3');
@@ -2065,7 +2087,7 @@ const ConfirmSwapModal = memo(({
                         fee: 500, // 0.05% fee tier - SDK standard for conditional tokens - most common
                         recipient: account,
                         amountIn: amountInWei,
-                        amountOutMinimum: ethers.BigNumber.from(0), // You may want to calculate this with slippage
+                        amountOutMinimum,
                         useUniversalRouter: usePermit2, // Use Universal Router on mainnet
                         walletClient: walletClient
                     });
@@ -2274,46 +2296,14 @@ const ConfirmSwapModal = memo(({
                     // --- Algebra (Swapr) Execution ---
                     console.log('[ConfirmSwapCow Debug - Toggle] Executing via Algebra (Swapr) Router (executeAlgebraExactSingle)');
 
-                    // Calculate minimum output if we have expected receive amount
-                    let minOutputAmount = null;
-                    if (transactionData.expectedReceiveAmount && parseFloat(transactionData.expectedReceiveAmount) > 0) {
-                        try {
-                            // Fee-inclusive from on-chain simulation when available
-                            // Apply user-configured slippage on top
-                            const expectedAmountWei = ethers.utils.parseUnits(transactionData.expectedReceiveAmount, 18);
-                            const safeSlippage = getSafeSlippageTolerance();
-                            const slippageBps = Math.round(safeSlippage * 100); // Convert percentage to basis points
-                            const slippageMultiplier = 10000 - slippageBps;
-                            minOutputAmount = expectedAmountWei.mul(slippageMultiplier).div(10000);
-
-                            // Ensure minimum is not too small (at least 1000 wei to avoid rounding issues)
-                            if (minOutputAmount.lt(1000)) {
-                                console.warn('Minimum output too small, setting to 0 for safety');
-                                minOutputAmount = ethers.BigNumber.from(0);
-                            }
-
-                            console.log('Using pre-calculated minimum output with custom slippage:', {
-                                expected: transactionData.expectedReceiveAmount,
-                                slippagePercent: safeSlippage,
-                                slippageBps,
-                                minOutput: ethers.utils.formatUnits(minOutputAmount, 18),
-                                minOutputWei: minOutputAmount.toString()
-                            });
-                        } catch (err) {
-                            console.warn('Could not calculate minimum output from expected amount:', err);
-                            minOutputAmount = ethers.BigNumber.from(0);
-                        }
-                    } else {
-                        console.warn('No valid expected receive amount, using 0 minimum for safety');
-                        minOutputAmount = ethers.BigNumber.from(0);
-                    }
+                    const minOutputAmount = minimumFromQuote(swapRouteData.data?.buyAmount || transactionData.amountOutRaw);
 
                     swapTx = await executeAlgebraExactSingle({ // Calls helper configured for Algebra (Swapr)
                         signer,
                         tokenIn,
                         tokenOut,
                         amount: amountInWei,
-                        slippageBps: 50, // 0.5% slippage
+                        slippageBps: Math.round(getSafeSlippageTolerance() * 100),
                         minOutputAmount, // Pass pre-calculated if available
                         options: { gasLimit: 500000, gasPrice: ethers.utils.parseUnits("0.97", "gwei") } // Gas options
                     });
@@ -2424,17 +2414,23 @@ const ConfirmSwapModal = memo(({
                     // Execute swap using SDK flow
                     console.log('[ConfirmSwapCow Debug - Toggle] Executing Uniswap SDK swap');
 
+                    const quotedAmountOutRaw = swapRouteData.data?.buyAmount || transactionData.amountOutRaw;
+                    if (!quotedAmountOutRaw || ethers.BigNumber.from(quotedAmountOutRaw).isZero()) {
+                        throw new Error('A non-zero on-chain quote is required for minOut');
+                    }
+
                     swapTx = await executeSwapForUniswapSDK(
                         tokenIn,
                         tokenOut,
                         amount, // Use the original string amount
-                        "0", // min output - SDK handles slippage
+                        quotedAmountOutRaw,
                         account,
                         signer,
                         slippageTolerance / 100,
                         walletClient,
                         publicClient,
-                        account
+                        account,
+                        transactionData.outputDecimals || 18
                     );
 
                     if (!swapTx || !swapTx.hash) throw new Error("Failed to get transaction hash from Uniswap SDK execution.");
@@ -2554,7 +2550,8 @@ const ConfirmSwapModal = memo(({
                                 console.log('[Uniswap V3] Waiting for Permit2 approval tx:', status.data?.transactionHash);
                             }
                         },
-                        publicClient: publicClient
+                        publicClient: publicClient,
+                        useUnlimitedApproval
                     });
                     if (!needsApprovalUniswap) markSubstepCompleted(2, 1);
                     setCurrentSubstep({ step: 2, substep: 2 });
@@ -2562,9 +2559,7 @@ const ConfirmSwapModal = memo(({
                     // --- Uniswap V3 Execution ---
                     console.log('[ConfirmSwapCow Debug - Toggle] Executing Uniswap V3 swap');
 
-                    // Calculate minimum output with slippage
-                    const slippageMultiplier = ethers.BigNumber.from(10000 - (slippageTolerance * 100));
-                    const calculatedMinOutput = amountInWei.mul(slippageMultiplier).div(10000);
+                    const calculatedMinOutput = minimumFromQuote(swapRouteData.data?.buyAmount || transactionData.amountOutRaw);
 
                     swapTx = await executeUniswapV3Swap({
                         signer,
@@ -3056,10 +3051,7 @@ const ConfirmSwapModal = memo(({
                         }
 
                         // Calculate price impact from sqrt prices
-                        const priceImpact = calculatePriceImpactFromSqrtPrice(
-                            poolData.sqrtPriceX96,
-                            quoteResult.sqrtPriceX96After
-                        );
+                        const priceImpact = quoteResult.priceImpactPct;
 
                         // Calculate raw prices from sqrtPriceX96
                         const rawCurrentPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
@@ -3149,7 +3141,8 @@ const ConfirmSwapModal = memo(({
                             currentPrice: currentPrice, // Pool price before trade
                             executionPrice: executionPrice, // Average execution price (amountOut/amountIn)
                             poolPriceAfter: poolPriceAfter, // Pool price after trade
-                            poolAddress: poolData.poolAddress
+                            poolAddress: poolData.poolAddress,
+                            decimalsOut: quoteResult.decimalsOut
                         };
 
                         console.log('[QUOTER CONFIRMSWAP] Final uniswapData:', uniswapData);
@@ -3163,24 +3156,10 @@ const ConfirmSwapModal = memo(({
                         console.log('[QUOTER CONFIRMSWAP] Uniswap quote set with QuoterV2:', uniswapData);
                     } catch (error) {
                         console.error('[ConfirmSwapCow Debug - Toggle] Uniswap QuoterV2 error:', error);
-                        // Fallback to simple estimation if QuoterV2 fails
-                        console.warn('[QuoterV2] Falling back to simple estimation');
-                        const slippageMultiplier = ethers.BigNumber.from(10000 - (slippage * 100));
-                        const estimatedOutput = amountInWei.mul(slippageMultiplier).div(10000);
-
                         setSwapRouteData({
                             isLoading: false,
-                            error: null,
-                            data: {
-                                buyAmount: estimatedOutput.toString(),
-                                sellAmount: amountInWei.toString(),
-                                swapPrice: '1',
-                                estimatedGas: '350000',
-                                feeAmount: '0',
-                                priceImpact: null,
-                                protocol: selectedSwapMethod === 'uniswapSdk' ? 'Uniswap SDK' : 'Uniswap V3',
-                                protocolName: selectedSwapMethod === 'uniswapSdk' ? 'Uniswap SDK' : 'Uniswap V3'
-                            }
+                            error: error.message || 'On-chain pool quote unavailable',
+                            data: null
                         });
                     }
                     return; // Exit early for Uniswap - don't fetch SushiSwap quote
@@ -3595,6 +3574,16 @@ const ConfirmSwapModal = memo(({
             }
         }
     }, []);
+
+    const activePriceImpact = Math.abs(parseFloat(swapRouteData.data?.priceImpact ?? transactionData?.priceImpact ?? 0));
+    const priceImpactTooHigh = Number.isFinite(activePriceImpact) && activePriceImpact > 15;
+    const requiresPoolQuote = ['uniswap', 'uniswapSdk', 'algebra'].includes(selectedSwapMethod);
+    const quoteUnavailableForExecution = requiresPoolQuote && (
+        swapRouteData.isLoading ||
+        Boolean(swapRouteData.error) ||
+        !swapRouteData.data?.buyAmount ||
+        ethers.BigNumber.from(swapRouteData.data?.buyAmount || 0).isZero()
+    );
 
     const modalContent = (
         <>
@@ -4445,6 +4434,22 @@ const ConfirmSwapModal = memo(({
                             </div>
                         )}
 
+                        {priceImpactTooHigh && (
+                            <div className="mx-4 mb-4 p-3 rounded-lg border border-futarchyCrimson7 bg-futarchyCrimson3 dark:bg-futarchyCrimson11/10">
+                                <p className="text-sm font-medium text-futarchyCrimson11">
+                                    Price impact too high — pool depth insufficient for this size
+                                </p>
+                                <label className="mt-2 flex items-center gap-2 text-xs text-futarchyCrimson11 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={tradeAnywayAcknowledged}
+                                        onChange={(event) => setTradeAnywayAcknowledged(event.target.checked)}
+                                    />
+                                    Trade anyway
+                                </label>
+                            </div>
+                        )}
+
                         {/* Error Display */}
                         {error && (
                             <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/30 rounded-lg text-red-700 dark:text-red-300 text-sm flex overflow-y-auto">
@@ -4766,7 +4771,7 @@ const ConfirmSwapModal = memo(({
                                             ? onClose
                                             : handleConfirmSwap
                                     }
-                                    disabled={(isProcessing && !isFinalStateForCloseButton) || transactionData.insufficientLiquidity}
+                                    disabled={(isProcessing && !isFinalStateForCloseButton) || transactionData.insufficientLiquidity || quoteUnavailableForExecution || (priceImpactTooHigh && !tradeAnywayAcknowledged)}
                                     className={`w-full mb-4 py-3 px-4 rounded-lg font-medium transition-colors ${transactionData.insufficientLiquidity
                                         ? 'bg-futarchyOrange7 text-futarchyOrange11 cursor-not-allowed opacity-60'
                                         : isFinalStateForCloseButton
@@ -4786,8 +4791,10 @@ const ConfirmSwapModal = memo(({
                                                         ? 'Processing SushiSwap V3...'
                                                         : 'Processing Swap'
                                             )
-                                            : transactionData.insufficientLiquidity
-                                                ? 'Insufficient Liquidity'
+                                            : transactionData.insufficientLiquidity || quoteUnavailableForExecution
+                                                ? 'Quote Unavailable'
+                                                : priceImpactTooHigh && !tradeAnywayAcknowledged
+                                                    ? 'Acknowledge High Impact'
                                                 : transactionData.action === 'Redeem'
                                                     ? 'Confirm Redeem'
                                                     : 'Confirm Swap'

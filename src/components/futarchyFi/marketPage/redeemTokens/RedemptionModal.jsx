@@ -15,6 +15,7 @@ import FutarchyCartridge from "futarchy-sdk/executors/FutarchyCartridge";
 import { useSafeDetection } from "../../../../hooks/useSafeDetection";
 import { waitForSafeTxReceipt } from "../../../../utils/waitForSafeTxReceipt";
 import { isSafeWallet } from "../../../../utils/ethersAdapters";
+import { approvalAmountFor } from "../../../../utils/approvalAmount";
 
 const DEFAULT_REDEEM_GAS_LIMIT = 700000;
 const REDEEM_GAS_LIMIT_BY_CHAIN = {
@@ -582,11 +583,11 @@ const RedemptionModal = ({
           contractName: `${winningTokens.companySymbol} Token Contract`,
           parameters: {
             spender: routerAddress,
-            amount: ethers.constants.MaxUint256.toString()
+            amount: approvalAmountFor(companyAmountInWei, useUnlimitedApproval).toString()
           },
           humanReadable: {
             spender: `Futarchy Router (${routerAddress})`,
-            amount: "Unlimited (MaxUint256)",
+            amount: useUnlimitedApproval ? "Unlimited" : `${winningTokens.companyAmount} ${winningTokens.companySymbol}`,
             purpose: `Allow router to spend your ${winningTokens.companySymbol} tokens`
           }
         },
@@ -597,11 +598,11 @@ const RedemptionModal = ({
           contractName: `${winningTokens.currencySymbol} Token Contract`,
           parameters: {
             spender: routerAddress,
-            amount: ethers.constants.MaxUint256.toString()
+            amount: approvalAmountFor(currencyAmountInWei, useUnlimitedApproval).toString()
           },
           humanReadable: {
             spender: `Futarchy Router (${routerAddress})`,
-            amount: "Unlimited (MaxUint256)",
+            amount: useUnlimitedApproval ? "Unlimited" : `${winningTokens.currencyAmount} ${winningTokens.currencySymbol}`,
             purpose: `Allow router to spend your ${winningTokens.currencySymbol} tokens`
           }
         },
@@ -629,7 +630,7 @@ const RedemptionModal = ({
       console.error('Error calculating transaction parameters:', error);
       return null;
     }
-  }, [config, winningTokens, redeemGasLimit]);
+  }, [config, winningTokens, redeemGasLimit, useUnlimitedApproval]);
 
   const handleTokenApproval = async (tokenAddress, spenderAddress, amount, tokenName = '') => {
     if (!window.ethereum) {
@@ -648,7 +649,10 @@ const RedemptionModal = ({
     if (currentAllowance.lt(amount)) {
       console.log(`Approving ${tokenName} for ${spenderAddress}...`);
       try {
-        const approveTx = await tokenContract.approve(spenderAddress, ethers.constants.MaxUint256);
+        const approveTx = await tokenContract.approve(
+          spenderAddress,
+          approvalAmountFor(amount, useUnlimitedApproval)
+        );
         console.log('Approval transaction sent:', approveTx.hash);
         await approveTx.wait();
         console.log(`${tokenName} approved successfully`);

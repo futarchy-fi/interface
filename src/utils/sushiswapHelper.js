@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { SUSHISWAP_V2_ROUTER } from '../components/futarchyFi/marketPage/constants/contracts';
+import { approvalAmountFor } from './approvalAmount';
 
 // Token addresses from the example transactions
 const NO_GNO = "0x0c485ED641dBCA4Ed797B189Cd674925B3437eDC";
@@ -219,7 +220,7 @@ const checkAndApproveToken = async (signer, tokenAddress, spenderAddress, amount
     console.log('Insufficient allowance, approving...');
     const approveTx = await tokenContract.approve(
       spenderAddress,
-      ethers.constants.MaxUint256 // Infinite approval
+      approvalAmountFor(amount)
     );
     console.log('Waiting for approval transaction:', approveTx.hash);
     await approveTx.wait();
@@ -253,4 +254,4 @@ export const executeSushiSwapRoute = async ({
     data: routeData.txData,
     ...txOptions
   });
-}; 
+};

@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { isSafeWallet } from './ethersAdapters';
+import { approvalAmountFor } from './approvalAmount';
 
 /**
  * Uniswap V3 Helper for Ethereum Mainnet
@@ -170,7 +171,8 @@ export const checkAndApproveTokenForUniswapV3 = async ({
   onApprovalNeeded,
   onApprovalComplete,
   publicClient = null,
-  walletClient = null // Add walletClient param
+  walletClient = null, // Add walletClient param
+  useUnlimitedApproval = false
 }) => {
   let checksummedTokenAddress;
   let spenderAddress;
@@ -228,16 +230,12 @@ export const checkAndApproveTokenForUniswapV3 = async ({
     console.log('Current Allowance:', currentAllowance.toString());
     console.log('Required Amount:', amount.toString());
 
-    // For Permit2, check if we have MAX approval (not just the swap amount)
-    // We approve MaxUint256 once, so any non-zero large approval means we're good
-    const hasMaxApproval = usePermit2 && currentAllowance.gt(ethers.constants.MaxUint256.div(2));
-    const hasEnoughAllowance = usePermit2 ? hasMaxApproval : currentAllowance.gte(amount);
+    const hasEnoughAllowance = currentAllowance.gte(amount);
 
     // Check if we need ERC20 approval
     if (hasEnoughAllowance) {
       console.log('ERC20 allowance sufficient:', {
         isPermit2: usePermit2,
-        hasMaxApproval,
         currentAllowance: currentAllowance.toString()
       });
 
@@ -299,9 +297,10 @@ export const checkAndApproveTokenForUniswapV3 = async ({
           // Get gas prices dynamically
           const { maxPriorityFeePerGas, maxFeePerGas } = await calculateGasPrice(signer.provider);
 
-          // Approve Permit2 to spend tokens on Universal Router - MAX amount for this token
+          // Approve Permit2 to spend tokens on Universal Router.
           const permit2Contract = new ethers.Contract(PERMIT2_ADDRESS, PERMIT2_ABI, signer);
           const MAX_UINT160 = ethers.BigNumber.from(2).pow(160).sub(1);
+          const permit2ApprovalAmount = approvalAmountFor(amount, useUnlimitedApproval, MAX_UINT160);
           // Set expiration to max allowed by Permit2 (type(uint48).max)
           const MAX_EXPIRATION = 281474976710655; // 2^48 - 1
           const oneYearFromNow = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60);
@@ -310,7 +309,7 @@ export const checkAndApproveTokenForUniswapV3 = async ({
           const tx = await permit2Contract.approve(
             checksummedTokenAddress,
             UNISWAP_UNIVERSAL_ROUTER,
-            MAX_UINT160,
+            permit2ApprovalAmount,
             expiration,
             {
               maxPriorityFeePerGas,
@@ -331,7 +330,7 @@ export const checkAndApproveTokenForUniswapV3 = async ({
           console.log('Permit2 approval confirmed for:', {
             token: checksummedTokenAddress,
             spender: UNISWAP_UNIVERSAL_ROUTER,
-            amount: MAX_UINT160.toString(),
+            amount: permit2ApprovalAmount.toString(),
             expiration: new Date(expiration * 1000).toISOString()
           });
 
@@ -357,10 +356,7 @@ export const checkAndApproveTokenForUniswapV3 = async ({
     // Create token contract and approve
     const tokenContract = new ethers.Contract(checksummedTokenAddress, ERC20_ABI, signer);
 
-    // For Permit2, approve max amount to avoid repeated approvals
-    const approvalAmount = usePermit2
-      ? ethers.constants.MaxUint256
-      : amount;
+    const approvalAmount = approvalAmountFor(amount, useUnlimitedApproval);
 
     // Get gas prices dynamically
     const { maxPriorityFeePerGas, maxFeePerGas } = await calculateGasPrice(signer.provider);
@@ -390,6 +386,7 @@ export const checkAndApproveTokenForUniswapV3 = async ({
 
       const permit2Contract = new ethers.Contract(PERMIT2_ADDRESS, PERMIT2_ABI, signer);
       const MAX_UINT160 = ethers.BigNumber.from(2).pow(160).sub(1);
+      const permit2ApprovalAmount = approvalAmountFor(amount, useUnlimitedApproval, MAX_UINT160);
       // Set expiration to max allowed by Permit2 (type(uint48).max)
       const MAX_EXPIRATION = 281474976710655; // 2^48 - 1
       const oneYearFromNow = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60);
@@ -398,7 +395,7 @@ export const checkAndApproveTokenForUniswapV3 = async ({
       const permit2Tx = await permit2Contract.approve(
         checksummedTokenAddress,
         UNISWAP_UNIVERSAL_ROUTER,
-        MAX_UINT160,
+        permit2ApprovalAmount,
         expiration,
         {
           maxPriorityFeePerGas: gasPriority2,
@@ -452,6 +449,9 @@ export const executeUniswapV3Swap = async ({
   useUniversalRouter = false
 }) => {
   try {
+    if (ethers.BigNumber.from(amountOutMinimum || 0).isZero()) {
+      throw new Error('amountOutMinimum must come from a non-zero pool quote');
+    }
     console.log('=== EXECUTING UNISWAP V3 SWAP ===');
     console.log('Token In:', tokenIn);
     console.log('Token Out:', tokenOut);

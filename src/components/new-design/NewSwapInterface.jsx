@@ -6,6 +6,7 @@ import { useContractConfig } from '../../hooks/useContractConfig';
 import { BASE_TOKENS_CONFIG, ERC20_ABI, FUTARCHY_ROUTER_ABI } from '../futarchyFi/marketPage/constants/contracts';
 import { useBalanceManager } from '../../hooks/useBalanceManager';
 import { ethers } from 'ethers';
+import { approvalAmountFor } from '../../utils/approvalAmount';
 
 // Helper to get ethers signer from wallet client
 const getEthersSigner = (walletClient, publicClient) => {
@@ -334,7 +335,7 @@ function MergePanel({ amount, setAmount, isConnected, currencySymbol, balances, 
             if (yesAllowance < amountWei) {
                 const signer = getEthersSigner(walletClient, publicClient);
                 const yesContract = new ethers.Contract(yesTokenAddress, ERC20_ABI, signer);
-                const tx = await yesContract.approve(routerAddress, ethers.constants.MaxUint256);
+                const tx = await yesContract.approve(routerAddress, approvalAmountFor(amountWei));
                 await tx.wait();
             }
 
@@ -352,7 +353,7 @@ function MergePanel({ amount, setAmount, isConnected, currencySymbol, balances, 
             if (noAllowance < amountWei) {
                 const signer = getEthersSigner(walletClient, publicClient);
                 const noContract = new ethers.Contract(noTokenAddress, ERC20_ABI, signer);
-                const tx = await noContract.approve(routerAddress, ethers.constants.MaxUint256);
+                const tx = await noContract.approve(routerAddress, approvalAmountFor(amountWei));
                 await tx.wait();
             }
 

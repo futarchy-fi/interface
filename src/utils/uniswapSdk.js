@@ -1,5 +1,7 @@
 import { ethers } from "ethers";
 import { isSafeWallet } from './ethersAdapters';
+import { approvalAmountFor } from './approvalAmount';
+import { quoteUniswapV3ExactInput } from './uniswapV3Quote.mjs';
 
 // Universal Router addresses by chain
 const UNIVERSAL_ROUTER_ADDRESSES = {
@@ -39,8 +41,7 @@ const Commands = {
 // Recipients
 const RECIPIENT_MSG_SENDER = '0x0000000000000000000000000000000000000002';
 
-// Max values
-const MAX_UINT256 = ethers.constants.MaxUint256;
+// Permit2 max values
 const MAX_UINT160 = ethers.BigNumber.from("0xffffffffffffffffffffffffffffffffffffffff");
 const MAX_UINT48 = ethers.BigNumber.from("0xffffffffffff");
 const PERMIT2_MAX_EXPIRATION = MAX_UINT48.toNumber();
@@ -343,7 +344,8 @@ async function checkPermit2Approval(tokenAddress, ownerAddress, provider, chainI
 /**
  * Approve token to Permit2 (Step 1 of cartridge flow)
  */
-export async function approveTokenToPermit2(tokenAddress, signer, walletClient = null, publicClient = null, amount = MAX_UINT256) {
+export async function approveTokenToPermit2(tokenAddress, signer, walletClient = null, publicClient = null, amount) {
+  if (amount == null) throw new Error('Required approval amount is missing');
   const isEthersSigner = signer && signer.getChainId && typeof signer.getChainId === 'function' && !signer._isSigner;
 
   let chainId;
@@ -388,7 +390,8 @@ export async function approveTokenToPermit2(tokenAddress, signer, walletClient =
 /**
  * Approve Permit2 to Universal Router (Step 2 of cartridge flow)
  */
-export async function approvePermit2ToRouter(tokenAddress, signer, amount = MAX_UINT160, duration = 'max', walletClient = null, publicClient = null, chainId = null) {
+export async function approvePermit2ToRouter(tokenAddress, signer, amount, duration = 'max', walletClient = null, publicClient = null, chainId = null) {
+  if (amount == null) throw new Error('Required Permit2 approval amount is missing');
   const isEthersSigner = signer && signer.getChainId && typeof signer.getChainId === 'function' && !signer._isSigner;
 
   if (!chainId) {
@@ -453,7 +456,7 @@ export async function executeUniswapV3Swap({
   tokenIn,
   tokenOut,
   amountIn,
-  minAmountOut = "0",
+  minAmountOut,
   fee = 500, // 0.05% for conditional tokens
   recipient,
   signer,
@@ -476,19 +479,18 @@ export async function executeUniswapV3Swap({
   routerAddress = UNIVERSAL_ROUTER_ADDRESSES[chainId];
   const config = getGasConfig(chainId);
 
-  // Check Permit2 approval before executing swap
-  const permit2Status = await checkPermit2Approval(tokenIn, ownerAddress, isEthersSigner ? signer.provider : null, chainId, publicClient);
+  const approvalDecimals = isEthersSigner
+    ? await new ethers.Contract(tokenIn, ERC20_ABI, signer.provider).decimals()
+    : await publicClient.readContract({ address: tokenIn, abi: ERC20_ABI_VIEM, functionName: 'decimals' });
+  const approvalAmount = ethers.utils.parseUnits(amountIn.toString(), approvalDecimals);
+  const [permit2Status, erc20Allowance] = await Promise.all([
+    checkPermit2Approval(tokenIn, ownerAddress, isEthersSigner ? signer.provider : null, chainId, publicClient),
+    checkERC20Approval(tokenIn, ownerAddress, isEthersSigner ? signer.provider : null, publicClient)
+  ]);
 
-  if (!permit2Status.isApproved) {
-    console.log('[UniswapSDK] Permit2 approval expired or missing, renewing...');
-
-    // First check ERC20 approval to Permit2
-    const erc20Allowance = await checkERC20Approval(tokenIn, ownerAddress, isEthersSigner ? signer.provider : null, publicClient);
-    const amountInWei = ethers.utils.parseUnits(amountIn.toString(), 18); // Will be adjusted later
-
-    if (erc20Allowance.lt(amountInWei)) {
+  if (erc20Allowance.lt(approvalAmount)) {
       console.log('[UniswapSDK] ERC20 approval to Permit2 needed, approving...');
-      const approveTx = await approveTokenToPermit2(tokenIn, signer, walletClient, publicClient);
+      const approveTx = await approveTokenToPermit2(tokenIn, signer, walletClient, publicClient, approvalAmount);
 
       if (isEthersSigner) {
         await approveTx.wait();
@@ -496,11 +498,11 @@ export async function executeUniswapV3Swap({
         await publicClient.waitForTransactionReceipt({ hash: approveTx.hash });
       }
       console.log('[UniswapSDK] ERC20 approval to Permit2 completed');
-    }
+  }
 
-    // Now approve Permit2 to Universal Router
+  if (!permit2Status.isApproved || permit2Status.amount.lt(approvalAmount)) {
     console.log('[UniswapSDK] Approving Permit2 to Universal Router...');
-    const permit2Tx = await approvePermit2ToRouter(tokenIn, signer, MAX_UINT160, 'max', walletClient, publicClient, chainId);
+    const permit2Tx = await approvePermit2ToRouter(tokenIn, signer, approvalAmount, 'max', walletClient, publicClient, chainId);
 
     if (isEthersSigner) {
       await permit2Tx.wait();
@@ -509,7 +511,7 @@ export async function executeUniswapV3Swap({
     }
     console.log('[UniswapSDK] Permit2 approval to Router completed');
   } else {
-    console.log('[UniswapSDK] Permit2 already approved, proceeding with swap');
+    console.log('[UniswapSDK] Permit2 allowance sufficient, proceeding with swap');
   }
 
   // Get token decimals
@@ -538,6 +540,7 @@ export async function executeUniswapV3Swap({
   // Parse amounts
   const amountInWei = ethers.utils.parseUnits(amountIn.toString(), decimalsIn);
   const minAmountOutWei = ethers.utils.parseUnits(minAmountOut.toString(), decimalsOut);
+  if (minAmountOutWei.isZero()) throw new Error('minAmountOut must come from a non-zero pool quote');
 
   // Build the path: tokenIn + fee (3 bytes) + tokenOut
   // Using ethers encodePacked equivalent
@@ -631,12 +634,13 @@ export async function completeSwapFlow({
     if (onProgress) onProgress({ step: 'checking', message: 'Checking approvals...' });
 
     const erc20Allowance = await checkERC20Approval(tokenIn, ownerAddress, signer.provider);
-    const amountInWei = ethers.utils.parseUnits(amountIn.toString(), 18); // Will be adjusted with actual decimals
+    const decimals = await new ethers.Contract(tokenIn, ERC20_ABI, signer.provider).decimals();
+    const amountInWei = ethers.utils.parseUnits(amountIn.toString(), decimals);
 
     if (erc20Allowance.lt(amountInWei)) {
       if (onProgress) onProgress({ step: 'erc20_approve', message: 'Approving token to Permit2...' });
 
-      const approveTx = await approveTokenToPermit2(tokenIn, signer);
+      const approveTx = await approveTokenToPermit2(tokenIn, signer, null, null, amountInWei);
       await approveTx.wait();
 
       if (onProgress) onProgress({ step: 'erc20_approved', message: 'Token approved to Permit2!' });
@@ -645,10 +649,10 @@ export async function completeSwapFlow({
     // Step 2: Check Permit2 approval to Universal Router
     const permit2Status = await checkPermit2Approval(tokenIn, ownerAddress, signer.provider, chainId);
 
-    if (!permit2Status.isApproved) {
+    if (!permit2Status.isApproved || permit2Status.amount.lt(amountInWei)) {
       if (onProgress) onProgress({ step: 'permit2_approve', message: 'Approving Permit2 to Universal Router...' });
 
-      const permit2Tx = await approvePermit2ToRouter(tokenIn, signer);
+      const permit2Tx = await approvePermit2ToRouter(tokenIn, signer, amountInWei);
       await permit2Tx.wait();
 
       if (onProgress) onProgress({ step: 'permit2_approved', message: 'Permit2 approved to Router!' });
@@ -697,93 +701,38 @@ export async function getUniswapV3QuoteWithPriceImpact({
   amountIn,
   fee = 500,
   provider,
-  chainId = 100
+  chainId = 1,
+  slippageBps = 50
 }) {
-  const quoterAddress = QUOTER_V2_ADDRESSES[chainId];
+  if (chainId !== 1) throw new Error(`Uniswap V3 depth quotes are not configured for chain ${chainId}`);
 
-  if (!quoterAddress) {
-    throw new Error(`QuoterV2 not available for chain ${chainId}`);
-  }
+  const quote = await quoteUniswapV3ExactInput({
+    provider,
+    tokenIn,
+    tokenOut,
+    amountIn,
+    fee,
+    slippageBps
+  });
 
-  const quoterContract = new ethers.Contract(quoterAddress, QUOTER_V2_ABI, provider);
-
-  // Get token decimals first
-  const tokenInContract = new ethers.Contract(tokenIn, ERC20_ABI, provider);
-  const tokenOutContract = new ethers.Contract(tokenOut, ERC20_ABI, provider);
-
-  const [decimalsIn, decimalsOut] = await Promise.all([
-    tokenInContract.decimals(),
-    tokenOutContract.decimals()
-  ]);
-
-  // Parse amount to wei
-  const amountInWei = ethers.utils.parseUnits(amountIn.toString(), decimalsIn);
-
-  // Try multiple fee tiers in case the specified one doesn't have a pool
-  const feeTiers = [fee, 500, 3000, 10000]; // Try user-specified first, then common tiers
-  const uniqueFeeTiers = [...new Set(feeTiers)]; // Remove duplicates
-
-  let lastError = null;
-
-  for (const feeTier of uniqueFeeTiers) {
-    try {
-      console.log(`[QuoterV2] Trying fee tier: ${feeTier} (${feeTier / 10000}%)`);
-
-      // Call QuoterV2
-      const params = {
-        tokenIn,
-        tokenOut,
-        amountIn: amountInWei,
-        fee: feeTier,
-        sqrtPriceLimitX96: 0 // No price limit
-      };
-
-      // Use callStatic for off-chain simulation
-      const result = await quoterContract.callStatic.quoteExactInputSingle(params);
-
-      // Result is [amountOut, sqrtPriceX96After, initializedTicksCrossed, gasEstimate]
-      const [amountOut, sqrtPriceX96After, initializedTicksCrossed, gasEstimate] = result;
-
-      // Get current pool price (before trade) - we can derive from the quote
-      // For simplicity, calculate price from input/output ratio
-      const amountOutFormatted = ethers.utils.formatUnits(amountOut, decimalsOut);
-      const amountInFormatted = parseFloat(amountIn);
-
-      // Effective price (how much output per input)
-      const effectivePrice = parseFloat(amountOutFormatted) / amountInFormatted;
-
-      console.log(`[QuoterV2] Success with fee tier ${feeTier}! Quote result:`, {
-        feeTier,
-        amountIn: amountIn.toString(),
-        amountOut: amountOut.toString(),
-        amountOutFormatted,
-        sqrtPriceX96After: sqrtPriceX96After.toString(),
-        initializedTicksCrossed: initializedTicksCrossed.toString(),
-        gasEstimate: gasEstimate.toString(),
-        effectivePrice
-      });
-
-      return {
-        amountOut: amountOut.toString(),
-        amountOutFormatted,
-        sqrtPriceX96After: sqrtPriceX96After.toString(),
-        initializedTicksCrossed: initializedTicksCrossed.toString(),
-        gasEstimate: gasEstimate.toString(),
-        effectivePrice,
-        decimalsIn,
-        decimalsOut,
-        feeTier // Return the fee tier that worked
-      };
-    } catch (error) {
-      console.warn(`[QuoterV2] Fee tier ${feeTier} failed:`, error.message);
-      lastError = error;
-      // Continue to next fee tier
-    }
-  }
-
-  // If all fee tiers failed, throw the last error
-  console.error('[QuoterV2] All fee tiers failed. Last error:', lastError);
-  throw new Error(`No Uniswap V3 pool found for this token pair. Tried fee tiers: ${uniqueFeeTiers.join(', ')}`);
+  return {
+    amountOut: quote.amountOutRaw,
+    amountOutRaw: quote.amountOutRaw,
+    amountOutFormatted: quote.amountOutFormatted,
+    minimumReceived: quote.minimumAmountOutRaw,
+    minimumReceivedFormatted: quote.minimumAmountOutFormatted,
+    sqrtPriceX96After: quote.sqrtPriceX96After,
+    initializedTicksCrossed: quote.initializedTicksCrossed,
+    gasEstimate: quote.gasEstimate,
+    effectivePrice: quote.executionRate,
+    priceImpact: quote.priceImpactPct,
+    priceImpactPct: quote.priceImpactPct,
+    currentSpotRate: quote.currentSpotRate,
+    decimalsIn: quote.decimalsIn,
+    decimalsOut: quote.decimalsOut,
+    poolAddress: quote.poolAddress,
+    feeTier: quote.feeTier
+  };
 }
 
 /**
@@ -925,8 +874,8 @@ export async function checkAndApproveForUniswapSDK(
       permit2Expiration: permit2Status.expiration
     });
 
-    // If Permit2 is already approved and ERC20 has sufficient allowance, we're done
-    if (permit2Status.isApproved && erc20Allowance.gte(amountToApprove)) {
+    // Exact approvals are consumed, so both allowances must cover this trade.
+    if (permit2Status.isApproved && permit2Status.amount.gte(amountToApprove) && erc20Allowance.gte(amountToApprove)) {
       console.log('[UniswapSDK] All approvals already in place, skipping');
       if (onStepComplete) {
         onStepComplete(1, true); // Step 1 already done
@@ -936,15 +885,13 @@ export async function checkAndApproveForUniswapSDK(
     }
 
     // Step 1: Approve ERC20 to Permit2 if needed
-    const needsERC20Approval = useUnlimitedApproval
-      ? erc20Allowance.lt(MAX_UINT256.div(2)) // For unlimited: check if not already max approved
-      : erc20Allowance.lt(amountToApprove); // For exact: check if less than needed amount
+    const needsERC20Approval = erc20Allowance.lt(amountToApprove);
 
     if (needsERC20Approval) {
       console.log(`[UniswapSDK] ERC20 approval needed (${useUnlimitedApproval ? 'unlimited' : 'exact amount'})`);
       if (onStepComplete) onStepComplete(1, false); // Step 1 starting
 
-      const approvalAmount = useUnlimitedApproval ? MAX_UINT256 : amountToApprove;
+      const approvalAmount = approvalAmountFor(amountToApprove, useUnlimitedApproval);
       const permit2Address = PERMIT2_ADDRESS;
 
       if (isEthersSigner) {
@@ -971,11 +918,12 @@ export async function checkAndApproveForUniswapSDK(
     }
 
     // Step 2: Approve Permit2 to Universal Router if needed
-    if (!permit2Status.isApproved) {
+    if (!permit2Status.isApproved || permit2Status.amount.lt(amountToApprove)) {
       console.log('[UniswapSDK] Permit2 approval needed');
       if (onStepComplete) onStepComplete(2, false); // Step 2 starting
 
-      const permit2Tx = await approvePermit2ToRouter(tokenAddress, signer, MAX_UINT160, 'max', walletClient, publicClient, chainId);
+      const permit2Amount = approvalAmountFor(amountToApprove, useUnlimitedApproval, MAX_UINT160);
+      const permit2Tx = await approvePermit2ToRouter(tokenAddress, signer, permit2Amount, 'max', walletClient, publicClient, chainId);
 
       if (isEthersSigner) {
         await permit2Tx.wait();
@@ -1004,13 +952,14 @@ export async function executeSwapForUniswapSDK(
   inputToken,
   outputToken,
   inputAmount,
-  minOutputAmount,
+  quotedAmountOutRaw,
   recipient,
   signer,
   slippageTolerance = 0.005,
   walletClient = null,
   publicClient = null,
-  account = null
+  account = null,
+  outputDecimals = 18
 ) {
   const isEthersSigner = signer && signer.getChainId && typeof signer.getChainId === 'function' && !signer._isSigner;
 
@@ -1024,18 +973,17 @@ export async function executeSwapForUniswapSDK(
   // Determine fee tier based on token type (conditional tokens use 500)
   const fee = 500; // 0.05% for conditional tokens
 
-  // Calculate minimum output with slippage
-  const minAmountWithSlippage = ethers.utils.parseUnits(
-    (parseFloat(minOutputAmount) * (1 - slippageTolerance)).toString(),
-    18
-  );
+  const quotedAmountOut = ethers.BigNumber.from(quotedAmountOutRaw || 0);
+  if (quotedAmountOut.isZero()) throw new Error('A non-zero on-chain quote is required for minOut');
+  const slippageBps = Math.round(slippageTolerance * 10000);
+  const minAmountWithSlippage = quotedAmountOut.mul(10000 - slippageBps).div(10000);
 
   try {
     const tx = await executeUniswapV3Swap({
       tokenIn: inputToken,
       tokenOut: outputToken,
       amountIn: inputAmount,
-      minAmountOut: ethers.utils.formatUnits(minAmountWithSlippage, 18),
+      minAmountOut: ethers.utils.formatUnits(minAmountWithSlippage, outputDecimals),
       fee,
       recipient: recipient || (isEthersSigner ? await signer.getAddress() : account),
       signer,

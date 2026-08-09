@@ -7,6 +7,7 @@ import {
   // ... other necessary config imports
 } from '../components/futarchyFi/marketPage/constants/contracts'; // Adjust path if needed
 import { isSafeWallet } from './ethersAdapters';
+import { approvalAmountFor } from './approvalAmount';
 
 /**
  * Feature Flag for CoW Swap
@@ -236,11 +237,7 @@ export const checkAndApproveTokenForV3Swap = async ({
       hasEnoughAllowance: currentAllowance.gte(amount)
     });
 
-    // Check if allowance is sufficient
-    // For unlimited mode: check if already at max, for exact mode: check if >= amount needed
-    const needsApproval = useUnlimitedApproval
-      ? currentAllowance.lt(ethers.constants.MaxUint256.div(2)) // Not already max approved
-      : currentAllowance.lt(amount); // Less than needed amount
+    const needsApproval = currentAllowance.lt(amount);
 
     if (!needsApproval) {
       console.log(`Token already approved for ${spenderName} - sufficient allowance exists`);
@@ -267,7 +264,7 @@ export const checkAndApproveTokenForV3Swap = async ({
     );
 
     // Approve with either exact amount or unlimited based on user preference
-    const approvalAmount = useUnlimitedApproval ? ethers.constants.MaxUint256 : amount;
+    const approvalAmount = approvalAmountFor(amount, useUnlimitedApproval);
     console.log(`Approval amount: ${useUnlimitedApproval ? 'MaxUint256 (unlimited)' : amount.toString() + ' (exact)'}`);
 
     const approveTx = await tokenContract.approve(
