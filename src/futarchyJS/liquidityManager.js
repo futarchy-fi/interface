@@ -8,6 +8,7 @@
 import { ethers } from 'ethers';
 import fs from 'fs';
 import path from 'path';
+import { approvalAmountFor } from '../utils/approvalAmount.js';
 
 // Contract ABIs
 const ERC20_ABI = [
@@ -61,7 +62,8 @@ export function createLiquidityProvider({
   onApprovalNeeded,
   onPoolCreation,
   onLiquidityAdded,
-  onTransaction
+  onTransaction,
+  useUnlimitedApproval = false
 }) {
   // Validation
   if (!provider) throw new Error('Provider is required');
@@ -139,14 +141,13 @@ export function createLiquidityProvider({
         }
       }
       
-      // Max uint256 for unlimited approval
-      const MAX_UINT256 = ethers.constants.MaxUint256;
-      
+      const approvalAmount = approvalAmountFor(amount, useUnlimitedApproval);
+
       // Estimate gas for approve
-      const gasEstimate = await tokenContract.estimateGas.approve(routerAddress, MAX_UINT256);
+      const gasEstimate = await tokenContract.estimateGas.approve(routerAddress, approvalAmount);
       
       // Send approval transaction
-      const tx = await tokenContract.approve(routerAddress, MAX_UINT256, {
+      const tx = await tokenContract.approve(routerAddress, approvalAmount, {
         gasLimit: gasEstimate.mul(120).div(100) // Add 20% buffer
       });
       
@@ -364,7 +365,10 @@ export function createLiquidityProvider({
           }
         }
         
-        const approveTx = await token0Contract.approve(routerAddress, ethers.constants.MaxUint256);
+        const approveTx = await token0Contract.approve(
+          routerAddress,
+          approvalAmountFor(amount0, useUnlimitedApproval)
+        );
         console.log(`${symbol0} approval transaction hash: ${approveTx.hash}`);
         
         if (typeof onTransaction === 'function') {
@@ -388,7 +392,10 @@ export function createLiquidityProvider({
           }
         }
         
-        const approveTx = await token1Contract.approve(routerAddress, ethers.constants.MaxUint256);
+        const approveTx = await token1Contract.approve(
+          routerAddress,
+          approvalAmountFor(amount1, useUnlimitedApproval)
+        );
         console.log(`${symbol1} approval transaction hash: ${approveTx.hash}`);
         
         if (typeof onTransaction === 'function') {
@@ -838,10 +845,11 @@ export function createLiquidityProvider({
  * @param {Object} options - Provider and signer
  * @returns {Object} Liquidity provider interface
  */
-export function createDefaultLiquidityProvider({ provider, signer }) {
+export function createDefaultLiquidityProvider({ provider, signer, useUnlimitedApproval = false }) {
   return createLiquidityProvider({
     provider,
     signer,
+    useUnlimitedApproval,
     onApprovalNeeded: (symbol) => {
       console.log(`Approval needed for ${symbol}`);
       return true; // Always approve
@@ -889,4 +897,4 @@ export async function validateTokenAmount(tokenAddress, amount, signer) {
   const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer.provider);
   const balance = await tokenContract.balanceOf(await signer.getAddress());
   return balance.gte(amount);
-} 
+}

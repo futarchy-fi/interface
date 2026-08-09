@@ -18,6 +18,7 @@ import { getEthersSigner, isSafeWallet } from "../../../../utils/ethersAdapters"
 // import { useContractConfig } from "../../../../hooks/useContractConfig";
 import { waitForSafeTxReceipt } from "../../../../utils/waitForSafeTxReceipt";
 import { useSafeDetection } from "../../../../hooks/useSafeDetection";
+import { approvalAmountFor } from "../../../../utils/approvalAmount";
 
 const toBN = (value) => ethers.BigNumber.from(value.toString());
 
@@ -477,7 +478,10 @@ const CollateralModal = ({
           signer
         );
 
-        const approveTx = await tokenContract.approve(spenderAddress, ethers.constants.MaxUint256);
+        const approveTx = await tokenContract.approve(
+          spenderAddress,
+          approvalAmountFor(amount, useUnlimitedApproval)
+        );
         console.log(`[CollateralModal] ${tokenSymbol} approval transaction sent:`, approveTx.hash);
 
         // Check for Safe wallet

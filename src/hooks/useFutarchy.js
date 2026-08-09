@@ -53,6 +53,7 @@ import {
 } from "../components/futarchyFi/marketPage/constants/contracts";
 import { fetchSushiSwapRoute, executeSushiSwapRoute } from "../utils/sushiswapHelper";
 import { SUSHISWAP_V3_ROUTER, checkAndApproveTokenForV3Swap, executeV3Swap } from "../utils/sushiswapV3Helper";
+import { approvalAmountFor } from "../utils/approvalAmount";
 
 // Add these constants for SushiSwap V2
 const SUSHISWAP_V2_FACTORY = "0xc35DADB65012eC5796536bD9864eD8773aBc74C4";
@@ -90,7 +91,7 @@ const WXDAI_ADDRESS = "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d";
  */
 export const useFutarchy = (config = {}) => {
   // Extract configuration with defaults
-  const { useSushiV3 = true } = config;
+  const { useSushiV3 = true, useUnlimitedApproval = false } = config;
 
   // Get current chain from wagmi
   const { chain } = useAccount();
@@ -184,7 +185,7 @@ export const useFutarchy = (config = {}) => {
       
       const approveTx = await tokenContract.approve(
         spenderAddress,
-        ethers.constants.MaxUint256, // Use max uint to avoid future approvals
+        approvalAmountFor(amount, useUnlimitedApproval),
         { 
           gasLimit: 100000,
           type: 2,
@@ -401,7 +402,7 @@ export const useFutarchy = (config = {}) => {
             
             const approveTx = await baseTokenContract.approve(
               CONTRACT_ADDRESSES.futarchyRouter,
-              ethers.constants.MaxUint256,
+              approvalAmountFor(additionalCollateralBN, useUnlimitedApproval),
               { 
                 gasLimit: 100000,
                 type: 2,
@@ -518,7 +519,8 @@ export const useFutarchy = (config = {}) => {
           onApprovalComplete: () => {
             handleStatus(`✅ Token successfully approved for SushiSwap V3 pool swap!`, true);
             onSwapApprovalComplete?.();
-          }
+          },
+          useUnlimitedApproval
         });
 
         // After approval completes and before the swap
@@ -872,11 +874,11 @@ export const useFutarchy = (config = {}) => {
           await resetTx.wait();
         }
         
-        // Create approval transaction with MaxUint256 to save gas on future transactions
+        // Approve the exact requirement unless unlimited approval was explicitly selected.
         try {
           const approveTx = await tokenContract.approve(
             FUTARCHY_ROUTER_ADDRESS,
-            ethers.constants.MaxUint256, // Approve max amount to save gas on future transactions
+            approvalAmountFor(amountBN, useUnlimitedApproval),
             { 
               gasLimit: 100000,
               type: 2,
@@ -1022,7 +1024,7 @@ export const useFutarchy = (config = {}) => {
         
         const approvalTx = await token.approve(
           FUTARCHY_ROUTER_ADDRESS,
-          ethers.constants.MaxUint256, // Approve max amount to save gas on future transactions
+          approvalAmountFor(amountBN, useUnlimitedApproval),
           { 
             gasLimit: 100000,
             type: 2,
@@ -1358,4 +1360,4 @@ export const useFutarchy = (config = {}) => {
     poolPrices,
     fetchPoolPrices
   };
-}; 
+};

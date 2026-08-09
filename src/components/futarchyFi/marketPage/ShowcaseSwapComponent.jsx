@@ -37,6 +37,7 @@ import { useContractConfig } from '../../../hooks/useContractConfig';
 import { formatWith } from '../../../utils/precisionFormatter';
 import { getUniswapV3QuoteWithPriceImpact, getPoolSqrtPrice, sqrtPriceX96ToPrice } from '../../../utils/uniswapSdk';
 import { usePublicClient, useChainId } from 'wagmi';
+import { approvalAmountFor } from '../../../utils/approvalAmount';
 
 // Configuration for this showcase implementation
 const SHOWCASE_CHECK_SELL_COLLATERAL = true;
@@ -138,6 +139,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
     error: null
   });
   const [showPriceInfo, setShowPriceInfo] = useState(false);
+  const [tradeAnywayAcknowledged, setTradeAnywayAcknowledged] = useState(false);
   const publicClient = usePublicClient();
   const walletChainId = useChainId();
 
@@ -363,7 +365,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             amountIn: amount,
             fee: 500,
             provider: ethersProvider,
-            chainId: 1
+            chainId: 1,
+            slippageBps: 50
           });
 
           console.log('[QUOTER SHOWCASE] Quote result:', quoteResult);
@@ -421,26 +424,28 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         }
 
         if (isActive) {
-          // Detect insufficient liquidity: impact > 99% means the pool can't handle this trade
           const afterPrice = quoteResult.priceAfter ?? executionPrice;
-          let insufficientLiquidity = false;
-          if (currentPrice && afterPrice) {
-            const impactPct = Math.abs(parseFloat(afterPrice) - currentPrice) / currentPrice * 100;
-            insufficientLiquidity = impactPct > 99;
-          }
+          const priceImpactPct = Number.isFinite(Number(quoteResult.priceImpactPct ?? quoteResult.priceImpact))
+            ? Math.abs(Number(quoteResult.priceImpactPct ?? quoteResult.priceImpact))
+            : currentPrice && executionPrice
+              ? Math.abs((currentPrice - executionPrice) / currentPrice) * 100
+              : null;
 
           setQuoterPreview({
             isLoading: false,
+            quotedAmountIn: amount,
             amountOut: quoteResult.amountOutFormatted || quoteResult.amountOut,
             currentPrice,
             executionPrice,
             priceImpact: quoteResult.priceImpact,
+            priceImpactPct,
             slippage: quoteResult.slippage,
             priceAfter: afterPrice,
             minimumReceived: quoteResult.minimumReceived,
             amountOutRaw: quoteResult.amountOutRaw,
+            decimalsOut: quoteResult.decimalsOut || 18,
             chainId: chainId,
-            insufficientLiquidity,
+            insufficientLiquidity: false,
             error: null
           });
         }
@@ -489,6 +494,10 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
       clearTimeout(timer);
     };
   }, [amount, selectedAction, selectedOutcome, chainId, config]);
+
+  useEffect(() => {
+    setTradeAnywayAcknowledged(false);
+  }, [amount, selectedAction, selectedOutcome]);
 
   // Handler for buy/sell selection
   const handleActionSelect = useCallback((action) => {
@@ -633,6 +642,10 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
       console.error("Invalid amount entered");
       return;
     }
+    if ((chainId === 1 || chainId === 100) && (quoterPreview.isLoading || quoterPreview.quotedAmountIn !== amount || !quoterPreview.amountOut)) {
+      console.error('A current on-chain pool quote is required');
+      return;
+    }
 
     if (selectedCurrency === 'WXDAI' && !redirectToCOW) {
       // Original behavior: Open native swap modal
@@ -664,7 +677,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         } else {
           receiveToken = getCurrencySymbol();
         }
-      } else if (currentPrice && currentPrice > 0) {
+      } else if (chainId !== 1 && chainId !== 100 && currentPrice && currentPrice > 0) {
         // Fallback to legacy calc — spot price estimate with conservative fee deduction
         const APPROX_POOL_FEE = 0.01; // 1% conservative estimate for pool fees
         if (selectedAction === 'Buy') {
@@ -702,9 +715,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         minimumReceived: (USING_FUTARCHY_QUOTER && quoterPreview?.minimumReceived) ? quoterPreview.minimumReceived : null,
         amountOutRaw: (USING_FUTARCHY_QUOTER && quoterPreview?.amountOutRaw) ? quoterPreview.amountOutRaw : null,
         // Price Impact: Change in Pool Spot Price (Price After vs Current Price)
-        priceImpact: (USING_FUTARCHY_QUOTER && quoterPreview?.currentPrice && quoterPreview?.priceAfter)
-          ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - parseFloat(quoterPreview.currentPrice)) / parseFloat(quoterPreview.currentPrice)) * 100).toFixed(4)
-          : null,
+        priceImpact: quoterPreview?.priceImpactPct ?? null,
 
         // Slippage: Execution Price (Avg) vs Current Spot Price
         slippage: (USING_FUTARCHY_QUOTER && quoterPreview?.currentPrice && quoterPreview?.executionPrice)
@@ -715,6 +726,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         executionPrice: (USING_FUTARCHY_QUOTER && quoterPreview?.executionPrice) ? quoterPreview.executionPrice : null,
         isApproximate: !(USING_FUTARCHY_QUOTER && quoterPreview?.amountOut && !quoterPreview.error),
         insufficientLiquidity: quoterPreview?.insufficientLiquidity || false,
+        outputDecimals: quoterPreview?.decimalsOut || 18,
+        tradeAnywayAcknowledged,
       };
       console.log("Opening ConfirmSwapModal directly with data:", directConfirmData);
       setConfirmModalData(directConfirmData);
@@ -736,7 +749,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
     const allowance = await tokenContract.allowance(account, spenderAddress);
 
     if (allowance.lt(amount)) {
-      const tx = await tokenContract.approve(spenderAddress, ethers.constants.MaxUint256);
+      const tx = await tokenContract.approve(spenderAddress, approvalAmountFor(amount));
       await tx.wait();
     }
   };
@@ -1034,7 +1047,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
           console.log('Need to approve token...');
           const approveTx = await tokenContract.approve(
             FUTARCHY_ROUTER_ADDRESS,
-            ethers.constants.MaxUint256
+            approvalAmountFor(additionalAmountNeeded)
           );
           console.log('Waiting for approval confirmation...');
           await approveTx.wait();
@@ -1212,7 +1225,10 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
     }
   };
 
-
+  const displayedPriceImpact = Number(quoterPreview.priceImpactPct);
+  const hasPriceImpact = Number.isFinite(displayedPriceImpact);
+  const priceImpactTooHigh = hasPriceImpact && displayedPriceImpact > 15;
+  const quoteUnavailable = (chainId === 1 || chainId === 100) && (quoterPreview.quotedAmountIn !== amount || !quoterPreview.amountOut);
 
   return (
     <>
@@ -1529,7 +1545,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           ? inputAmount / noPrice
                           : inputAmount * noPrice;
                         const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
-                        return `${formatWith(value, 'swapPrice')} ${symbol}`;
+                        return `${formatWith(value, 'swapPrice')} ${symbol} (estimate)`;
                       })()}
                     </span>
                     <span className="text-xs text-futarchyGray11 dark:text-futarchyGray112">
@@ -1543,13 +1559,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           <span className="text-futarchyGold11 dark:text-futarchyGold9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
                         {(() => {
-                          const cur = parseFloat(quoterPreview.currentPrice);
                           const afterPrice = quoterPreview.priceAfter || quoterPreview.executionPrice;
-                          const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
-                          const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
-                          const val = quoterPreview.chainId === 100 ? slippage : impact;
-                          // No data or extreme impact (>99%) = insufficient liquidity
-                          if (!afterPrice || val > 99) {
+                          const val = Number(quoterPreview.priceImpactPct);
+                          if (!afterPrice || !Number.isFinite(val)) {
                             return (
                               <div className="flex justify-between items-center text-[10px]">
                                 <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">Insufficient liquidity</span>
@@ -1564,7 +1576,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                               </div>
                               <div className="flex justify-between items-center text-[10px]">
                                 <span className="text-futarchyGray11 dark:text-white/50">
-                                  {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
+                                  Price Impact
                                 </span>
                                 <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
                                   {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
@@ -1585,7 +1597,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       {(() => {
                         const value = parseFloat(amount) || 0;
                         const symbol = selectedAction === 'Buy' ? getCurrencySymbol() : getCompanySymbol();
-                        return `${formatWith(value, 'swapPrice')} ${symbol}`;
+                        return `${formatWith(value, 'swapPrice')} ${symbol} (estimate)`;
                       })()}
                     </span>
                     <span className="text-xs text-futarchyGray11 dark:text-futarchyGray112">Recover</span>
@@ -1646,12 +1658,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           <span className="text-futarchyBlue11 dark:text-futarchyBlue9 font-mono">{parseFloat(quoterPreview.currentPrice).toFixed(4)}</span>
                         </div>
                         {(() => {
-                          const cur = parseFloat(quoterPreview.currentPrice);
                           const afterPrice = quoterPreview.priceAfter || quoterPreview.executionPrice;
-                          const impact = quoterPreview.priceAfter ? ((Math.abs(parseFloat(quoterPreview.priceAfter) - cur) / cur) * 100) : 0;
-                          const slippage = quoterPreview.executionPrice ? ((Math.abs(parseFloat(quoterPreview.executionPrice) - cur) / cur) * 100) : 0;
-                          const val = quoterPreview.chainId === 100 ? slippage : impact;
-                          if (!afterPrice || val > 99) {
+                          const val = Number(quoterPreview.priceImpactPct);
+                          if (!afterPrice || !Number.isFinite(val)) {
                             return (
                               <div className="flex justify-between items-center text-[10px]">
                                 <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[9px]">Insufficient liquidity</span>
@@ -1666,7 +1675,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                               </div>
                               <div className="flex justify-between items-center text-[10px]">
                                 <span className="text-futarchyGray11 dark:text-white/50">
-                                  {quoterPreview.chainId === 100 ? 'Slippage' : 'Impact'}
+                                  Price Impact
                                 </span>
                                 <span className={`font-medium ${val > 1 ? 'text-futarchyCrimson9' : 'text-futarchyGreen9'}`}>
                                   {val < 0.01 ? val.toFixed(4) : val.toFixed(2)}%
@@ -1695,6 +1704,24 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                 </>
               )}
             </div>
+            {quoterPreview.amountOut && hasPriceImpact && displayedPriceImpact > 1 && (
+              <div className={`mt-2 text-xs ${priceImpactTooHigh ? 'text-futarchyCrimson11' : 'text-futarchyOrange11'}`}>
+                Price impact {displayedPriceImpact.toFixed(2)}%
+              </div>
+            )}
+            {priceImpactTooHigh && (
+              <label className="mt-2 flex items-start gap-2 text-xs text-futarchyCrimson11 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={tradeAnywayAcknowledged}
+                  onChange={(event) => setTradeAnywayAcknowledged(event.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Price impact too high — pool depth insufficient for this size. Trade anyway.
+                </span>
+              </label>
+            )}
           </div>
 
           {/* Confirm Transaction Button */}
@@ -1702,9 +1729,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             <button
               onClick={handleConfirmClick}
               className="group relative overflow-hidden w-full py-3 px-4 rounded-xl font-semibold transition-colors text-sm bg-futarchyGray2 dark:bg-futarchyDarkGray2 border-2 border-futarchyGray62 dark:border-futarchyGray112/40 text-black dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!amount || parseFloat(amount) <= 0 || marketHasClosed || quoterPreview.isLoading || quoterPreview.insufficientLiquidity}
+              disabled={!amount || parseFloat(amount) <= 0 || marketHasClosed || quoterPreview.isLoading || quoteUnavailable || quoterPreview.insufficientLiquidity || (priceImpactTooHigh && !tradeAnywayAcknowledged)}
             >
-              <span className="relative z-10">{quoterPreview.isLoading ? 'Calculating...' : quoterPreview.insufficientLiquidity ? 'Insufficient Liquidity' : 'Confirm Swap'}</span>
+              <span className="relative z-10">{quoterPreview.isLoading ? 'Calculating...' : quoterPreview.insufficientLiquidity || quoteUnavailable ? 'Quote Unavailable' : priceImpactTooHigh && !tradeAnywayAcknowledged ? 'Acknowledge High Impact' : 'Confirm Swap'}</span>
               {(amount && parseFloat(amount) > 0 && !marketHasClosed) && (
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-black/10 dark:via-white/20 to-transparent transform -translate-x-full -skew-x-12 group-hover:translate-x-full transition-transform duration-500 ease-in-out pointer-events-none"></div>
               )}
@@ -1804,4 +1831,4 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
   );
 };
 
-export default ShowcaseSwapComponent; 
+export default ShowcaseSwapComponent;

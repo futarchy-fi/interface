@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import { ERC20_ABI } from "../components/futarchyFi/marketPage/constants/contracts";
+import { approvalAmountFor } from "../utils/approvalAmount";
 
 export const createStatusManager = (onStatus) => ({
   update: (message, data = {}) => {
@@ -30,12 +31,15 @@ export const checkTokenBalance = async (tokenAddress, amount, userAddress, provi
   return balance;
 };
 
-export const handleTokenApproval = async (tokenAddress, spenderAddress, amount, signer) => {
+export const handleTokenApproval = async (tokenAddress, spenderAddress, amount, signer, useUnlimitedApproval = false) => {
   const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
   const allowance = await tokenContract.allowance(await signer.getAddress(), spenderAddress);
   
   if (allowance.lt(amount)) {
-    const tx = await tokenContract.approve(spenderAddress, ethers.constants.MaxUint256);
+    const tx = await tokenContract.approve(
+      spenderAddress,
+      approvalAmountFor(amount, useUnlimitedApproval)
+    );
     await tx.wait();
     return true;
   }
@@ -154,4 +158,4 @@ export const validateSwapInput = (amount) => {
   if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
     throw new Error('Invalid amount');
   }
-}; 
+};

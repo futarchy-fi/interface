@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ethers } from 'ethers';
+import { approvalAmountFor } from '../utils/approvalAmount';
 
 // Enhanced MetaMask detection
 const detectMetaMask = () => {
@@ -233,7 +234,7 @@ export const useMetaMask = () => {
   }, [initializeProvider]);
 
   // Check and approve token with enhanced error handling
-  const checkAndApproveToken = useCallback(async (tokenAddress, spenderAddress, amount) => {
+  const checkAndApproveToken = useCallback(async (tokenAddress, spenderAddress, amount, useUnlimitedApproval = false) => {
     if (!signer) {
       throw new Error('No signer available - please connect MetaMask first');
     }
@@ -262,7 +263,10 @@ export const useMetaMask = () => {
 
       if (currentAllowance.lt(amount)) {
         console.log(`📝 Approving ${tokenSymbol} for spending...`);
-        const tx = await tokenContract.approve(spenderAddress, ethers.constants.MaxUint256);
+        const tx = await tokenContract.approve(
+          spenderAddress,
+          approvalAmountFor(amount, useUnlimitedApproval)
+        );
         console.log(`⏳ Waiting for ${tokenSymbol} approval confirmation...`);
         await tx.wait();
         console.log(`✅ ${tokenSymbol} approval confirmed`);
@@ -336,4 +340,4 @@ export const useMetaMask = () => {
     checkAndApproveToken,
     isMetaMaskDetected, // New: boolean indicating if MetaMask is available
   };
-}; 
+};

@@ -232,6 +232,7 @@ import { useCurrency, useUpdateCurrencyFromConfig } from '../../../contexts/Curr
 import { useSdaiRate } from '../../../hooks/useSdaiRate'; // Import sDAI rate hook
 import { useBalanceManager } from '../../../hooks/useBalanceManager'; // Import centralized balance manager
 import { useExternalSpotPrice } from '../../../hooks/useExternalSpotPrice'; // External spot price from CoinGecko
+import { approvalAmountFor } from '../../../utils/approvalAmount';
 
 // ---> Add CowSdk import <---
 import { CowSdk } from '@gnosis.pm/cow-sdk';
@@ -3064,7 +3065,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       await handleTokenApproval(
         BASE_TOKENS_CONFIG.currency.address,
         CONDITIONAL_TOKENS_ADDRESS,
-        ethers.constants.MaxUint256,
+        null,
         'WXDAI'
       );
 
@@ -3072,7 +3073,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       await handleTokenApproval(
         BASE_TOKENS_CONFIG.company.address,
         CONDITIONAL_TOKENS_ADDRESS,
-        ethers.constants.MaxUint256,
+        null,
         'FAOT'
       );
 
@@ -3116,7 +3117,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       // Approve tokens if needed
       if (allowance.lt(amount)) {
         console.log('Approving tokens...');
-        const approveTx = await tokenContract.approve(FUTARCHY_ROUTER_ADDRESS, ethers.constants.MaxUint256);
+        const approveTx = await tokenContract.approve(FUTARCHY_ROUTER_ADDRESS, approvalAmountFor(amount));
         await approveTx.wait();
         console.log('Tokens approved');
       } else {
@@ -3380,7 +3381,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       console.log('Approving tokens...');
       const approveTx = await tokenContract.approve(
         spenderAddress,
-        ethers.constants.MaxUint256 // Infinite approval
+        approvalAmountFor(amount)
       );
       await approveTx.wait();
       console.log('Approval complete');
@@ -3445,7 +3446,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
         console.log('Need to approve token...');
         const approveTx = await tokenContract.approve(
           FUTARCHY_ROUTER_ADDRESS,
-          ethers.constants.MaxUint256
+          approvalAmountFor(amount)
         );
         console.log('Waiting for approval confirmation...');
         await approveTx.wait();
@@ -3520,16 +3521,17 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
 
     // Create token contract instance
     const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+    const requiredAmount = amount == null ? await tokenContract.balanceOf(userAddress) : amount;
 
     // Check current allowance
     const currentAllowance = await tokenContract.allowance(userAddress, spenderAddress);
     console.log(`Current ${tokenName} allowance for ${spenderAddress}:`, ethers.utils.formatEther(currentAllowance));
 
     // If allowance is insufficient
-    if (currentAllowance.lt(amount)) {
+    if (currentAllowance.lt(requiredAmount)) {
       console.log(`Approving ${tokenName} for ${spenderAddress}...`);
       try {
-        const approveTx = await tokenContract.approve(spenderAddress, ethers.constants.MaxUint256);
+        const approveTx = await tokenContract.approve(spenderAddress, approvalAmountFor(requiredAmount));
         console.log('Approval transaction sent:', approveTx.hash);
         await approveTx.wait();
         console.log(`${tokenName} approved successfully`);
@@ -3538,7 +3540,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
         const newAllowance = await tokenContract.allowance(userAddress, spenderAddress);
         console.log(`New ${tokenName} allowance:`, ethers.utils.formatEther(newAllowance));
 
-        if (newAllowance.lt(amount)) {
+        if (newAllowance.lt(requiredAmount)) {
           throw new Error('Allowance is still insufficient after approval');
         }
       } catch (error) {
@@ -3949,7 +3951,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     const [estimation, setEstimation] = useState({
       loading: false,
       error: null,
-      outputAmount: null
+      outputAmount: null,
+      outputAmountRaw: null
     });
     const [isSwapping, setIsSwapping] = useState(false);
 
@@ -3984,21 +3987,24 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
         const outputReserve = token0.toLowerCase() === DEFAULT_BASE_CURRENCY_TOKEN_ADDRESS.toLowerCase() ? reserve1 : reserve0;
 
         // Calculate output amount using constant product formula
-        const numerator = inputAmount.mul(outputReserve);
-        const denominator = inputReserve.add(inputAmount);
+        const inputAmountWithFee = inputAmount.mul(997);
+        const numerator = inputAmountWithFee.mul(outputReserve);
+        const denominator = inputReserve.mul(1000).add(inputAmountWithFee);
         const outputAmount = numerator.div(denominator);
 
         setEstimation({
           loading: false,
           error: null,
-          outputAmount: ethers.utils.formatEther(outputAmount)
+          outputAmount: ethers.utils.formatEther(outputAmount),
+          outputAmountRaw: outputAmount.toString()
         });
       } catch (error) {
         console.error('Failed to fetch estimation:', error);
         setEstimation({
           loading: false,
           error: error.message,
-          outputAmount: null
+          outputAmount: null,
+          outputAmountRaw: null
         });
       }
     };
@@ -4043,14 +4049,16 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
         // Check and approve WXDAI if needed
         const allowance = await wxdaiContract.allowance(userAddress, SUSHISWAP_ROUTER);
         if (allowance.lt(amount)) {
-          const approveTx = await wxdaiContract.approve(SUSHISWAP_ROUTER, ethers.constants.MaxUint256);
+          const approveTx = await wxdaiContract.approve(SUSHISWAP_ROUTER, approvalAmountFor(amount));
           await approveTx.wait();
         }
 
         // Prepare swap parameters
         const path = [DEFAULT_BASE_CURRENCY_TOKEN_ADDRESS, MERGE_CONFIG.companyPositions.yes.wrap.wrappedCollateralTokenAddress];
         const deadline = Math.floor(Date.now() / 1000) + 300; // 5 minutes
-        const amountOutMin = 0; // No minimum output (be careful with this in production)
+        const quotedAmountOut = ethers.BigNumber.from(estimation.outputAmountRaw || 0);
+        if (quotedAmountOut.isZero()) throw new Error('A current pool quote is required');
+        const amountOutMin = quotedAmountOut.mul(97).div(100);
 
         // Execute swap
         const swapTx = await router.swapExactTokensForTokens(
