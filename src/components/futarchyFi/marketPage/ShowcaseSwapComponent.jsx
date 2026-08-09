@@ -34,7 +34,7 @@ import { fetchSushiSwapRoute, executeSushiSwapRoute } from '../../../utils/sushi
 import { formatBalance, formatPercentage } from '../../../utils/formatters';
 import { useCurrency } from '../../../contexts/CurrencyContext';
 import { useContractConfig } from '../../../hooks/useContractConfig';
-import { formatWith } from '../../../utils/precisionFormatter';
+import { formatTokenAmount, formatWith } from '../../../utils/precisionFormatter';
 import { getUniswapV3QuoteWithPriceImpact, getPoolSqrtPrice, sqrtPriceX96ToPrice } from '../../../utils/uniswapSdk';
 import { usePublicClient, useChainId } from 'wagmi';
 import { approvalAmountFor } from '../../../utils/approvalAmount';
@@ -1533,7 +1533,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
 
                         if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
-                          return `${formatWith(parseFloat(quoterPreview.amountOut), 'swapPrice')} ${symbol}`;
+                          return `${formatTokenAmount(quoterPreview.amountOut)} ${symbol}`;
                         }
 
                         // Fallback to price calculation
@@ -1545,7 +1545,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           ? inputAmount / noPrice
                           : inputAmount * noPrice;
                         const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
-                        return `${formatWith(value, 'swapPrice')} ${symbol} (estimate)`;
+                        return `${formatTokenAmount(value)} ${symbol} (estimate)`;
                       })()}
                     </span>
                     <span className="text-xs text-futarchyGray11 dark:text-futarchyGray112">
@@ -1597,7 +1597,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       {(() => {
                         const value = parseFloat(amount) || 0;
                         const symbol = selectedAction === 'Buy' ? getCurrencySymbol() : getCompanySymbol();
-                        return `${formatWith(value, 'swapPrice')} ${symbol} (estimate)`;
+                        return `${formatTokenAmount(value)} ${symbol} (estimate)`;
                       })()}
                     </span>
                     <span className="text-xs text-futarchyGray11 dark:text-futarchyGray112">Recover</span>
@@ -1632,7 +1632,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
 
                         if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
-                          return `${formatWith(parseFloat(quoterPreview.amountOut), 'swapPrice')} ${symbol}`;
+                          return `${formatTokenAmount(quoterPreview.amountOut)} ${symbol}`;
                         }
 
                         // Fallback to price calculation
@@ -1644,7 +1644,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                           ? inputAmount / yesPrice
                           : inputAmount * yesPrice;
                         const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
-                        return `${formatWith(value, 'swapPrice')} ${symbol}`;
+                        return `${formatTokenAmount(value)} ${symbol}`;
                       })()}
                     </span>
                     <span className="text-xs text-futarchyGray11 dark:text-futarchyGray112">
@@ -1696,7 +1696,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       {(() => {
                         const value = parseFloat(amount) || 0;
                         const symbol = selectedAction === 'Buy' ? getCurrencySymbol() : getCompanySymbol();
-                        return `${formatWith(value, 'swapPrice')} ${symbol}`;
+                        return `${formatTokenAmount(value)} ${symbol}`;
                       })()}
                     </span>
                     <span className="text-xs text-futarchyGray11 dark:text-futarchyGray112">Recover</span>

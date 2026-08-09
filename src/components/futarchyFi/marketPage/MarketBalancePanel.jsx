@@ -226,7 +226,8 @@ const MarketBalancePanel = ({
   const { config } = useContractConfig(proposalId);
 
   // Helper functions for dynamic token symbols with fallbacks
-  const getCurrencySymbol = () => config?.BASE_TOKENS_CONFIG?.currency?.symbol || 'SDAI';
+  const getCurrencySymbol = () => config?.BASE_TOKENS_CONFIG?.currency?.symbol ||
+    (Number(config?.chainId) === 1 ? 'USDS' : 'sDAI');
   const getCompanySymbol = () => config?.BASE_TOKENS_CONFIG?.company?.symbol || 'COMPANY';
 
   // Get token URLs for "BUY" links - use chain ID from config (1 for mainnet, 100 for Gnosis)

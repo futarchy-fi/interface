@@ -63,7 +63,8 @@ export const fetchResolvedEventHighlightData = async (_companyId = "all", limit 
         metadata: proposal.metadata,
         companyId: proposal.companyId,
         companySymbol: proposal.metadata?.companyTokens?.base?.tokenSymbol || 'GNO',
-        currencySymbol: proposal.metadata?.currencyTokens?.base?.tokenSymbol || 'sDAI',
+        currencySymbol: proposal.metadata?.currencyTokens?.base?.tokenSymbol ||
+          (Number(proposal.chainId) === 1 ? 'USDS' : 'sDAI'),
         displayTitle0: proposal.metadata?.display_title_0,
         displayTitle1: proposal.metadata?.display_title_1,
         description: proposal.description || 'No description available',

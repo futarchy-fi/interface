@@ -93,6 +93,28 @@ export function formatWithClean(value, type = 'default', config = null) {
 }
 
 /**
+ * Format user-visible token amounts without scientific notation.
+ * Values below one retain four significant digits, capped at eight decimals.
+ */
+export function formatTokenAmount(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num === 0) return '0.00';
+
+  const absolute = Math.abs(num);
+  let fractionDigits = 2;
+
+  if (absolute < 1) {
+    fractionDigits = Math.min(8, Math.max(4, 3 - Math.floor(Math.log10(absolute))));
+  }
+
+  return num.toLocaleString('en-US', {
+    useGrouping: false,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
+  });
+}
+
+/**
  * Format a percentage value
  * @param {number|string} value - The decimal value (e.g., 0.5 for 50%)
  * @param {object} config - Optional custom precision config
