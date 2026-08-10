@@ -69,7 +69,6 @@ export const TRANSACTION_SETTINGS = {
   DEFAULT_GAS_LIMIT: ethers.BigNumber.from("300000"),
   GAS_PRICE_BUFFER: 1.2, // 20% buffer
   CONFIRMATION_BLOCKS: 1,
-  MAX_APPROVAL_AMOUNT: ethers.constants.MaxUint256,
   REFRESH_INTERVAL_MS: 5000
 };
 
@@ -114,4 +113,4 @@ export const STATUS_MESSAGES = {
   WAITING_CONFIRMATION: "Waiting for confirmation...",
   TRANSACTION_CONFIRMED: "Transaction confirmed",
   TRANSACTION_FAILED: "Transaction failed"
-}; 
+};

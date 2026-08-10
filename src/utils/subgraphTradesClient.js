@@ -5,7 +5,9 @@
  * Used when ?tradeSource=subgraph URL parameter is set.
  */
 
+import { ethers } from 'ethers';
 import { SUBGRAPH_ENDPOINTS } from '../config/subgraphEndpoints';
+import { formatTokenAmount } from './precisionFormatter';
 
 const ENDPOINTS = SUBGRAPH_ENDPOINTS;
 
@@ -184,34 +186,12 @@ export async function fetchSwapsFromSubgraph(chainId, poolAddresses, userAddress
     }
 }
 
-/**
- * Format a number for display, handling very small/large values
- * Shows significant figures rather than fixed decimals
- */
-function formatAmount(value) {
-    const num = parseFloat(value);
-    if (isNaN(num) || num === 0) return '0';
-
-    const absNum = Math.abs(num);
-
-    // For very small numbers, use scientific notation or significant figures
-    if (absNum < 0.000001) {
-        return num.toExponential(2);
+function formatAmount(value, decimals = 18) {
+    try {
+        return formatTokenAmount(ethers.utils.formatUnits(value || '0', Number(decimals) || 18));
+    } catch (_) {
+        return formatTokenAmount(value);
     }
-    if (absNum < 0.001) {
-        return num.toPrecision(3);
-    }
-    if (absNum < 1) {
-        return num.toFixed(6);
-    }
-    if (absNum < 1000) {
-        return num.toFixed(4);
-    }
-    if (absNum < 1000000) {
-        return num.toFixed(2);
-    }
-    // Large numbers: use compact notation
-    return num.toExponential(2);
 }
 
 /**
@@ -307,12 +287,12 @@ export function convertSwapToTradeFormat(swap, chainId) {
             // tokenOUT = what user GIVES (subgraph's amountIn/tokenIn)
             tokenIN: {
                 symbol: swap.tokenOut?.symbol || 'UNKNOWN',
-                value: formatAmount(swap.amountOut),
+                value: formatAmount(swap.amountOut, swap.tokenOut?.decimals ?? swap.decimalsOut),
                 address: swap.tokenOut?.id
             },
             tokenOUT: {
                 symbol: swap.tokenIn?.symbol || 'UNKNOWN',
-                value: formatAmount(swap.amountIn),
+                value: formatAmount(swap.amountIn, swap.tokenIn?.decimals ?? swap.decimalsIn),
                 address: swap.tokenIn?.id
             }
         },

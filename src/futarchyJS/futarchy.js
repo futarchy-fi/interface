@@ -17,6 +17,7 @@
  */
 
 import { ethers } from "ethers";
+import { approvalAmountFor } from "../utils/approvalAmount.js";
 import { createBalanceManager } from "./balanceManager.js";
 import {
   getProviderAndSigner as getDefaultProviderAndSigner,
@@ -156,6 +157,7 @@ export { config as environmentConfig };
  * @param {ethers.Wallet|ethers.Signer} options.customSigner - Custom signer for testing
  * @param {boolean} options.autoInitialize - Whether to initialize automatically
  * @param {boolean} options.testMode - Enable test mode (simulated transactions)
+ * @param {boolean} options.useUnlimitedApproval - Opt in to unlimited approvals
  * @returns {Object} Futarchy management methods and state
  */
 export const createFutarchy = (options = {}) => {
@@ -165,6 +167,7 @@ export const createFutarchy = (options = {}) => {
     useSushiV3: config.settings.useSushiV3,
     autoInitialize: config.settings.autoInitialize,
     testMode: config.settings.testMode,
+    useUnlimitedApproval: false,
     
     // Override with any user-provided options
     ...options
@@ -176,6 +179,7 @@ export const createFutarchy = (options = {}) => {
   const AUTO_INITIALIZE = mergedConfig.autoInitialize;
   const useSushiV3 = mergedConfig.useSushiV3;
   const TEST_MODE = mergedConfig.testMode;
+  const useUnlimitedApproval = Boolean(mergedConfig.useUnlimitedApproval);
   
   // Initialize event emitter for notifications
   const eventEmitter = new EventEmitter();
@@ -813,7 +817,7 @@ export const createFutarchy = (options = {}) => {
         // Approve for max amount
         const approveTx = await tokenContract.approve(
           FUTARCHY_ROUTER_ADDRESS,
-          ethers.constants.MaxUint256,
+          approvalAmountFor(parsedAmount, useUnlimitedApproval),
           { 
             gasLimit: 100000,
             type: 2,
@@ -983,7 +987,7 @@ export const createFutarchy = (options = {}) => {
         
         const approvalTx = await token.approve(
           FUTARCHY_ROUTER_ADDRESS,
-          ethers.constants.MaxUint256, // Approve max amount to save gas on future transactions
+          approvalAmountFor(parsedAmount, useUnlimitedApproval),
           { 
             gasLimit: 100000,
             type: 2,
@@ -1178,7 +1182,9 @@ export const createFutarchy = (options = {}) => {
         fromToken,
         routerAddress,
         parsedAmount,
-        signer
+        signer,
+        {},
+        useUnlimitedApproval
       );
       
       if (didApprove) {
@@ -1195,7 +1201,12 @@ export const createFutarchy = (options = {}) => {
         const { checkAndApproveTokenForV3Swap, executeV3Swap } = await import("../utils/sushiswapV3Helper");
         
         // Approve token if needed
-        await checkAndApproveTokenForV3Swap(fromToken, parsedAmount, signer);
+        await checkAndApproveTokenForV3Swap({
+          signer,
+          tokenAddress: fromToken,
+          amount: parsedAmount,
+          useUnlimitedApproval
+        });
         
         // Execute swap
         statusManager.update('Executing V3 swap...');
@@ -1457,7 +1468,7 @@ export const createFutarchy = (options = {}) => {
       
       const approveTx = await tokenContract.approve(
         spenderAddress,
-        ethers.constants.MaxUint256, // Use max uint to avoid future approvals
+        approvalAmountFor(amount, useUnlimitedApproval),
         { 
           gasLimit: 100000,
           type: 2,
@@ -1743,7 +1754,7 @@ export const createFutarchy = (options = {}) => {
             console.log('Approving token for SushiSwap V3 router');
             const approvalTx = await tokenContract.approve(
               SUSHISWAP_V3_ROUTER,
-              ethers.constants.MaxUint256 // Approve unlimited amount to avoid future approvals
+              approvalAmountFor(amountBN, useUnlimitedApproval)
             );
             
             console.log('Approval transaction sent:', approvalTx.hash);
@@ -2044,4 +2055,4 @@ export default {
   createFutarchy,
   getEnvironmentConfig,
   environmentConfig: config
-}; 
+};

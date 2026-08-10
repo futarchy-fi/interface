@@ -17,6 +17,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useAccount } from 'wagmi';
 import { fetchFormattedTrades, fetchPoolsForProposal } from '../../../utils/subgraphTradesClient';
 import { useSubgraphRefresh } from '../../../contexts/SubgraphRefreshContext';
+import { SHOW_DATA_DEBUG } from '../../../config/featureFlags';
 
 const REFRESH_INTERVAL = 45000; // 45 seconds
 
@@ -205,7 +206,7 @@ const SubgraphTradesDataLayer = ({
             <div className="flex items-center justify-center py-12">
                 <div className="text-center">
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-futarchyViolet9 mb-4"></div>
-                    <p className="text-futarchyGray11 dark:text-futarchyGray112">Loading from Subgraph...</p>
+                    <p className="text-futarchyGray11 dark:text-futarchyGray112">{SHOW_DATA_DEBUG ? 'Loading from Subgraph...' : 'Loading trades...'}</p>
                 </div>
             </div>
         );
@@ -234,7 +235,7 @@ const SubgraphTradesDataLayer = ({
         return (
             <div className="relative">
                 {/* Subgraph Status Bar */}
-                <div className="flex items-center justify-between px-4 py-2 mb-2 bg-futarchyGray3 dark:bg-futarchyDarkGray3 rounded-lg border border-futarchyGray62 dark:border-futarchyDarkGray42">
+                {SHOW_DATA_DEBUG && <div className="flex items-center justify-between px-4 py-2 mb-2 bg-futarchyGray3 dark:bg-futarchyDarkGray3 rounded-lg border border-futarchyGray62 dark:border-futarchyDarkGray42">
                     <div className="flex items-center gap-3">
                         <span className="px-2 py-0.5 text-xs font-medium bg-futarchyTeal4 text-futarchyTeal11 dark:bg-futarchyTeal4/20 dark:text-futarchyTeal7 rounded-full border border-futarchyTeal6 dark:border-futarchyTeal7">
                             Subgraph
@@ -258,7 +259,7 @@ const SubgraphTradesDataLayer = ({
                             Resync
                         </button>
                     </div>
-                </div>
+                </div>}
                 <div className="flex items-center justify-center py-12 text-futarchyGray11 dark:text-futarchyGray112">
                     {showMyTrades && !isConnected
                         ? 'Connect wallet to view your trades'
@@ -274,7 +275,7 @@ const SubgraphTradesDataLayer = ({
     return (
         <div className="relative">
             {/* Subgraph Status Bar */}
-            <div className="flex items-center justify-between px-4 py-2 mb-2 bg-futarchyGray3 dark:bg-futarchyDarkGray3 rounded-lg border border-futarchyGray62 dark:border-futarchyDarkGray42">
+            {SHOW_DATA_DEBUG && <div className="flex items-center justify-between px-4 py-2 mb-2 bg-futarchyGray3 dark:bg-futarchyDarkGray3 rounded-lg border border-futarchyGray62 dark:border-futarchyDarkGray42">
                 <div className="flex items-center gap-3">
                     <span className="px-2 py-0.5 text-xs font-medium bg-futarchyTeal4 text-futarchyTeal11 dark:bg-futarchyTeal4/20 dark:text-futarchyTeal7 rounded-full border border-futarchyTeal6 dark:border-futarchyTeal7">
                         Subgraph
@@ -298,7 +299,7 @@ const SubgraphTradesDataLayer = ({
                         Resync
                     </button>
                 </div>
-            </div>
+            </div>}
 
             {/* Desktop Table View */}
             <div className="hidden md:block rounded-2xl border border-futarchyGray62 dark:border-futarchyDarkGray42 bg-futarchyGray2 dark:bg-futarchyDarkGray3">
@@ -308,7 +309,7 @@ const SubgraphTradesDataLayer = ({
                             <thead>
                                 <tr className="border-b-2 border-futarchyGray62 dark:border-futarchyDarkGray42 dark:bg-futarchyDarkGray3 h-[60px]">
                                     <th className="text-xs text-futarchyGray11 dark:text-futarchyGray112 font-semibold text-left px-4 w-[180px]">Outcome</th>
-                                    <th className="text-xs text-futarchyGray11 dark:text-futarchyGray112 font-semibold text-left px-4 w-[100px]">Type</th>
+                                    {SHOW_DATA_DEBUG && <th className="text-xs text-futarchyGray11 dark:text-futarchyGray112 font-semibold text-left px-4 w-[100px]">Type</th>}
                                     <th className="text-xs text-futarchyGray11 dark:text-futarchyGray112 font-semibold text-left px-4 w-[180px]">Amount</th>
                                     <th className="text-xs text-futarchyGray11 dark:text-futarchyGray112 font-semibold text-right px-4 w-[100px]">Price</th>
                                     <th className="text-xs text-futarchyGray11 dark:text-futarchyGray112 font-semibold text-right px-4 w-[140px]">Date</th>
@@ -351,7 +352,7 @@ const SubgraphTradesDataLayer = ({
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-4 w-[100px]">
+                                                {SHOW_DATA_DEBUG && <td className="px-4 w-[100px]">
                                                     <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${trade.poolType === 'PREDICTION'
                                                         ? 'bg-futarchyViolet4 text-futarchyViolet11 border border-futarchyViolet6 dark:bg-transparent dark:text-futarchyViolet7 dark:border-futarchyViolet7'
                                                         : trade.poolType === 'CONDITIONAL'
@@ -360,7 +361,7 @@ const SubgraphTradesDataLayer = ({
                                                         }`}>
                                                         {trade.poolType || 'UNKNOWN'}
                                                     </span>
-                                                </td>
+                                                </td>}
                                                 <td className="px-4 w-[180px]">
                                                     <div className="flex flex-col gap-1">
                                                         <span className="text-xs font-semibold text-futarchyGray12 dark:text-futarchyGray112 whitespace-nowrap flex items-center">

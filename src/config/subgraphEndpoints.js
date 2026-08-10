@@ -15,7 +15,7 @@ export const AGGREGATOR_SUBGRAPH_URL = 'https://api.futarchy.fi/registry/graphql
 
 // Candles/pools — Checkpoint candles indexer (serves both chains)
 export const SUBGRAPH_ENDPOINTS = {
-    1:   'https://api.futarchy.fi/candles/graphql',
+    1:   'https://api.futarchy.fi/candles/graphql?chainId=1',
     100: 'https://api.futarchy.fi/candles/graphql',
 };
 
