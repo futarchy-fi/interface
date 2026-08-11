@@ -3,7 +3,7 @@ import Image from "next/image";
 
 const NAV_LINKS = [
   { label: 'Companies', href: '/companies' },
-  { label: 'Documentation', href: 'https://docs.futarchy.fi', external: true },
+  { label: 'Documentation', href: '/documents' },
   { label: 'Status', href: 'https://status.futarchy.fi', external: true },
 ];
 
