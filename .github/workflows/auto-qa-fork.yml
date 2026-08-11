@@ -1,0 +1,80 @@
+name: auto-qa fork
+
+on:
+  workflow_dispatch:
+    inputs:
+      fork_url:
+        description: 'Override Gnosis fork RPC URL'
+        required: false
+        default: ''
+  schedule:
+    - cron: '37 4 * * 2'
+
+jobs:
+  fork:
+    name: Forked-chain auto-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            auto-qa/harness/package-lock.json
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install harness dependencies
+        working-directory: auto-qa/harness
+        run: npm ci
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('auto-qa/harness/package-lock.json') }}
+
+      - name: Install Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: auto-qa/harness
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Chromium system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: auto-qa/harness
+        run: npx playwright install-deps chromium
+
+      - name: Run fork tier
+        env:
+          FORK_URL_INPUT: ${{ github.event.inputs.fork_url || '' }}
+          FORK_URL_SECRET: ${{ secrets.GNOSIS_FORK_URL }}
+          HARNESS_ANVIL_LOG: '1'
+        run: |
+          export FORK_URL="${FORK_URL_INPUT:-${FORK_URL_SECRET:-https://rpc.gnosis.gateway.fm}}"
+          npm run auto-qa:harness:fork
+
+      - name: Upload fork artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-auto-qa-results-${{ github.run_attempt }}
+          path: |
+            auto-qa/harness/playwright-report/
+            auto-qa/harness/test-results/
+            /tmp/anvil-harness.log
+          retention-days: 14
+          if-no-files-found: ignore

@@ -1,0 +1,29 @@
+# Local node deps (we keep harness deps separate from the interface repo deps)
+node_modules/
+
+# Playwright artifacts
+.playwright/
+playwright-report/
+playwright-prod-report/
+test-results/
+*.video
+*.trace.zip
+*.har
+
+# Browser binaries (Playwright pulls them on install)
+.browsers/
+
+# Local Next.js dev server state when run from harness
+.next-harness/
+
+# Local wallet keys for the harness (anvil dev keys; never real)
+.wallet-state/
+
+# Step 7: cross-process channel for the active anvil snapshot ID
+# (globalSetup writes; per-scenario beforeEach reads + rewrites).
+# Ephemeral; regenerated on every test run.
+.fork-snapshot-id
+
+# Editor / OS
+.DS_Store
+*.log

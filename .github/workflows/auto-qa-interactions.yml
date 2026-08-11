@@ -1,0 +1,85 @@
+name: auto-qa interactions
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/auto-qa-interactions.yml'
+      - 'auto-qa/harness/**'
+      - 'app/**'
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.mjs'
+      - 'tailwind.config.js'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/auto-qa-interactions.yml'
+      - 'auto-qa/harness/**'
+      - 'app/**'
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.mjs'
+      - 'tailwind.config.js'
+  workflow_dispatch:
+
+jobs:
+  interaction:
+    name: Browser interaction auto-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            auto-qa/harness/package-lock.json
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install harness dependencies
+        working-directory: auto-qa/harness
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('auto-qa/harness/package-lock.json') }}
+
+      - name: Install Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: auto-qa/harness
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Chromium system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: auto-qa/harness
+        run: npx playwright install-deps chromium
+
+      - name: Run browser interaction tier
+        run: npm run auto-qa:harness:interaction
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-interaction-results-${{ github.run_attempt }}
+          path: |
+            auto-qa/harness/playwright-report/
+            auto-qa/harness/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
