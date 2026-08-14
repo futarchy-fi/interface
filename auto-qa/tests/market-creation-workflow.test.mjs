@@ -142,5 +142,8 @@ test('validation rejects flows that would link Snapshot before liquidity', () =>
     nowSeconds: NOW,
     snapshotLinkAfterLiquidity: false,
   });
-  assert.deepEqual(validateOneStepMarketPlan(invalidPlan).errors, ['snapshotLinkAfterLiquidity']);
+  assert.deepEqual(
+    validateOneStepMarketPlan(invalidPlan, { nowSeconds: NOW }).errors,
+    ['snapshotLinkAfterLiquidity']
+  );
 });

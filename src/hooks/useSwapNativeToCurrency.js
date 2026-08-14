@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import { CowSdk, OrderKind } from '@gnosis.pm/cow-sdk';
 import { useMetaMask } from './useMetaMask'; // Assuming this path is correct relative to src/hooks
 import { BASE_TOKENS_CONFIG as DEFAULT_BASE_TOKENS_CONFIG } from '../components/futarchyFi/marketPage/constants/contracts'; // Adjust path if needed
+import { approvalAmountFor } from '../utils/approvalAmount';
 
 // Constants for Gnosis Chain (Chain ID 100)
 const GNOSIS_CHAIN_ID = 100;
@@ -161,8 +162,10 @@ export const useSwapNativeToCurrency = (baseTokensConfig = DEFAULT_BASE_TOKENS_C
             console.log("[useSwapWxdaiToCurrency] WXDAI allowance insufficient. Requesting approval...");
             setOrderStatus('awaiting_approval');
             
-            // Use MaxUint256 for simplicity, avoids repeated approvals
-            const approveTx = await wxdaiContract.approve(COW_VAULT_RELAYER_ADDRESS, ethers.constants.MaxUint256);
+            const approveTx = await wxdaiContract.approve(
+                COW_VAULT_RELAYER_ADDRESS,
+                approvalAmountFor(amountInWei)
+            );
             console.log(`[useSwapWxdaiToCurrency] WXDAI approval transaction sent: ${approveTx.hash}. Waiting for confirmation...`);
             
             await approveTx.wait(); // Wait for the transaction to be mined
@@ -356,4 +359,4 @@ export const useSwapNativeToCurrency = (baseTokensConfig = DEFAULT_BASE_TOKENS_C
         sellTokenDecimals: sellTokenDecimals, // 18
         executedBuyAmount,
     };
-}; 
+};

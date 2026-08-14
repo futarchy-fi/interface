@@ -14,11 +14,8 @@ const CONTRACTS = {
     ORGANIZATION_FACTORY: '0x2Fa9318E1e29d7435EE9d23B687b10a9CDDD0d9e',
 };
 
-// Default aggregator (FutarchyFi)
-const DEFAULT_AGGREGATOR = '0x767868874be4b5434bd351410b0b9a6e7f4c3aaf';
-
-// Subgraph endpoint
-import { AGGREGATOR_SUBGRAPH_URL as SUBGRAPH_URL } from '../../config/subgraphEndpoints';
+// Subgraph endpoint + canonical default aggregator (FutarchyFi)
+import { AGGREGATOR_SUBGRAPH_URL as SUBGRAPH_URL, DEFAULT_AGGREGATOR } from '../../config/subgraphEndpoints';
 
 // ABIs (minimal)
 const ORGANIZATION_FACTORY_ABI = [

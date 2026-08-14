@@ -2,7 +2,7 @@ import React, { useEffect, useRef, memo, useState, useCallback, useMemo } from "
 import { useSearchParams } from 'next/navigation';
 import Image from "next/image";
 import RootLayout from "../../../components/layout/RootLayout";
-import { ENABLE_SUBGRAPH_FOR_ALL_PROPOSALS } from '../../../config/featureFlags';
+import { ENABLE_SUBGRAPH_FOR_ALL_PROPOSALS, SHOW_DATA_DEBUG } from '../../../config/featureFlags';
 import { StatDisplay, AggregatedStatDisplay, formatVolume, formatLiquidity, normalizeTokenAmount } from './page/Formatter';
 import ImpactIcon from './page/icons/ImpactIcon';
 import LiquidityIcon from './page/icons/LiquidityIcon';
@@ -232,6 +232,7 @@ import { useCurrency, useUpdateCurrencyFromConfig } from '../../../contexts/Curr
 import { useSdaiRate } from '../../../hooks/useSdaiRate'; // Import sDAI rate hook
 import { useBalanceManager } from '../../../hooks/useBalanceManager'; // Import centralized balance manager
 import { useExternalSpotPrice } from '../../../hooks/useExternalSpotPrice'; // External spot price from CoinGecko
+import { approvalAmountFor } from '../../../utils/approvalAmount';
 
 // ---> Add CowSdk import <---
 import { CowSdk } from '@gnosis.pm/cow-sdk';
@@ -1411,9 +1412,9 @@ const TradeHistoryTable = React.memo(({ tokenImages = { company: null, currency:
         ) : (isLoading || (loadingFromHook && trades.length === 0 && !forceShowData)) ? (
           <div className="py-8 text-center text-futarchyGray11">
             {retryCount > 0 ? `Retrying... (${retryCount}/${MAX_RETRIES})` : 'Loading trades...'}
-            <div className="text-xs mt-1 text-futarchyGray8">
+            {SHOW_DATA_DEBUG && <div className="text-xs mt-1 text-futarchyGray8">
               Local: {isLoading ? 'loading' : 'ready'} | Hook: {loadingFromHook ? 'loading' : 'ready'} | Trades: {trades.length} | Force: {forceShowData ? 'yes' : 'no'}
-            </div>
+            </div>}
           </div>
         ) : error ? (
           <div className="py-8 text-center text-futarchyCrimson11">
@@ -1527,6 +1528,43 @@ const PriceHeader = ({ yesPrice, noPrice, currencySymbol }) => (
           <span className="text-futarchyGold8">NO: {noPrice === null || noPrice === undefined ? 'N/A' : `${noPrice.toFixed(4)} ${currencySymbol}`}</span>
         </div>
       </div>
+    </div>
+  </div>
+);
+
+const YourViewCard = ({ subject }) => (
+  <div className="bg-futarchyGray3 dark:bg-futarchyDarkGray3 rounded-3xl border-2 border-futarchyGray62 dark:border-futarchyGray11/70 overflow-hidden">
+    <div className="px-4 py-3 bg-futarchyGray2 dark:bg-futarchyDarkGray2 border-b-2 border-futarchyGray62 dark:border-futarchyGray11/70">
+      <h3 className="font-oxanium text-sm font-semibold text-futarchyGray12 dark:text-white">
+        Your view on {subject}
+      </h3>
+    </div>
+    <div className="px-4 py-3">
+      <table className="w-full table-fixed font-oxanium text-xs text-center">
+        <thead>
+          <tr className="text-futarchyGray11 dark:text-white/60">
+            <th className="pb-2 text-left font-medium" />
+            <th className="pb-2 font-medium">If YES</th>
+            <th className="pb-2 font-medium">If NO</th>
+          </tr>
+        </thead>
+        <tbody className="text-futarchyGray12 dark:text-white">
+          <tr className="border-t border-futarchyGray62 dark:border-futarchyGray11/50">
+            <th scope="row" className="py-2 text-left font-medium">
+              <span className="inline-block w-2 h-2 mr-2 rounded-full bg-futarchyTeal9" />Bullish
+            </th>
+            <td className="py-2 font-semibold text-futarchyTeal9">BUY</td>
+            <td className="py-2 font-semibold text-futarchyCrimson9">SELL</td>
+          </tr>
+          <tr className="border-t border-futarchyGray62 dark:border-futarchyGray11/50">
+            <th scope="row" className="py-2 text-left font-medium">
+              <span className="inline-block w-2 h-2 mr-2 rounded-full bg-futarchyCrimson9" />Bearish
+            </th>
+            <td className="py-2 font-semibold text-futarchyCrimson9">SELL</td>
+            <td className="py-2 font-semibold text-futarchyTeal9">BUY</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 );
@@ -1979,7 +2017,7 @@ const SnapshotWidget = ({
 
           <span className="text-xs md:text-sm whitespace-nowrap flex-shrink-0">
             Final Result
-            {snapshotSource === 'api' && (
+            {SHOW_DATA_DEBUG && snapshotSource === 'api' && (
               <span className="ml-1 text-[10px] text-futarchyViolet9 dark:text-futarchyViolet7">●</span>
             )}
           </span>
@@ -2035,7 +2073,7 @@ const SnapshotWidget = ({
             <>
               <span className="text-xs md:text-sm whitespace-nowrap flex-shrink-0">
                 Snapshot Results
-                {snapshotSource === 'api' && (
+                {SHOW_DATA_DEBUG && snapshotSource === 'api' && (
                   <span className="ml-1 text-[10px] text-futarchyViolet9 dark:text-futarchyViolet7">●</span>
                 )}
               </span>
@@ -2362,7 +2400,9 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
   const chainValidation = useChainValidation(config, configLoading);
 
   // Get currency symbol from config (used for display throughout component)
-  const currencySymbol = config?.BASE_TOKENS_CONFIG?.currency?.symbol || 'sDAI';
+  const currencySymbol = config?.BASE_TOKENS_CONFIG?.currency?.symbol ||
+    config?.metadata?.currencyTokens?.base?.tokenSymbol ||
+    (Number(config?.chainId || proposal?.chainId) === 1 ? 'USDS' : 'sDAI');
   const companySymbol = config?.BASE_TOKENS_CONFIG?.company?.symbol || DEFAULT_BASE_TOKENS_CONFIG?.company?.symbol || 'GNO';
 
   // Check if connected user is the proposal owner (for edit permissions)
@@ -2430,8 +2470,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       }
 
       const entries = [
-        { token: liquidity.token0, amount: liquidity.amount0 },
-        { token: liquidity.token1, amount: liquidity.amount1 }
+        { token: liquidity.token0, amount: liquidity.amount0, kind: liquidity.kind0 },
+        { token: liquidity.token1, amount: liquidity.amount1, kind: liquidity.kind1 }
       ];
 
       let cashValue = 0;
@@ -2443,9 +2483,9 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
         const normalizedAmount = normalizeTokenAmount(entry.amount);
         const tokenAddress = entry.token?.toLowerCase();
 
-        if (currencyAddress && tokenAddress === currencyAddress) {
+        if (entry.kind === 'currency' || (currencyAddress && tokenAddress === currencyAddress)) {
           cashValue += normalizedAmount;
-        } else if (companyAddress && tokenAddress === companyAddress) {
+        } else if (entry.kind === 'company' || (companyAddress && tokenAddress === companyAddress)) {
           companyTokenAmount += normalizedAmount;
         } else {
           otherValue += normalizedAmount;
@@ -2466,8 +2506,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       };
     };
 
-    const yesPrice = parsePrice(newYesPrice ?? latestPrices.yes);
-    const noPrice = parsePrice(newNoPrice ?? latestPrices.no);
+    const yesPrice = parsePrice(newYesPrice ?? poolData?.yesPool?.price ?? latestPrices.yes);
+    const noPrice = parsePrice(newNoPrice ?? poolData?.noPool?.price ?? latestPrices.no);
 
     const yesData = computeBreakdown(poolData?.yesPool?.liquidity, yesPrice);
     const noData = computeBreakdown(poolData?.noPool?.liquidity, noPrice);
@@ -2550,6 +2590,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     config?.BASE_TOKENS_CONFIG,
     poolData?.yesPool?.liquidity,
     poolData?.noPool?.liquidity,
+    poolData?.yesPool?.price,
+    poolData?.noPool?.price,
     newYesPrice,
     newNoPrice,
     latestPrices.yes,
@@ -2885,6 +2927,31 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     error: null
   });
 
+  const marketSubject = useMemo(() => {
+    const displayTexts = [
+      marketData.display_title_1,
+      marketData.display_title_0,
+      marketData.title,
+      config?.marketInfo?.display_text_1,
+      config?.marketInfo?.title
+    ].filter(Boolean);
+    const identifier = displayTexts.join(' ').match(/\b(?:EIP|GIP|KIP|ERC|RIP|SIP|AIP|MIP|TIP)[-\s]?\d+\b/i)?.[0];
+
+    if (identifier) return identifier.replace(/\s+/, '-').toUpperCase();
+
+    const fallback = String(displayTexts[0] || 'this market')
+      .replace(/^\s*if\s+/i, '')
+      .replace(/[?.!]+$/, '')
+      .trim();
+    return fallback.length > 48 ? `${fallback.slice(0, 45).trimEnd()}…` : fallback;
+  }, [
+    marketData.display_title_1,
+    marketData.display_title_0,
+    marketData.title,
+    config?.marketInfo?.display_text_1,
+    config?.marketInfo?.title
+  ]);
+
   const [selectedToken, setSelectedToken] = useState('currency');
 
   // Function to fetch dynamic market data from Supabase
@@ -3064,7 +3131,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       await handleTokenApproval(
         BASE_TOKENS_CONFIG.currency.address,
         CONDITIONAL_TOKENS_ADDRESS,
-        ethers.constants.MaxUint256,
+        null,
         'WXDAI'
       );
 
@@ -3072,7 +3139,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       await handleTokenApproval(
         BASE_TOKENS_CONFIG.company.address,
         CONDITIONAL_TOKENS_ADDRESS,
-        ethers.constants.MaxUint256,
+        null,
         'FAOT'
       );
 
@@ -3116,7 +3183,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       // Approve tokens if needed
       if (allowance.lt(amount)) {
         console.log('Approving tokens...');
-        const approveTx = await tokenContract.approve(FUTARCHY_ROUTER_ADDRESS, ethers.constants.MaxUint256);
+        const approveTx = await tokenContract.approve(FUTARCHY_ROUTER_ADDRESS, approvalAmountFor(amount));
         await approveTx.wait();
         console.log('Tokens approved');
       } else {
@@ -3380,7 +3447,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
       console.log('Approving tokens...');
       const approveTx = await tokenContract.approve(
         spenderAddress,
-        ethers.constants.MaxUint256 // Infinite approval
+        approvalAmountFor(amount)
       );
       await approveTx.wait();
       console.log('Approval complete');
@@ -3445,7 +3512,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
         console.log('Need to approve token...');
         const approveTx = await tokenContract.approve(
           FUTARCHY_ROUTER_ADDRESS,
-          ethers.constants.MaxUint256
+          approvalAmountFor(amount)
         );
         console.log('Waiting for approval confirmation...');
         await approveTx.wait();
@@ -3520,16 +3587,17 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
 
     // Create token contract instance
     const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+    const requiredAmount = amount == null ? await tokenContract.balanceOf(userAddress) : amount;
 
     // Check current allowance
     const currentAllowance = await tokenContract.allowance(userAddress, spenderAddress);
     console.log(`Current ${tokenName} allowance for ${spenderAddress}:`, ethers.utils.formatEther(currentAllowance));
 
     // If allowance is insufficient
-    if (currentAllowance.lt(amount)) {
+    if (currentAllowance.lt(requiredAmount)) {
       console.log(`Approving ${tokenName} for ${spenderAddress}...`);
       try {
-        const approveTx = await tokenContract.approve(spenderAddress, ethers.constants.MaxUint256);
+        const approveTx = await tokenContract.approve(spenderAddress, approvalAmountFor(requiredAmount));
         console.log('Approval transaction sent:', approveTx.hash);
         await approveTx.wait();
         console.log(`${tokenName} approved successfully`);
@@ -3538,7 +3606,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
         const newAllowance = await tokenContract.allowance(userAddress, spenderAddress);
         console.log(`New ${tokenName} allowance:`, ethers.utils.formatEther(newAllowance));
 
-        if (newAllowance.lt(amount)) {
+        if (newAllowance.lt(requiredAmount)) {
           throw new Error('Allowance is still insufficient after approval');
         }
       } catch (error) {
@@ -3949,7 +4017,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
     const [estimation, setEstimation] = useState({
       loading: false,
       error: null,
-      outputAmount: null
+      outputAmount: null,
+      outputAmountRaw: null
     });
     const [isSwapping, setIsSwapping] = useState(false);
 
@@ -3984,21 +4053,24 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
         const outputReserve = token0.toLowerCase() === DEFAULT_BASE_CURRENCY_TOKEN_ADDRESS.toLowerCase() ? reserve1 : reserve0;
 
         // Calculate output amount using constant product formula
-        const numerator = inputAmount.mul(outputReserve);
-        const denominator = inputReserve.add(inputAmount);
+        const inputAmountWithFee = inputAmount.mul(997);
+        const numerator = inputAmountWithFee.mul(outputReserve);
+        const denominator = inputReserve.mul(1000).add(inputAmountWithFee);
         const outputAmount = numerator.div(denominator);
 
         setEstimation({
           loading: false,
           error: null,
-          outputAmount: ethers.utils.formatEther(outputAmount)
+          outputAmount: ethers.utils.formatEther(outputAmount),
+          outputAmountRaw: outputAmount.toString()
         });
       } catch (error) {
         console.error('Failed to fetch estimation:', error);
         setEstimation({
           loading: false,
           error: error.message,
-          outputAmount: null
+          outputAmount: null,
+          outputAmountRaw: null
         });
       }
     };
@@ -4043,14 +4115,16 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
         // Check and approve WXDAI if needed
         const allowance = await wxdaiContract.allowance(userAddress, SUSHISWAP_ROUTER);
         if (allowance.lt(amount)) {
-          const approveTx = await wxdaiContract.approve(SUSHISWAP_ROUTER, ethers.constants.MaxUint256);
+          const approveTx = await wxdaiContract.approve(SUSHISWAP_ROUTER, approvalAmountFor(amount));
           await approveTx.wait();
         }
 
         // Prepare swap parameters
         const path = [DEFAULT_BASE_CURRENCY_TOKEN_ADDRESS, MERGE_CONFIG.companyPositions.yes.wrap.wrappedCollateralTokenAddress];
         const deadline = Math.floor(Date.now() / 1000) + 300; // 5 minutes
-        const amountOutMin = 0; // No minimum output (be careful with this in production)
+        const quotedAmountOut = ethers.BigNumber.from(estimation.outputAmountRaw || 0);
+        if (quotedAmountOut.isZero()) throw new Error('A current pool quote is required');
+        const amountOutMin = quotedAmountOut.mul(97).div(100);
 
         // Execute swap
         const swapTx = await router.swapExactTokensForTokens(
@@ -4804,7 +4878,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
               />
 
               <AggregatedStatDisplay
-                label={poolData?.source === 'subgraph' ? 'Liquidity' : `Liquidity (Total; ${currencySymbol})`}
+                label="Liquidity"
                 yesValue={liquiditySummary.yes?.total ?? null}
                 noValue={liquiditySummary.no?.total ?? null}
                 Icon={LiquidityIcon}
@@ -5343,6 +5417,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                           </div>
                         )}
 
+                        <YourViewCard subject={marketSubject} />
+
                         {/* Balance Stats Container */}
                         <MarketBalancePanel
                           positions={positions}
@@ -5638,7 +5714,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
           />
 
           {/* Snapshot Debug Console - Shows when debug mode is active */}
-          {isDebugMode && (
+          {SHOW_DATA_DEBUG && isDebugMode && (
             <div className="fixed top-4 right-4 z-50 bg-black/90 text-white p-4 rounded-lg max-w-md text-xs font-mono">
               <div className="font-bold mb-2 text-futarchyViolet9">📊 Snapshot Widget Debug</div>
               <div className="space-y-1">
@@ -5659,7 +5735,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
           )}
 
           {/* Market Analytics Toast - Hidden on Mobile and when debug mode is false */}
-          {isDebugMode && (
+          {SHOW_DATA_DEBUG && isDebugMode && (
             <div className="hidden md:block">
               <MarketStatsDebugToast
                 prices={prices}

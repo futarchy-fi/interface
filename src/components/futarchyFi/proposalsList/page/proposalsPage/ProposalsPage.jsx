@@ -17,6 +17,7 @@ import PageLayout from "../../../../layout/PageLayout";
 import { useOrganization } from "../../../../../hooks/useOrganization";
 import { useChainId } from "wagmi";
 import OrganizationManagerModal from "../../../../debug/OrganizationManagerModal";
+import { SHOW_DATA_DEBUG } from "../../../../../config/featureFlags";
 
 const PROPOSAL_IMAGES = {
   "ethereum-budget": "/assets/ethereum-budget-picture.webp",
@@ -198,6 +199,7 @@ const ProposalsPage = ({
               prices: { yes: yesPrice, no: noPrice },
               impact,
               metadata: {
+                ...proposalMeta,
                 background_image: subgraphOrg.coverImage || subgraphOrg.logo,
                 display_title_0: p.displayNameQuestion,
                 display_title_1: p.displayNameEvent
@@ -329,7 +331,7 @@ const ProposalsPage = ({
                 {companyData.currencyToken}
               </div>
               {/* Subgraph badge */}
-              {companyData.fromSubgraph && (
+              {SHOW_DATA_DEBUG && companyData.fromSubgraph && (
                 <div className="py-1 px-2 bg-purple-600 rounded-full text-white text-sm leading-4 font-medium">
                   📊 Subgraph
                 </div>

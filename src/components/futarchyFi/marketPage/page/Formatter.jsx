@@ -207,11 +207,15 @@ export const AggregatedStatDisplay = ({
     normalize = true
 }) => {
     const formatValue = formatFunction || formatNumber;
+    // Distinguish "no data" (RPC/indexer failure -> null on both sides) from a
+    // genuine zero: a $0 reading on a live market is misleading, show a dash.
+    const noData = (yesValue === null || yesValue === undefined)
+        && (noValue === null || noValue === undefined);
     const normalizedYes = normalize ? normalizeTokenAmount(yesValue) : (Number(yesValue) || 0);
     const normalizedNo = normalize ? normalizeTokenAmount(noValue) : (Number(noValue) || 0);
     const total = normalizedYes + normalizedNo;
 
-    const formattedTotal = formatValue(total);
+    const formattedTotal = noData ? '—' : formatValue(total);
     const breakdownItems = (tooltipBreakdown && tooltipBreakdown.length > 0
         ? tooltipBreakdown
         : [

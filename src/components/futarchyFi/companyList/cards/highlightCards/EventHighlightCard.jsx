@@ -293,7 +293,7 @@ const EventHighlightCard = ({
   // Extract base token symbol from metadata
   const baseTokenSymbol = metadata?.currencyTokens?.base?.tokenSymbol ||
     metadata?.BASE_TOKENS_CONFIG?.currency?.symbol ||
-    'SDAI';
+    (Number(metadata?.chain || chainId) === 1 ? 'USDS' : 'sDAI');
 
   // Use high precision for small prices
   const shouldUseHighPrecision = (prices.no !== null && prices.no < 1) ||

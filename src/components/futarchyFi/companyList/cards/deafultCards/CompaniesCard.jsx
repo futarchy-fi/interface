@@ -3,6 +3,7 @@ import Image from "next/image";
 import FutarchyTileAnimation from "../../components/FutarchyTileAnimation";
 import { generateFallbackImage } from "../../../../../utils/imageUtils";
 import EditCompanyModal from "../../../../debug/EditCompanyModal";
+import { SHOW_DATA_DEBUG } from "../../../../../config/featureFlags";
 
 const getStorybookUrl = (companyId) => {
   // Map company IDs to their proper Storybook story names
@@ -80,9 +81,9 @@ export const CompaniesCard = ({
     <>
       <a href={href} className="group relative block border-2 border-futarchyGray62 dark:border-futarchyGray11/70 rounded-3xl w-full md:w-[340px] shadow-sm hover:shadow-lg transition-colors duration-300 overflow-hidden bg-futarchyGray3 dark:bg-futarchyDarkGray2">
         {/* Badges Container */}
-        {(fromSubgraph || isOwner) && (
+        {((SHOW_DATA_DEBUG && fromSubgraph) || isOwner) && (
           <div className="absolute top-2 right-2 z-30 flex flex-col gap-1">
-            {fromSubgraph && (
+            {SHOW_DATA_DEBUG && fromSubgraph && (
               <div className="bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
                 📊 Subgraph
               </div>
@@ -187,4 +188,3 @@ export const CompaniesCard = ({
     </>
   );
 };
-

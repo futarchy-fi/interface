@@ -33,8 +33,8 @@
  *      (options || routeData.gasSpent || 400000), gasPrice default
  *      0.97 gwei. Drift would over/under-pay gas silently.
  *
- *   8. checkAndApproveToken uses MaxUint256 (infinite approval).
- *      Pinned because limited approval would force re-approval per swap.
+ *   8. checkAndApproveToken uses approvalAmountFor(amount), which defaults
+ *      to an exact approval unless the user explicitly opts into unlimited.
  *
  * HAZARDS pinned (leave-as-is per /loop directive):
  *
@@ -245,16 +245,16 @@ test('source — throws "Router address not found in route data" when routeProce
 });
 
 // ---------------------------------------------------------------------------
-// checkAndApproveToken — MaxUint256 infinite approval
+// checkAndApproveToken — exact approval by default
 // ---------------------------------------------------------------------------
 
-test('source — checkAndApproveToken uses MaxUint256 (infinite approval)', () => {
-    // Pinned: limited approval would force re-approval per swap (UX
-    // friction + extra gas). MaxUint256 = "approve once, swap forever".
-    // Trade-off: token compromise = full balance at risk; pinned-as-is.
+test('source — checkAndApproveToken uses approvalAmountFor(amount)', () => {
     assert.match(SRC,
-        /tokenContract\.approve\(\s*spenderAddress,\s*ethers\.constants\.MaxUint256/,
-        `approval amount drifted from MaxUint256 (infinite)`);
+        /import\s*\{\s*approvalAmountFor\s*\}\s*from\s*['"]\.\/approvalAmount['"]/,
+        `approvalAmountFor import missing`);
+    assert.match(SRC,
+        /tokenContract\.approve\(\s*spenderAddress,\s*approvalAmountFor\(amount\)\s*\)/,
+        `approval must use approvalAmountFor(amount)`);
 });
 
 test('source — allowance check uses .lt() (strictly less than amount)', () => {

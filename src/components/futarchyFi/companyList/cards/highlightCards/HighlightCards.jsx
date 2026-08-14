@@ -3,6 +3,7 @@ import CircularProgressBar from "../../components/CircularProgressBar";
 import { createSubgraphPoolFetcher } from "../../../../../utils/SubgraphPoolFetcher";
 import { generateMarketUrl } from "../../constants/staticPaths";
 import ChainBadge from "../../components/ChainBadge";
+import { SHOW_DATA_DEBUG } from "../../../../../config/featureFlags";
 
 // Subgraph-backed pool fetcher (replaces SupabasePoolFetcher)
 const poolFetcher = createSubgraphPoolFetcher();
@@ -190,6 +191,7 @@ const HighlightCard = ({
   finalOutcome,
   impact: impactProp,
   companySymbol = 'GNO',
+  currencySymbol,
   // Pool addresses for price fetching
   poolAddresses,
   metadata,
@@ -320,8 +322,8 @@ const HighlightCard = ({
   // Extract base token symbol from metadata
   const baseTokenSymbol = metadata?.currencyTokens?.base?.tokenSymbol ||
     metadata?.BASE_TOKENS_CONFIG?.currency?.symbol ||
-    companySymbol ||
-    'SDAI';
+    currencySymbol ||
+    (Number(metadata?.chain || chainId) === 1 ? 'USDS' : 'sDAI');
 
   const renderValue = (value, format) => {
     if (isLoading) return <LoadingSpinner />;
@@ -446,12 +448,12 @@ const HighlightCard = ({
                 </button>
               )}
               {/* Data Source Badge */}
-              <span className={`px-2 py-1 rounded-lg text-xs font-medium ${priceSource === 'subgraph'
+              {SHOW_DATA_DEBUG && <span className={`px-2 py-1 rounded-lg text-xs font-medium ${priceSource === 'subgraph'
                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                 : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                 }`}>
                 {priceSource === 'subgraph' ? '📊 Subgraph' : '📊 Subgraph (per-pool)'}
-              </span>
+              </span>}
               {chainId && <ChainBadge chainId={chainId} size="sm" />}
             </div>
           </div>

@@ -293,14 +293,14 @@ const ProposalStatus = ({ approvalStatus }) => {
 };
 
 // Update the ProposalsPrices component to handle numerical prices and loading state
-const ProposalsPrices = ({ approvalPrice, refusalPrice, approvalStatus, isLoading, metadata }) => {
+const ProposalsPrices = ({ approvalPrice, refusalPrice, approvalStatus, isLoading, metadata, chainId }) => {
   const currentColors = statusColors[approvalStatus] || statusColors.ongoing;
   const [dividerColor, setDividerColor] = useState("bg-futarchyGray4 dark:bg-futarchyGray112/20");
 
   // Extract base token symbol from metadata
   const baseTokenSymbol = metadata?.currencyTokens?.base?.tokenSymbol ||
     metadata?.BASE_TOKENS_CONFIG?.currency?.symbol ||
-    'SDAI';
+    (Number(metadata?.chain || chainId) === 1 ? 'USDS' : 'sDAI');
 
   // Use high precision for inverted prices or small prices
   const shouldUseHighPrecision = metadata?.invertCondPoolPrice === true ||
@@ -380,6 +380,7 @@ export const ProposalsCard = ({
   predictionPools,
   poolAddresses,
   metadata,
+  chainId,
   resolutionStatus,
   visibility = 'public',
   isOwner = false,
@@ -541,6 +542,7 @@ export const ProposalsCard = ({
                   approvalStatus={approvalStatus}
                   isLoading={isLoadingPrices}
                   metadata={metadata}
+                  chainId={chainId}
                 />
 
                 {/* Add Impact and Event Probability */}
@@ -602,6 +604,7 @@ export const MobileProposalsCard = ({
   predictionPools,
   poolAddresses,
   metadata,
+  chainId,
   resolutionStatus,
   visibility = 'public',
   isOwner = false,
@@ -757,6 +760,7 @@ export const MobileProposalsCard = ({
                 approvalStatus={approvalStatus}
                 isLoading={isLoadingPrices}
                 metadata={metadata}
+                chainId={chainId}
               />
 
               {/* Impact and Event Probability - Stacked for mobile */}

@@ -136,6 +136,8 @@ function transformProposalToEvent(proposal, org, connectedWallet) {
 
     const resolved = isProposalResolved(proposalMeta);
     const closed = isProposalClosed(proposalMeta);
+    const currencySymbol = proposalMeta?.currencyTokens?.base?.tokenSymbol ||
+        (detectedChain === 1 ? 'USDS' : 'sDAI');
 
     return {
         // =============================================
@@ -157,8 +159,8 @@ function transformProposalToEvent(proposal, org, connectedWallet) {
 
         // Stats placeholder (will be fetched by card from Market Subgraph)
         stats: {
-            yesPrice: '0.50 SDAI',
-            noPrice: '0.50 SDAI'
+            yesPrice: `0.50 ${currencySymbol}`,
+            noPrice: `0.50 ${currencySymbol}`
         },
 
         // Pool info - will need to fetch from market subgraph or metadata

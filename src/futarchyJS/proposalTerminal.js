@@ -20,6 +20,7 @@ import {
   isValidAddress
 } from './proposalConfig.js';
 import { createLiquidityProvider } from './liquidityManager.js';
+import { approvalAmountFor } from '../utils/approvalAmount.js';
 
 // Load environment variables
 dotenv.config();
@@ -769,10 +770,9 @@ const addV2LiquidityInteractive = async (configPath, { provider, signer }) => {
                 return;
               }
               
-              // Approve unlimited amount
               const approveTx = await collateralContract.approve(
                 routerAddress, 
-                ethers.constants.MaxUint256
+                approvalAmountFor(amount)
               );
               
               printInfo(`Approval transaction sent: ${approveTx.hash}`);
@@ -1433,10 +1433,9 @@ const addV3LiquidityInteractive = async (configPathOrAddress, { provider, signer
               return;
             }
             
-            // Approve unlimited amount
             const approveTx = await collateralContract.approve(
               routerAddress, 
-              ethers.constants.MaxUint256
+              approvalAmountFor(amount)
             );
             
             printInfo(`Approval transaction sent: ${approveTx.hash}`);
@@ -1525,10 +1524,9 @@ const addV3LiquidityInteractive = async (configPathOrAddress, { provider, signer
           return false;
         }
         
-        // Approve unlimited amount
         const approveTx = await tokenContract.approve(
           positionManagerAddress, 
-          ethers.constants.MaxUint256
+          approvalAmountFor(amount)
         );
         
         printInfo(`Approval transaction sent: ${approveTx.hash}`);
@@ -2359,4 +2357,4 @@ if (args.length > 0) {
     printError(`Unexpected error: ${error.message}`);
     rl.close();
   });
-} 
+}

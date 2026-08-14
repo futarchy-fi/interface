@@ -1,11 +1,10 @@
 /**
- * Feature Flags — all permanently enabled
+ * Feature Flags
  *
- * These flags were used during the V1→V2 migration and are now always true.
- * Kept as named exports to avoid touching 15+ import sites.
- * Safe to inline and remove in a future cleanup pass.
+ * The migration flags remain enabled. Data-source diagnostics are opt-in.
  */
 
 export const ENABLE_SUBGRAPH_FOR_ALL_PROPOSALS = true;
 export const ENABLE_V2_SUBGRAPH = true;
 export const USE_QUERY_PARAM_URLS = true;
+export const SHOW_DATA_DEBUG = process.env.NEXT_PUBLIC_SHOW_DATA_DEBUG === 'true';

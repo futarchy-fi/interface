@@ -46,25 +46,20 @@ test('subgraphEndpoints — AGGREGATOR_SUBGRAPH_URL is the canonical Checkpoint 
 // ---------------------------------------------------------------------------
 
 test('subgraphEndpoints — SUBGRAPH_ENDPOINTS has entries for chain 1 and chain 100', () => {
-    // Chain 1 = Ethereum Mainnet, Chain 100 = Gnosis. The frontend
-    // currently routes both through the same Checkpoint backend.
+    // Chain 1 = Ethereum Mainnet, Chain 100 = Gnosis. Both use the
+    // Checkpoint candles backend; Mainnet is selected by query param.
     assert.match(SRC, /SUBGRAPH_ENDPOINTS\s*=\s*\{[\s\S]*?\b1\s*:\s*['"][^'"]+['"]/,
         `SUBGRAPH_ENDPOINTS missing chain id "1" entry`);
     assert.match(SRC, /SUBGRAPH_ENDPOINTS\s*=\s*\{[\s\S]*?\b100\s*:\s*['"][^'"]+['"]/,
         `SUBGRAPH_ENDPOINTS missing chain id "100" entry`);
 });
 
-test('subgraphEndpoints — both chain endpoints point to api.futarchy.fi (pinned current state)', () => {
-    // Today both chains route through the same proxied Checkpoint. If
-    // we ever differentiate (e.g. native Mainnet subgraph vs Gnosis
-    // Checkpoint), this test surfaces the change.
+test('subgraphEndpoints — chain endpoints select the correct candles indexer', () => {
     const m1   = SRC.match(/\b1\s*:\s*['"]([^'"]+)['"]/);
     const m100 = SRC.match(/\b100\s*:\s*['"]([^'"]+)['"]/);
     assert.ok(m1 && m100);
-    assert.equal(m1[1], 'https://api.futarchy.fi/candles/graphql');
+    assert.equal(m1[1], 'https://api.futarchy.fi/candles/graphql?chainId=1');
     assert.equal(m100[1], 'https://api.futarchy.fi/candles/graphql');
-    assert.equal(m1[1], m100[1],
-        `chain 1 and chain 100 endpoints diverged — confirm intentional`);
 });
 
 // ---------------------------------------------------------------------------
@@ -93,7 +88,7 @@ test('subgraphEndpoints — OUTCOME_SIDES has exactly YES and NO', () => {
 // ---------------------------------------------------------------------------
 
 const SUBGRAPH_ENDPOINTS = {
-    1:   'https://api.futarchy.fi/candles/graphql',
+    1:   'https://api.futarchy.fi/candles/graphql?chainId=1',
     100: 'https://api.futarchy.fi/candles/graphql',
 };
 function getSubgraphEndpoint(chainId) { return SUBGRAPH_ENDPOINTS[chainId] || null; }
@@ -101,7 +96,7 @@ function isChainSupported(chainId)    { return chainId in SUBGRAPH_ENDPOINTS; }
 
 test('getSubgraphEndpoint — returns URL for supported chain', () => {
     assert.equal(getSubgraphEndpoint(100), 'https://api.futarchy.fi/candles/graphql');
-    assert.equal(getSubgraphEndpoint(1), 'https://api.futarchy.fi/candles/graphql');
+    assert.equal(getSubgraphEndpoint(1), 'https://api.futarchy.fi/candles/graphql?chainId=1');
 });
 
 test('getSubgraphEndpoint — returns null for unsupported chain', () => {
