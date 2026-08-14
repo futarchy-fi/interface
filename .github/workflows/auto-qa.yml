@@ -7,7 +7,9 @@ on:
       - '.github/workflows/auto-qa-live.yml'
       - 'auto-qa/**'
       - 'package.json'
+      - 'src/features/marketCreation/**'
       - 'src/utils/proposalLifecycle.js'
+      - 'test/**'
   push:
     branches:
       - main
@@ -16,7 +18,9 @@ on:
       - '.github/workflows/auto-qa-live.yml'
       - 'auto-qa/**'
       - 'package.json'
+      - 'src/features/marketCreation/**'
       - 'src/utils/proposalLifecycle.js'
+      - 'test/**'
   workflow_dispatch:
 
 jobs:
