@@ -9,6 +9,10 @@ const CONFIGURED_MARKETS = new Set(
   getStaticMarketAddresses().map((address) => (address || '').toLowerCase())
 );
 
+const SUPERSEDED_MARKETS = {
+  '0x1d1f3b43f3c61b815041e9092b1ba7ca37c63262': '0x4120de9931fd29c8a6effea4df57a7c8760c1677',
+};
+
 const normalizeQueryValue = (value) => {
   if (Array.isArray(value)) return value[0];
   return value;
@@ -68,6 +72,7 @@ const MarketPage = () => {
 
     const hasQueryParams = Object.keys(router.query || {}).length > 0;
     const proposalId = proposalIdFromQuery ? String(proposalIdFromQuery).trim() : '';
+    const canonicalProposalId = SUPERSEDED_MARKETS[proposalId.toLowerCase()] || proposalId;
 
     if (!hasQueryParams) {
       // Redirect to market page with default proposal ID
@@ -77,11 +82,11 @@ const MarketPage = () => {
 
     // Normalize legacy query-based links to canonical /markets/:address
     // when the market exists in the generated static market configuration.
-    if (proposalId && isConfiguredMarket(proposalId)) {
+    if (canonicalProposalId && isConfiguredMarket(canonicalProposalId)) {
       const normalizedQuery = stripQueryAliases(router.query, ['proposalId', 'marketId', 'address', 'proposal', 'market']);
       router.replace(
         {
-          pathname: `/markets/${proposalId}`,
+          pathname: `/markets/${canonicalProposalId}`,
           query: normalizedQuery
         },
         undefined,

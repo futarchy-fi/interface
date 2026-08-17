@@ -24,6 +24,15 @@
 [context.branch-deploy]
   command = "npm install --legacy-peer-deps && npm run build"
 
+# The first GIP-153 deployment had empty pools at a stale opening price and was
+# archived. Keep old bookmarks from landing on a dead market after its static
+# page is removed from src/config/markets.js.
+[[redirects]]
+  from = "/markets/0x1d1f3b43f3c61b815041e9092b1ba7ca37c63262"
+  to = "/markets/0x4120de9931fd29c8a6effea4df57a7c8760c1677"
+  status = 301
+  force = true
+
 # Security headers
 [[headers]]
   for = "/*"

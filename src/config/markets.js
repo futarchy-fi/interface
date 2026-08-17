@@ -1414,11 +1414,11 @@ export const MARKETS_CONFIG = {
       "closeTimestamp": 1792800000
     }
   },
-  "0x1d1f3b43f3c61b815041e9092b1ba7ca37c63262": {
+  "0x4120de9931fd29c8a6effea4df57a7c8760c1677": {
     "title": "What will the impact on GNO price be if GIP-153 is passed?",
     "description": "GIP-153: Should Gnosis Chain transition into the Ethereum Economic Zone?",
     "image": "https://www.cryptoninjas.net/wp-content/uploads/gnosis-crypto-ninjas.jpg",
-    "path": "/markets/0x1d1f3b43f3c61b815041e9092b1ba7ca37c63262",
+    "path": "/markets/0x4120de9931fd29c8a6effea4df57a7c8760c1677",
     "openGraph": {
       "title": "What will the impact on GNO price be if GIP-153 is passed? | Futarchy.fi",
       "description": "GIP-153: Should Gnosis Chain transition into the Ethereum Economic Zone?",
