@@ -245,16 +245,15 @@ test('source — throws "Router address not found in route data" when routeProce
 });
 
 // ---------------------------------------------------------------------------
-// checkAndApproveToken — MaxUint256 infinite approval
+// checkAndApproveToken — exact approval
 // ---------------------------------------------------------------------------
 
-test('source — checkAndApproveToken uses MaxUint256 (infinite approval)', () => {
-    // Pinned: limited approval would force re-approval per swap (UX
-    // friction + extra gas). MaxUint256 = "approve once, swap forever".
-    // Trade-off: token compromise = full balance at risk; pinned-as-is.
+test('source — checkAndApproveToken uses the exact required approval amount', () => {
+    // Unlimited approval is opt-in only. The default swap path limits router
+    // authority to the amount required by this operation.
     assert.match(SRC,
-        /tokenContract\.approve\(\s*spenderAddress,\s*ethers\.constants\.MaxUint256/,
-        `approval amount drifted from MaxUint256 (infinite)`);
+        /tokenContract\.approve\(\s*spenderAddress,\s*approvalAmountFor\(amount\)/,
+        `approval amount drifted from approvalAmountFor(amount)`);
 });
 
 test('source — allowance check uses .lt() (strictly less than amount)', () => {

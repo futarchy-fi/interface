@@ -2,6 +2,10 @@ import { collectAndFetchPoolPrices, attachPrefetchedPrices } from "../../../../u
 import { fetchProposalsFromAggregator } from "../../../../hooks/useAggregatorProposals";
 import { DEFAULT_AGGREGATOR } from "../../../../config/subgraphEndpoints";
 import { isClosedProposal, isResolvedProposal } from "../../../../utils/proposalLifecycle";
+import {
+  filterEventsByMinimumLiquidity,
+  MIN_ACTIVE_MARKET_LIQUIDITY_USD,
+} from "../../../../utils/activeMarketLiquidity";
 
 // Main function to fetch active milestones from the registry subgraph aggregator.
 // Returns proposals filtered by visibility (hidden visible only to owner/editor)
@@ -50,8 +54,16 @@ export const fetchEventHighlightData = async (_companyId = "all", options = {}) 
     // Filter out resolved and ended proposals. Ended proposals may still have
     // stale/missing resolution metadata, but they should not disappear from the
     // homepage; Recently Closed owns that state.
-    const activeSubgraphEvents = subgraphEvents.filter(p =>
+    const lifecycleActiveEvents = subgraphEvents.filter(p =>
       !isResolvedProposal(p) && !isClosedProposal(p, nowSeconds)
+    );
+
+    // "Active" means economically usable, not merely unresolved. Read real
+    // ERC-20 reserves from both conditional pools and fail closed when the
+    // indexer/RPC cannot prove at least the configured stable-dollar floor.
+    const activeSubgraphEvents = await filterEventsByMinimumLiquidity(lifecycleActiveEvents);
+    console.log(
+      `[Active Milestones] ${activeSubgraphEvents.length}/${lifecycleActiveEvents.length} markets meet the $${MIN_ACTIVE_MARKET_LIQUIDITY_USD} real-liquidity floor`
     );
 
     // Bulk fetch prices for the remaining events

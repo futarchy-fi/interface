@@ -55,16 +55,13 @@ test('subgraphEndpoints — SUBGRAPH_ENDPOINTS has entries for chain 1 and chain
 });
 
 test('subgraphEndpoints — both chain endpoints point to api.futarchy.fi (pinned current state)', () => {
-    // Today both chains route through the same proxied Checkpoint. If
-    // we ever differentiate (e.g. native Mainnet subgraph vs Gnosis
-    // Checkpoint), this test surfaces the change.
+    // Both chains route through the Checkpoint service, with chain 1 selected
+    // explicitly and chain 100 remaining the default endpoint.
     const m1   = SRC.match(/\b1\s*:\s*['"]([^'"]+)['"]/);
     const m100 = SRC.match(/\b100\s*:\s*['"]([^'"]+)['"]/);
     assert.ok(m1 && m100);
-    assert.equal(m1[1], 'https://api.futarchy.fi/candles/graphql');
+    assert.equal(m1[1], 'https://api.futarchy.fi/candles/graphql?chainId=1');
     assert.equal(m100[1], 'https://api.futarchy.fi/candles/graphql');
-    assert.equal(m1[1], m100[1],
-        `chain 1 and chain 100 endpoints diverged — confirm intentional`);
 });
 
 // ---------------------------------------------------------------------------
