@@ -140,7 +140,11 @@ test('validation rejects flows that would link Snapshot before liquidity', () =>
   const invalidPlan = buildOneStepMarketPlan({
     organizationId: 'gnosis',
     nowSeconds: NOW,
+    closeTimestamp: NOW + (7 * 24 * 60 * 60),
     snapshotLinkAfterLiquidity: false,
   });
-  assert.deepEqual(validateOneStepMarketPlan(invalidPlan).errors, ['snapshotLinkAfterLiquidity']);
+  assert.deepEqual(
+    validateOneStepMarketPlan(invalidPlan, { nowSeconds: NOW }).errors,
+    ['snapshotLinkAfterLiquidity']
+  );
 });
