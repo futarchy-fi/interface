@@ -13,7 +13,7 @@ const source = await readFile(sourcePath, 'utf8');
 // import so Node can evaluate it in isolation under the repository's CJS mode.
 const testableSource = source.replace(
   "import { getSubgraphEndpoint } from '../config/subgraphEndpoints';",
-  'const getSubgraphEndpoint = () => "https://example.invalid/graphql";'
+  'const getSubgraphEndpoint = (chainId) => `https://chain-${chainId}.example/graphql`;'
 );
 const liquidity = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(testableSource)}`);
 
@@ -123,6 +123,85 @@ test('active filter requires both indexed pools and at least $1,000 combined rea
   assert.equal(exact[0].liquidityUsd, 1_000);
 });
 
+test('active filter queries and preserves Ethereum and Gnosis markets together', async () => {
+  const fixtures = {
+    1: {
+      proposal: '0x0000000000000000000000000000000000000031',
+      yesPool: '0x0000000000000000000000000000000000000041',
+      noPool: '0x0000000000000000000000000000000000000042',
+      company: '0x0000000000000000000000000000000000000051',
+      currency: '0x0000000000000000000000000000000000000052',
+    },
+    100: {
+      proposal: '0x0000000000000000000000000000000000000061',
+      yesPool: '0x0000000000000000000000000000000000000071',
+      noPool: '0x0000000000000000000000000000000000000072',
+      company: '0x0000000000000000000000000000000000000081',
+      currency: '0x0000000000000000000000000000000000000082',
+    },
+  };
+  const events = Object.entries(fixtures).map(([chainId, fixture]) => ({
+    chainId: Number(chainId),
+    proposalAddress: fixture.proposal,
+    poolAddresses: { yes: fixture.yesPool, no: fixture.noPool },
+  }));
+  const graphqlChains = [];
+  const rpcChains = [];
+
+  const fetchImpl = async (url, options) => {
+    const textUrl = String(url);
+    if (textUrl.includes('/graphql')) {
+      const chainId = Number(textUrl.match(/chain-(\d+)/)?.[1]);
+      const fixture = fixtures[chainId];
+      const { variables } = JSON.parse(options.body);
+      graphqlChains.push(chainId);
+      assert.deepEqual(variables.poolIds.sort(), [
+        `${chainId}-${fixture.noPool}`,
+        `${chainId}-${fixture.yesPool}`,
+      ].sort());
+      assert.deepEqual(variables.proposalIds, [`${chainId}-${fixture.proposal}`]);
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            pools: [
+              { id: fixture.yesPool, proposal: fixture.proposal, type: 'CONDITIONAL', outcomeSide: 'YES', token0: fixture.company, token1: fixture.currency, tick: 0 },
+              { id: fixture.noPool, proposal: fixture.proposal, type: 'CONDITIONAL', outcomeSide: 'NO', token0: fixture.company, token1: fixture.currency, tick: 0 },
+            ],
+            whitelistedtokens: [
+              { address: fixture.company, decimals: 18, role: 'YES_COMPANY' },
+              { address: fixture.currency, decimals: 18, role: 'YES_CURRENCY' },
+            ],
+          },
+        }),
+      };
+    }
+
+    const chainId = Number(textUrl.match(/rpc-(\d+)/)?.[1]);
+    rpcChains.push(chainId);
+    const requests = JSON.parse(options.body);
+    return {
+      ok: true,
+      json: async () => requests.map((request) => ({
+        jsonrpc: '2.0',
+        id: request.id,
+        // Four calls per chain: 250 company + 250 currency in both pools.
+        result: `0x${wei(250).toString(16)}`,
+      })),
+    };
+  };
+
+  const active = await filterEventsByMinimumLiquidity(events, {
+    fetchImpl,
+    rpcUrls: { 1: 'https://rpc-1.example', 100: 'https://rpc-100.example' },
+  });
+
+  assert.deepEqual(graphqlChains.sort((a, b) => a - b), [1, 100]);
+  assert.deepEqual(rpcChains.sort((a, b) => a - b), [1, 100]);
+  assert.deepEqual(active.map((event) => event.chainId).sort((a, b) => a - b), [1, 100]);
+  assert.ok(active.every((event) => event.liquidityUsd === 1_000));
+});
+
 test('active filter fails closed when either pool or RPC evidence is unavailable', async () => {
   const event = {
     chainId: 100,
@@ -149,4 +228,3 @@ test('active filter fails closed when either pool or RPC evidence is unavailable
     rpcUrls: { 100: 'https://rpc.example' },
   }), []);
 });
-
