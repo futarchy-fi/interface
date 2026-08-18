@@ -14,6 +14,8 @@ const normalizeAddress = (value) => {
   return text.includes('-') ? text.split('-').at(-1) : text;
 };
 
+const chainAddressKey = (chainId, value) => `${Number(chainId)}:${normalizeAddress(value)}`;
+
 const toHumanNumber = (rawValue, decimals) => {
   let raw;
   try {
@@ -44,16 +46,24 @@ const isCurrencyToken = (token) => {
 export function calculatePoolLiquidityUsd(pool, tokensByAddress, balancesByTokenAndPool) {
   if (!pool) return null;
 
+  const chainId = Number(pool.chainId);
+  const hasChainId = Number.isFinite(chainId);
   const token0Address = normalizeAddress(pool.token0);
   const token1Address = normalizeAddress(pool.token1);
   const poolAddress = normalizeAddress(pool.id);
-  const token0 = tokensByAddress.get(token0Address);
-  const token1 = tokensByAddress.get(token1Address);
+  const token0 = (hasChainId && tokensByAddress.get(chainAddressKey(chainId, token0Address)))
+    || tokensByAddress.get(token0Address);
+  const token1 = (hasChainId && tokensByAddress.get(chainAddressKey(chainId, token1Address)))
+    || tokensByAddress.get(token1Address);
 
   if (!token0 || !token1 || isCurrencyToken(token0) === isCurrencyToken(token1)) return null;
 
-  const raw0 = balancesByTokenAndPool.get(`${token0Address}:${poolAddress}`);
-  const raw1 = balancesByTokenAndPool.get(`${token1Address}:${poolAddress}`);
+  const raw0 = (hasChainId
+    ? balancesByTokenAndPool.get(`${chainId}:${token0Address}:${poolAddress}`)
+    : undefined) ?? balancesByTokenAndPool.get(`${token0Address}:${poolAddress}`);
+  const raw1 = (hasChainId
+    ? balancesByTokenAndPool.get(`${chainId}:${token1Address}:${poolAddress}`)
+    : undefined) ?? balancesByTokenAndPool.get(`${token1Address}:${poolAddress}`);
   const amount0 = toHumanNumber(raw0, token0.decimals);
   const amount1 = toHumanNumber(raw1, token1.decimals);
   const tick = Number(pool.tick);
@@ -80,23 +90,25 @@ const balanceOfCalldata = (poolAddress) => (
 );
 
 async function fetchIndexedPools(events, fetchImpl) {
-  const poolIds = [];
-  const proposalIds = [];
+  const idsByChain = new Map();
 
   for (const event of events) {
     const chainId = Number(event.chainId || event.metadata?.chain || 100);
+    if (!idsByChain.has(chainId)) {
+      idsByChain.set(chainId, { poolIds: [], proposalIds: [] });
+    }
+    const ids = idsByChain.get(chainId);
     const proposalAddress = normalizeAddress(event.proposalAddress || event.eventId);
-    if (proposalAddress) proposalIds.push(`${chainId}-${proposalAddress}`);
+    if (proposalAddress) ids.proposalIds.push(`${chainId}-${proposalAddress}`);
     for (const address of [event.poolAddresses?.yes, event.poolAddresses?.no]) {
-      if (address) poolIds.push(`${chainId}-${normalizeAddress(address)}`);
+      if (address) ids.poolIds.push(`${chainId}-${normalizeAddress(address)}`);
     }
   }
 
-  if (poolIds.length === 0 || proposalIds.length === 0) {
+  if (idsByChain.size === 0) {
     return { pools: [], tokens: [] };
   }
 
-  const endpoint = getSubgraphEndpoint(100);
   const query = `
     query ActiveMarketLiquidity($poolIds: [String!]!, $proposalIds: [String!]!) {
       pools(where: { id_in: $poolIds }, first: 1000) {
@@ -107,46 +119,66 @@ async function fetchIndexedPools(events, fetchImpl) {
       }
     }
   `;
-  const response = await fetchImpl(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      variables: {
-        poolIds: [...new Set(poolIds)],
-        proposalIds: [...new Set(proposalIds)],
-      },
-    }),
-  });
-  if (!response.ok) throw new Error(`Liquidity index returned HTTP ${response.status}`);
-  const result = await response.json();
-  if (result.errors?.length) throw new Error(result.errors[0]?.message || 'Liquidity index query failed');
-  return { pools: result.data?.pools || [], tokens: result.data?.whitelistedtokens || [] };
+
+  const results = await Promise.all([...idsByChain.entries()].map(async ([chainId, ids]) => {
+    if (ids.poolIds.length === 0 || ids.proposalIds.length === 0) {
+      return { pools: [], tokens: [] };
+    }
+
+    const endpoint = getSubgraphEndpoint(chainId);
+    if (!endpoint) {
+      console.warn(`[Active Milestones] No liquidity index configured for chain ${chainId}`);
+      return { pools: [], tokens: [] };
+    }
+
+    try {
+      const response = await fetchImpl(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          variables: {
+            poolIds: [...new Set(ids.poolIds)],
+            proposalIds: [...new Set(ids.proposalIds)],
+          },
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      if (result.errors?.length) throw new Error(result.errors[0]?.message || 'GraphQL query failed');
+      return {
+        pools: (result.data?.pools || []).map((pool) => ({ ...pool, chainId })),
+        tokens: (result.data?.whitelistedtokens || []).map((token) => ({ ...token, chainId })),
+      };
+    } catch (error) {
+      // Fail closed only for the affected chain. A Gnosis index outage must not
+      // hide independently verified Ethereum markets, or vice versa.
+      console.warn(`[Active Milestones] Chain ${chainId} liquidity index failed: ${error.message}`);
+      return { pools: [], tokens: [] };
+    }
+  }));
+
+  return {
+    pools: results.flatMap((result) => result.pools),
+    tokens: results.flatMap((result) => result.tokens),
+  };
 }
 
-async function fetchReserveBalances(pools, events, fetchImpl, rpcUrls) {
-  const chainByPool = new Map();
-  for (const event of events) {
-    const chainId = Number(event.chainId || event.metadata?.chain || 100);
-    for (const address of [event.poolAddresses?.yes, event.poolAddresses?.no]) {
-      if (address) chainByPool.set(normalizeAddress(address), chainId);
-    }
-  }
-
+async function fetchReserveBalances(pools, fetchImpl, rpcUrls) {
   const callsByChain = new Map();
   let nextId = 1;
   for (const pool of pools) {
     if (String(pool.type || '').toUpperCase() !== 'CONDITIONAL') continue;
     const poolAddress = normalizeAddress(pool.id);
-    const chainId = chainByPool.get(poolAddress);
-    if (!chainId) continue;
+    const chainId = Number(pool.chainId);
+    if (!Number.isFinite(chainId)) continue;
     if (!callsByChain.has(chainId)) callsByChain.set(chainId, []);
 
     for (const token of [pool.token0, pool.token1]) {
       const tokenAddress = normalizeAddress(token);
       callsByChain.get(chainId).push({
         id: nextId++,
-        key: `${tokenAddress}:${poolAddress}`,
+        key: `${chainId}:${tokenAddress}:${poolAddress}`,
         request: {
           jsonrpc: '2.0',
           id: nextId - 1,
@@ -200,13 +232,18 @@ export async function filterEventsByMinimumLiquidity(
 
   try {
     const { pools, tokens } = await fetchIndexedPools(events, fetchImpl);
-    const poolByAddress = new Map(pools.map((pool) => [normalizeAddress(pool.id), pool]));
-    const tokensByAddress = new Map(tokens.map((token) => [normalizeAddress(token.address), token]));
-    const balances = await fetchReserveBalances(pools, events, fetchImpl, rpcUrls);
+    const poolByAddress = new Map(
+      pools.map((pool) => [chainAddressKey(pool.chainId, pool.id), pool])
+    );
+    const tokensByAddress = new Map(
+      tokens.map((token) => [chainAddressKey(token.chainId, token.address), token])
+    );
+    const balances = await fetchReserveBalances(pools, fetchImpl, rpcUrls);
 
     return events.filter((event) => {
-      const yesPool = poolByAddress.get(normalizeAddress(event.poolAddresses?.yes));
-      const noPool = poolByAddress.get(normalizeAddress(event.poolAddresses?.no));
+      const chainId = Number(event.chainId || event.metadata?.chain || 100);
+      const yesPool = poolByAddress.get(chainAddressKey(chainId, event.poolAddresses?.yes));
+      const noPool = poolByAddress.get(chainAddressKey(chainId, event.poolAddresses?.no));
       const yesUsd = calculatePoolLiquidityUsd(yesPool, tokensByAddress, balances);
       const noUsd = calculatePoolLiquidityUsd(noPool, tokensByAddress, balances);
 
@@ -219,4 +256,3 @@ export async function filterEventsByMinimumLiquidity(
     return [];
   }
 }
-
