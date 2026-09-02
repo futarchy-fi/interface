@@ -1,11 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import {
   buildOneStepMarketPlan,
-  buildPermissionlessStackPlan,
   createMarketWizardDefaults,
+  deriveTwapTiming,
   KNOWN_ORGANIZATIONS,
+  GNOSIS_CHAIN_ID,
+  REALITY_OPENING_BUFFER_SECONDS,
 } from '../../../features/marketCreation/marketCreationWorkflow';
+import { validateMetadata } from '../../../features/marketCreation/validateMetadata';
+import { evaluateFloor, ZERO_TRADE_NOTICE, FLOOR_TRADE_USD, FLOOR_MAX_IMPACT } from '../../../features/marketCreation/liquidityFloor';
+import useCreateProposal, { simulateProposal } from '../../debug/hooks/useCreateProposal';
 import RootLayout from '../../layout/RootLayout';
 import PageLayout from '../../layout/PageLayout';
 
@@ -83,17 +89,179 @@ function MetadataPreview({ metadata }) {
   );
 }
 
+const badge = (ok) => ok
+  ? 'text-emerald-600 dark:text-emerald-400'
+  : 'text-amber-600 dark:text-amber-400';
+
+// R1 floor gate + metadata validation + R3 honesty. Pre-creation, the floor is
+// evaluated against the planned bootstrap seed (the honest lower bound): a
+// pinhead seed correctly reads as DRAFT, which is the whole point — a wizard
+// that mints dead markets would be worse than no wizard.
+function ReadinessPanel({ metadataDraft, bootstrap }) {
+  // Pool data doesn't exist at step 1 — invert checks defer with a warning.
+  // nowUnix arms the window-starts-in-the-past gate against stale drafts.
+  const validation = useMemo(
+    () => validateMetadata(metadataDraft, { nowUnix: Math.floor(Date.now() / 1000) }),
+    [metadataDraft]
+  );
+  // Treat the currency seed (~sDAI ≈ $1) as the input reserve; company seed as output.
+  const floor = useMemo(() => evaluateFloor({
+    reserveInTokens: Number(bootstrap?.currencyToken || 0),
+    reserveOutTokens: Number(bootstrap?.companyToken || 0),
+    inputUsdPrice: 1,
+  }), [bootstrap]);
+
+  return (
+    <section className={`${panelClass} p-4`}>
+      <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Readiness gate</h2>
+      <p className="mt-1 text-sm text-futarchyGray11">
+        A market goes live only when its metadata is valid and a ${FLOOR_TRADE_USD} trade moves
+        price under {(FLOOR_MAX_IMPACT * 100)}%. Below the floor it stays a draft.
+      </p>
+
+      <div className="mt-4 rounded-md border border-futarchyGray6 dark:border-futarchyGray7 p-3">
+        <div className="flex items-center justify-between">
+          <span className={labelClass}>Liquidity floor</span>
+          <span className={`text-sm font-semibold ${badge(floor.passes)}`}>
+            {floor.state}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-futarchyGray10">{floor.reason} (from the planned seed).</p>
+      </div>
+
+      <div className="mt-3 rounded-md border border-futarchyGray6 dark:border-futarchyGray7 p-3">
+        <div className="flex items-center justify-between">
+          <span className={labelClass}>Metadata</span>
+          <span className={`text-sm font-semibold ${badge(validation.ok)}`}>
+            {validation.ok ? 'Valid' : `${validation.errors.length} issue${validation.errors.length === 1 ? '' : 's'}`}
+          </span>
+        </div>
+        {validation.errors.map((e, i) => (
+          <p key={i} className="mt-1 text-xs text-amber-600 dark:text-amber-400">• {e}</p>
+        ))}
+        {validation.warnings.map((w, i) => (
+          <p key={i} className="mt-1 text-xs text-futarchyGray10">• {w}</p>
+        ))}
+      </div>
+
+      <p className="mt-3 text-xs text-futarchyGray9 italic">{ZERO_TRADE_NOTICE}</p>
+    </section>
+  );
+}
+
+// Real, wallet-connected proposal creation. Simulate-first (no broadcast) so the
+// flow is demoable end-to-end without minting a market; Broadcast sends the tx.
+function ExecutePanel({ form, organization }) {
+  const { isConnected, isSubmitting, status, transactionHash, proposalAddress, createProposal } = useCreateProposal();
+  const [mode, setMode] = useState('simulate');
+  const [simResult, setSimResult] = useState(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  // Epoch seconds end-to-end: an ISO string re-parsed as local time shifted the
+  // on-chain openingTime by the operator's UTC offset.
+  const closeValid = Number.isFinite(form.closeTimestamp);
+  const formData = closeValid ? {
+    chainId: GNOSIS_CHAIN_ID,
+    marketName: form.proposalCode,
+    companyToken: organization.companyToken.address,
+    currencyToken: organization.currencyToken.address,
+    category: 'crypto',
+    language: 'en',
+    minBond: form.minBondWei,
+    openingTimeUnix: form.closeTimestamp + REALITY_OPENING_BUFFER_SECONDS,
+  } : null;
+
+  const onRun = async () => {
+    if (!formData) return;
+    setSimResult(null);
+    if (mode === 'broadcast') {
+      await createProposal(formData);
+      return;
+    }
+    setIsSimulating(true);
+    try {
+      const result = await simulateProposal(formData);
+      setSimResult({ ok: result.ok, msg: result.message });
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
+  return (
+    <section className={`${panelClass} p-4`}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Create proposal</h2>
+        <ConnectButton showBalance={false} chainStatus="icon" accountStatus="address" />
+      </div>
+      <p className="mt-1 text-sm text-futarchyGray11">
+        The permissionless, proven first step. Simulate runs a static call against Gnosis with no
+        broadcast; Broadcast sends the real transaction from your wallet. Pools, liquidity manager,
+        Snapshot, and arbitrage follow as the staged plan below.
+      </p>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-md border border-futarchyGray6 dark:border-futarchyGray7 p-0.5">
+          {['simulate', 'broadcast'].map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-3 py-1.5 text-sm rounded ${mode === m
+                ? 'bg-futarchyBlue9 text-white'
+                : 'text-futarchyGray11'}`}
+            >
+              {m === 'simulate' ? 'Simulate' : 'Sign & broadcast'}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onRun}
+          disabled={!closeValid || isSubmitting || isSimulating || (mode === 'broadcast' && !isConnected)}
+          className="inline-flex h-9 items-center rounded-md bg-futarchyBlue9 px-4 text-sm font-medium text-white disabled:opacity-50"
+        >
+          {(isSubmitting || isSimulating) ? 'Working…' : mode === 'simulate' ? 'Simulate createProposal' : 'Create proposal'}
+        </button>
+        {!closeValid && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">Pick a valid close date.</span>
+        )}
+        {closeValid && mode === 'broadcast' && !isConnected && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">Connect a wallet to broadcast.</span>
+        )}
+      </div>
+
+      {simResult && (
+        <p className={`mt-3 text-sm ${simResult.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+          {simResult.msg}
+        </p>
+      )}
+      {status && (
+        <p className="mt-3 text-sm text-futarchyGray11">{status.message}</p>
+      )}
+      {transactionHash && (
+        <p className="mt-1 text-xs font-mono text-futarchyBlue9 break-all">tx: {transactionHash}</p>
+      )}
+      {proposalAddress && (
+        <p className="mt-1 text-xs font-mono text-emerald-600 dark:text-emerald-400 break-all">proposal: {proposalAddress}</p>
+      )}
+    </section>
+  );
+}
+
 export default function CreateMarketFlow() {
   const [organizationId, setOrganizationId] = useState('kleros');
-  const defaults = useMemo(
-    () => createMarketWizardDefaults({ organizationId }),
-    [organizationId]
-  );
-  const [form, setForm] = useState(defaults);
+  // Defaults are Date.now()-derived, and wallet panels use wagmi hooks — both
+  // must stay out of the static export. form stays null until client mount, so
+  // the exported HTML carries the page frame but no build-time timestamps
+  // (which caused React 18 hydration mismatches and days-stale dates).
+  const [form, setForm] = useState(null);
+  useEffect(() => {
+    setForm(createMarketWizardDefaults({ organizationId: 'kleros' }));
+  }, []);
 
   const selectedOrganization = KNOWN_ORGANIZATIONS[organizationId];
-  const marketPlan = useMemo(() => buildOneStepMarketPlan({ ...form, organizationId }), [form, organizationId]);
-  const permissionlessPlan = useMemo(() => buildPermissionlessStackPlan(), []);
+  const marketPlan = useMemo(
+    () => (form ? buildOneStepMarketPlan({ ...form, organizationId }) : null),
+    [form, organizationId]
+  );
 
   const updateOrganization = (nextOrganizationId) => {
     setOrganizationId(nextOrganizationId);
@@ -106,13 +274,18 @@ export default function CreateMarketFlow() {
 
   const updateCloseDate = (value) => {
     const nextTimestamp = Math.floor(new Date(value).getTime() / 1000);
-    setForm((previous) => ({
-      ...previous,
-      closeDateTimeLocal: value,
-      closeTimestamp: nextTimestamp,
-      twapStartTimestamp: nextTimestamp - (48 * 60 * 60),
-      startCandleUnix: nextTimestamp - (49 * 60 * 60),
-    }));
+    setForm((previous) => {
+      if (!value || !Number.isFinite(nextTimestamp)) {
+        // Cleared/invalid input: never store NaN — ExecutePanel disables on null.
+        return { ...previous, closeDateTimeLocal: value, closeTimestamp: null };
+      }
+      return {
+        ...previous,
+        closeDateTimeLocal: value,
+        closeTimestamp: nextTimestamp,
+        ...deriveTwapTiming(nextTimestamp, previous.twapDurationHours),
+      };
+    });
   };
 
   return (
@@ -135,20 +308,26 @@ export default function CreateMarketFlow() {
             </Link>
           </div>
 
-          <section className={`${panelClass} mb-6`}>
-            <div className="border-b border-futarchyGray6 px-4 py-3 dark:border-futarchyGray7">
-              <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Permissionless Chiado Stack</h2>
-              <p className="mt-1 text-sm text-futarchyGray11">
-                This is the target testnet lifecycle: any wallet creates an organization, it is listed
-                automatically, and the organization receives a default liquidity manager for proposal liquidity.
-              </p>
+          {!form ? (
+            // Static-export frame: real wizard markup (headings, copy) but no
+            // timestamps — the interactive panels mount client-side.
+            <div className="grid gap-6 lg:grid-cols-2">
+              {['Create proposal', 'Readiness gate', 'Market Defaults', 'One-Step Execution Plan'].map((title) => (
+                <section key={title} className={`${panelClass} p-4`}>
+                  <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">{title}</h2>
+                  <p className="mt-1 text-sm text-futarchyGray11">Loading…</p>
+                </section>
+              ))}
             </div>
-            <StageList stages={permissionlessPlan.stages} />
-            <div className="border-t border-futarchyGray6 px-4 py-3 dark:border-futarchyGray7">
-              <h3 className="text-sm font-semibold text-futarchyGray12 dark:text-white">Contract Actions</h3>
-            </div>
-            <ActionList actions={permissionlessPlan.contractActions} />
-          </section>
+          ) : (
+          <>
+          <div className="grid gap-6 lg:grid-cols-2 mb-6">
+            <ExecutePanel form={form} organization={selectedOrganization} />
+            <ReadinessPanel
+              metadataDraft={marketPlan.metadataDraft}
+              bootstrap={form.initialLiquidityBudget}
+            />
+          </div>
 
           <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
             <section className={`${panelClass} p-4`}>
@@ -281,6 +460,8 @@ export default function CreateMarketFlow() {
             </div>
             <MetadataPreview metadata={marketPlan.metadataDraft} />
           </section>
+          </>
+          )}
         </div>
       </PageLayout>
     </RootLayout>
