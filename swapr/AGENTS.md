@@ -1,6 +1,6 @@
-# CLAUDE.md - Swapr Pool Automation
+# AGENTS.md - Swapr Pool Automation
 
-This file provides guidance to Claude Code (claude.ai/code) when working with the pool automation tools in the swapr directory.
+This file provides guidance to coding agents (Claude Code, Codex and others) when working with the pool automation tools in the swapr directory.
 
 ## Overview
 
