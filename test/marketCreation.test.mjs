@@ -1,11 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { ethers } from 'ethers';
 import { validateMetadata, mergeMetadataForUpdate } from '../src/features/marketCreation/validateMetadata.js';
 import { priceImpactConstantProduct, evaluateFloor } from '../src/features/marketCreation/liquidityFloor.js';
 import { deriveTwapTiming, TWAP_BUFFER_SECONDS, stepOneBroadcastErrors } from '../src/features/marketCreation/marketCreationWorkflow.js';
 import { buildProposalParams } from '../src/features/marketCreation/proposalCalldata.js';
-import { findCreatedProposalAddress } from '../src/features/marketCreation/receiptEvents.js';
-import { ethers } from 'ethers';
+import { findCreatedMetadataAddress, findCreatedProposalAddress } from '../src/features/marketCreation/receiptEvents.js';
+import { ensureWalletChain } from '../src/features/marketCreation/chainGuard.js';
+import { nextPoolPublication } from '../src/features/marketCreation/poolPublication.js';
 
 // Conditional (wrapped YES/NO) company tokens — what the pools actually hold.
 const COND_YES = '0x1111111111111111111111111111111111111111';
@@ -150,4 +153,169 @@ test('new proposal address comes only from the factory NewProposal event', () =>
   assert.equal(findCreatedProposalAddress([{ address: otherFactory, ...log }], factory), null);
   assert.equal(findCreatedProposalAddress([{ address: factory, ...log }], factory), proposal);
   assert.equal(findCreatedProposalAddress([], factory), null);
+});
+
+test('receipt address selection uses only matching factory/org events', () => {
+  const factory = '0x1000000000000000000000000000000000000001';
+  const otherFactory = '0x1000000000000000000000000000000000000002';
+  const proposal = '0x2000000000000000000000000000000000000001';
+  const organization = '0x3000000000000000000000000000000000000001';
+  const metadata = '0x4000000000000000000000000000000000000001';
+  const factoryIface = new ethers.utils.Interface([
+    'event NewProposal(address indexed proposal, string marketName, bytes32 conditionId, bytes32 questionId)',
+  ]);
+  const orgIface = new ethers.utils.Interface([
+    'event ProposalCreatedAndAdded(address indexed proposalMetadata, address indexed proposalAddress)',
+  ]);
+  const factoryLog = factoryIface.encodeEventLog(
+    factoryIface.getEvent('NewProposal'),
+    [proposal, 'KIP-90', ethers.constants.HashZero, ethers.constants.HashZero],
+  );
+  const metadataLog = orgIface.encodeEventLog(
+    orgIface.getEvent('ProposalCreatedAndAdded'),
+    [metadata, proposal],
+  );
+
+  assert.equal(
+    findCreatedProposalAddress([{ address: otherFactory, ...factoryLog }], factory),
+    null,
+  );
+  assert.equal(
+    findCreatedProposalAddress([{ address: factory, ...factoryLog }], factory),
+    proposal,
+  );
+  assert.equal(
+    findCreatedMetadataAddress([{ address: organization, ...metadataLog }], organization, proposal),
+    metadata,
+  );
+  assert.equal(
+    findCreatedMetadataAddress([{ address: organization, ...metadataLog }], organization, otherFactory),
+    null,
+  );
+});
+
+test('metadata and pool writes switch and verify the target chain', async () => {
+  let switchedTo = null;
+  await ensureWalletChain({
+    currentChainId: 1,
+    targetChainId: 100,
+    switchChainAsync: async ({ chainId }) => { switchedTo = chainId; },
+    readWalletChainId: async () => 100,
+  });
+  assert.equal(switchedTo, 100);
+  await assert.rejects(
+    ensureWalletChain({
+      currentChainId: 100,
+      targetChainId: 100,
+      switchChainAsync: async () => {},
+      readWalletChainId: async () => 1,
+    }),
+    /Chain mismatch/,
+  );
+});
+
+test('PoolCreator publishes each created address once and uses stable parent callbacks', () => {
+  const source = readFileSync(new URL('../src/components/futarchyFi/createMarket/WizardSteps23.jsx', import.meta.url), 'utf8');
+  assert.match(source, /publishedAddress = useRef\(null\)/);
+  assert.match(source, /const onYesPoolCreated = useCallback/);
+  assert.match(source, /const onNoPoolCreated = useCallback/);
+  assert.doesNotMatch(source, /onCreated=\{\(addr\) => setPools/);
+  assert.equal(nextPoolPublication(null, null), null);
+  assert.equal(nextPoolPublication(OTHER, OTHER), null);
+  assert.equal(nextPoolPublication(OTHER, null), OTHER);
+  assert.equal(nextPoolPublication(COND_YES, OTHER), COND_YES);
+});
+
+test('proposal organization is persisted and locked before metadata steps', () => {
+  const source = readFileSync(new URL('../src/components/futarchyFi/createMarket/CreateMarketFlow.jsx', import.meta.url), 'utf8');
+  assert.match(source, /organization: organizationId/);
+  assert.match(source, /disabled=\{Boolean\(proposalAddress\)\}/);
+  assert.match(source, /setProposalOrganizationId\(queryOrganization\)/);
+});
+
+// ---- increment C pure helpers ----
+const { buildProposalMetadataArgs, buildInvertContext, buildInvertPatch } =
+  await import('../src/features/marketCreation/orgMetadataWrite.js');
+
+test('org metadata write args match the OrganizationManagerModal tuple', () => {
+  const args = buildProposalMetadataArgs({
+    proposalAddress: OTHER, question: 'Q?', event: 'E', description: 'D', metadata: { a: 1 },
+  });
+  assert.deepEqual(args, [OTHER, 'Q?', 'E', 'D', '{"a":1}', '']);
+});
+
+test('invert context pairs each pool token0 with its conditional company token', () => {
+  const ctx = buildInvertContext({
+    yesCompanyToken: COND_YES, noCompanyToken: COND_NO,
+    yesPoolToken0: COND_YES, noPoolToken0: OTHER,
+  });
+  assert.deepEqual(ctx.pools.yes, { token0: COND_YES, conditionalCompanyToken: COND_YES });
+  assert.deepEqual(ctx.pools.no, { token0: OTHER, conditionalCompanyToken: COND_NO });
+  // partial data → that side omitted, validator defers
+  assert.deepEqual(buildInvertContext({ yesCompanyToken: COND_YES }).pools, {});
+});
+
+test('invert patch contains ONLY changed flags; null when nothing changed', () => {
+  const original = { invertTwapPoolYes: false, invertTwapPoolNo: true, keep: 'x' };
+  const corrected = { ...original, invertTwapPoolYes: true };
+  assert.deepEqual(buildInvertPatch(original, corrected), { invertTwapPoolYes: true });
+  assert.equal(buildInvertPatch(original, null), null);
+  assert.equal(buildInvertPatch(original, { ...original }), null);
+});
+
+test('end-to-end invert verification: wrong flags produce a flags-only merge', () => {
+  const onChain = { ...GOOD, invertTwapPoolYes: false, invertTwapPoolNo: false, precious: 'keep-me' };
+  const ctx = buildInvertContext({
+    yesCompanyToken: COND_YES, noCompanyToken: COND_NO,
+    yesPoolToken0: OTHER, noPoolToken0: COND_NO, // YES pool ordered the other way
+  });
+  const result = validateMetadata(onChain, ctx);
+  const patch = buildInvertPatch(onChain, result.corrected);
+  assert.deepEqual(patch, { invertTwapPoolYes: true });
+  const merged = mergeMetadataForUpdate(JSON.stringify(onChain), patch);
+  assert.equal(merged.precious, 'keep-me');
+  assert.equal(merged.invertTwapPoolYes, true);
+  assert.equal(merged.invertTwapPoolNo, false);
+});
+
+// ---- increment D: Snapshot vote-timing autofill ----
+const { fetchSnapshotVoteEnd } = await import('../src/features/marketCreation/snapshotTiming.js');
+const SNAP_ID = '0x' + 'ab'.repeat(32);
+
+test('snapshot vote end fetched and returned as epoch seconds', async () => {
+  const mockFetch = async () => ({
+    ok: true,
+    json: async () => ({ data: { proposal: { end: 1790000000, state: 'active' } } }),
+  });
+  assert.deepEqual(await fetchSnapshotVoteEnd(SNAP_ID, mockFetch), { end: 1790000000, state: 'active' });
+});
+
+test('snapshot autofill fails closed: bad id, unknown proposal, hub down', async () => {
+  assert.equal(await fetchSnapshotVoteEnd('not-a-hash', async () => { throw new Error('should not fetch'); }), null);
+  assert.equal(await fetchSnapshotVoteEnd(SNAP_ID, async () => ({ ok: true, json: async () => ({ data: { proposal: null } }) })), null);
+  assert.equal(await fetchSnapshotVoteEnd(SNAP_ID, async () => { throw new Error('offline'); }), null);
+});
+
+test('step 2 binds close time and question to the on-chain proposal', async () => {
+  const { bindProposalToOrganization } = await import('../src/features/marketCreation/orgMetadataWrite.js');
+  const organization = {
+    name: 'Kleros',
+    companyToken: { address: '0xAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaa' },
+    currencyToken: { address: '0xBBbbBBbbBBbbBBbbBBbbBBbbBBbbBBbbBBbbBBbb' },
+  };
+  const base = {
+    openingTs: 1_800_172_800,
+    collateralToken1: organization.companyToken.address.toLowerCase(),
+    collateralToken2: organization.currencyToken.address,
+    marketName: 'Will KIP-90 be passed by Kleros?',
+    organization,
+    openingBufferSeconds: 48 * 3600,
+  };
+  assert.deepEqual(bindProposalToOrganization(base), {
+    ok: true, errors: [], closeTimestamp: 1_800_000_000, question: 'Will KIP-90 be passed by Kleros?',
+  });
+  assert.equal(bindProposalToOrganization({ ...base, collateralToken1: OTHER }).ok, false);
+  assert.equal(bindProposalToOrganization({ ...base, collateralToken2: null }).ok, false);
+  assert.equal(bindProposalToOrganization({ ...base, openingTs: 0 }).ok, false);
+  assert.equal(bindProposalToOrganization({ ...base, marketName: '' }).ok, false);
 });
