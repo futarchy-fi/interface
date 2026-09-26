@@ -32,6 +32,34 @@ const FACTORY = '0xa6cB18FCDC17a2B44E5cAd2d80a6D5942d30a345';
 const NFPM = '0x91fd594c46d8b01e62dbdebed2401dde01817834'; // Algebra position manager
 const ALGEBRA_FACTORY = '0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766';
 
+const FULL = process.argv.includes('--full') || process.env.FULL === '1';
+const ROUTER = '0x7495a583ba85875d59407781b4958ED6e0E1228f'; // FutarchyRouter (adapter)
+const ROUTER_ABI = [
+  'function splitPosition(address proposal, address collateralToken, uint256 amount)',
+  'function redeemProposal(address proposal, uint256 amount1, uint256 amount2)',
+];
+const ERC20_ABI = [
+  'function approve(address,uint256) returns (bool)',
+  'function balanceOf(address) view returns (uint256)',
+  'function transfer(address,uint256) returns (bool)',
+  'function decimals() view returns (uint8)',
+];
+const FACTORY_RESOLUTION_ABI = [
+  'function realityProxy() view returns (address)',
+  'function realitio() view returns (address)',
+  'function conditionalTokens() view returns (address)',
+];
+const REALITY_PROXY_ABI = ['function resolve(address proposal)'];
+const CTF_ABI = ['function payoutNumerators(bytes32, uint256) view returns (uint256)'];
+const REALITY_ABI = [
+  'function submitAnswer(bytes32 question_id, bytes32 answer, uint256 max_previous) payable',
+  'function resultFor(bytes32) view returns (bytes32)',
+  'function isFinalized(bytes32) view returns (bool)',
+];
+const NFPM_MINT_ABI = [
+  'function mint((address token0, address token1, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline)) payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)',
+];
+
 const ORG_ABI = [
   'function setEditor(address _editor)',
   'function editor() view returns (address)',
@@ -193,11 +221,136 @@ try {
   const ownerTxs = signedBy.filter((t) => t.from === ORG_OWNER.toLowerCase());
   assert.equal(ownerTxs.length, 1, 'org owner appears exactly once (the onboarding grant)');
 
-  console.log('\nPASS — full client journey on fork:');
+  console.log('\nPASS (create → metadata → pools → invert-verified):');
   console.log(`  proposal ${proposalAddress}`);
   console.log(`  metadata ${metadataAddress} (TWAP ${onChain.twapStartTimestamp} +120h, ends close−48h)`);
   console.log(`  pools YES ${yesPool} / NO ${noPool}, invert flags verified`);
   console.log(`  ${signedBy.length} txs total, 0 from Kelvin's EOA, owner only for setEditor`);
+
+  if (FULL) {
+    const { evaluateFloor } = await import('../src/features/marketCreation/liquidityFloor.js');
+    const wei = (n) => ethers.utils.parseEther(String(n));
+
+    // ── LIVE: fund the client from fork whales, split, seed both pools ──
+    // Demo amounts only — the PRODUCT's liquidity defaults stay a deferred
+    // Kelvin decision (§5a); a throwaway fork demo decides nothing.
+    const fundFromWhale = async (token, amount, label) => {
+      const holders = await (await fetch(`https://gnosis.blockscout.com/api/v2/tokens/${token}/holders`)).json();
+      const erc20 = new ethers.Contract(token, ERC20_ABI, provider);
+      for (const h of holders.items || []) {
+        const whale = h.address?.hash || h.address;
+        if (!whale || whale.toLowerCase() === ROUTER.toLowerCase()) continue;
+        try {
+          if ((await erc20.balanceOf(whale)).lt(amount)) continue;
+          await provider.send('anvil_impersonateAccount', [whale]);
+          await provider.send('anvil_setBalance', [whale, '0x8AC7230489E80000']);
+          const ok = await erc20.connect(provider.getSigner(whale)).transfer(clientAddr, amount)
+            .then((tx) => tx.wait()).then(() => true).catch(() => false);
+          await provider.send('anvil_stopImpersonatingAccount', [whale]);
+          if (ok) { console.log(`  funded ${label} from whale ${whale}`); return true; }
+        } catch { /* try next holder */ }
+      }
+      throw new Error(`no usable ${label} whale on fork`);
+    };
+    const COMPANY = form.companyToken.address; // PNK
+    const CURRENCY = form.currencyToken.address; // sDAI
+    const currencyAmount = wei(12000); // ~$12k → floor comfortably passes
+    const companyAmount = wei(Math.round(12000 / spotPrice)); // matching value at spot
+    await fundFromWhale(CURRENCY, currencyAmount, 'sDAI');
+    await fundFromWhale(COMPANY, companyAmount, 'PNK');
+
+    const router = new ethers.Contract(ROUTER, ROUTER_ABI, client);
+    for (const [token, amount, label] of [[CURRENCY, currencyAmount, 'sDAI'], [COMPANY, companyAmount, 'PNK']]) {
+      await track(new ethers.Contract(token, ERC20_ABI, client).approve(ROUTER, amount), `approve router (${label})`);
+      await track(router.splitPosition(proposalAddress, token, amount, { gasLimit: 3000000 }), `router.splitPosition ${label} → YES/NO`);
+    }
+
+    // LP both conditional pools full-range; keep 10% of outcome tokens unpooled
+    // so redemption after resolution is visible in the wallet.
+    const nfpmMint = new ethers.Contract(NFPM, NFPM_MINT_ABI, client);
+    const seedPool = async (label, companyTok, currencyTok) => {
+      const coBal = (await new ethers.Contract(companyTok, ERC20_ABI, provider).balanceOf(clientAddr)).mul(90).div(100);
+      const cuBal = (await new ethers.Contract(currencyTok, ERC20_ABI, provider).balanceOf(clientAddr)).mul(90).div(100);
+      await track(new ethers.Contract(companyTok, ERC20_ABI, client).approve(NFPM, coBal), `approve NFPM (${label} company)`);
+      await track(new ethers.Contract(currencyTok, ERC20_ABI, client).approve(NFPM, cuBal), `approve NFPM (${label} currency)`);
+      const [t0, t1] = companyTok.toLowerCase() < currencyTok.toLowerCase() ? [companyTok, currencyTok] : [currencyTok, companyTok];
+      const [a0, a1] = t0 === companyTok ? [coBal, cuBal] : [cuBal, coBal];
+      await track(nfpmMint.mint({
+        token0: t0, token1: t1, tickLower: -887220, tickUpper: 887220,
+        amount0Desired: a0, amount1Desired: a1, amount0Min: 0, amount1Min: 0,
+        recipient: clientAddr, deadline: now + 86400 * 30,
+      }, { gasLimit: 16000000 }), `seed ${label} pool liquidity`);
+    };
+    await seedPool('YES', yesCompany, yesCurrency);
+    await seedPool('NO', noCompany, noCurrency);
+
+    // Floor gate on the REAL seeded reserves → LIVE.
+    const yesCurrencyReserve = Number(ethers.utils.formatEther(
+      await new ethers.Contract(yesCurrency, ERC20_ABI, provider).balanceOf(yesPool)));
+    const floor = evaluateFloor({
+      reserveInTokens: yesCurrencyReserve,
+      reserveOutTokens: yesCurrencyReserve / spotPrice,
+      inputUsdPrice: 1,
+    });
+    assert.equal(floor.state, 'LIVE', `floor gate must pass with seeded reserves (${floor.reason})`);
+    console.log(`  LIVE — YES pool holds ~$${Math.round(yesCurrencyReserve)} currency; ${floor.reason}`);
+
+    // ── RESOLVED: warp past openingTime, answer on Reality, resolve, redeem ──
+    // futarchyProposalParams() struct shape varies across factory versions —
+    // decode raw: word0 = conditionId, word6 = questionId (verified against
+    // this factory's live return layout; both sanity-asserted nonzero).
+    const rawParams = await provider.call({ to: proposalAddress, data: '0x66b32916' });
+    const word = (i) => '0x' + rawParams.slice(2 + i * 64, 2 + (i + 1) * 64);
+    const params2 = { conditionId: word(0), questionId: word(6) };
+    assert.notEqual(params2.conditionId, ethers.constants.HashZero, 'conditionId decoded');
+    assert.notEqual(params2.questionId, ethers.constants.HashZero, 'questionId decoded');
+    const factoryRes = new ethers.Contract(FACTORY, FACTORY_RESOLUTION_ABI, provider);
+    const [realityProxyAddr, realityAddr, ctfAddr] = await Promise.all([
+      factoryRes.realityProxy(), factoryRes.realitio(), factoryRes.conditionalTokens(),
+    ]);
+    const openingTime = formData.openingTimeUnix;
+    await provider.send('evm_setNextBlockTimestamp', [openingTime + 60]);
+    await provider.send('evm_mine', []);
+    const reality = new ethers.Contract(realityAddr, REALITY_ABI, client);
+    const YES_ANSWER = ethers.utils.hexZeroPad('0x01', 32); // outcome index 1 = proposal accepted
+    await track(
+      reality.submitAnswer(params2.questionId, YES_ANSWER, 0, { value: wei(1) }),
+      'reality.submitAnswer (1 xDAI bond) — client-posted'
+    );
+    await provider.send('evm_increaseTime', [Math.ceil(3.5 * 86400) + 60]);
+    await provider.send('evm_mine', []);
+    assert.equal(await reality.isFinalized(params2.questionId), true, 'Reality answer finalized after timeout');
+    await track(
+      new ethers.Contract(realityProxyAddr, REALITY_PROXY_ABI, client).resolve(proposalAddress, { gasLimit: 2000000 }),
+      'realityProxy.resolve(proposal) — permissionless'
+    );
+
+    // Which side won? Read the CTF payout vector, then redeem that side's
+    // unpooled outcome tokens back to collateral.
+    const ctf = new ethers.Contract(ctfAddr, CTF_ABI, provider);
+    const payout0 = await ctf.payoutNumerators(params2.conditionId, 0);
+    const winner = payout0.gt(0)
+      ? { label: 'outcome0', company: yesCompany, currency: yesCurrency }
+      : { label: 'outcome1', company: noCompany, currency: noCurrency };
+    console.log(`  resolved — winning side: ${winner.label}`);
+    const balOf = (t) => new ethers.Contract(t, ERC20_ABI, provider).balanceOf(clientAddr);
+    const approveMax = (t, label) => track(
+      new ethers.Contract(t, ERC20_ABI, client).approve(ROUTER, ethers.constants.MaxUint256), `approve router redeem (${label})`);
+    const currencyBefore = await balOf(CURRENCY);
+    const [winCoBal, winCuBal] = [await balOf(winner.company), await balOf(winner.currency)];
+    await approveMax(winner.company, 'winning company');
+    await approveMax(winner.currency, 'winning currency');
+    await track(router.redeemProposal(proposalAddress, winCoBal, winCuBal, { gasLimit: 3000000 }), 'router.redeemProposal (winning side → collateral)');
+    const currencyAfter = await balOf(CURRENCY);
+    assert.ok(currencyAfter.gt(currencyBefore), 'redemption returned collateral to the client');
+
+    const kelvinFullTxs = signedBy.filter((t) => t.from === KELVIN_EOA);
+    assert.equal(kelvinFullTxs.length, 0, 'zero Kelvin-signed transactions through LIVE → resolved');
+    console.log('\nPASS FULL — create → metadata → pools → LIVE → resolved → redeemed:');
+    console.log(`  answer finalized on Reality ${realityAddr}, proposal resolved permissionlessly`);
+    console.log(`  client redeemed ${ethers.utils.formatEther(currencyAfter.sub(currencyBefore))} sDAI of winning outcome tokens`);
+    console.log(`  ${signedBy.length} txs total — 0 from Kelvin's EOA, org owner only the setEditor grant`);
+  }
 } finally {
   if (proc) proc.kill();
 }
