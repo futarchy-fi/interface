@@ -42,3 +42,43 @@ export function buildInvertPatch(original, corrected) {
   }
   return Object.keys(patch).length ? patch : null;
 }
+
+/**
+ * Step 2 must describe the proposal that step 1 actually created, not whatever
+ * the form holds now (after a refresh the form resets to defaults, and the
+ * close date and Snapshot fields stay editable). Takes the proposal's on-chain
+ * reads and returns the close time and question to write, or errors when the
+ * proposal does not belong to the selected organization's token pair.
+ * closeTimestamp = Reality opening time - the opening buffer step 1 added.
+ */
+export function bindProposalToOrganization({
+  openingTs,
+  collateralToken1,
+  collateralToken2,
+  marketName,
+  organization,
+  openingBufferSeconds,
+}) {
+  const same = (a, b) => Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+  const errors = [];
+  const opening = Number(openingTs);
+  if (!Number.isFinite(opening) || opening <= 0) {
+    errors.push('Could not read the proposal opening time from Reality.eth.');
+  }
+  if (!same(collateralToken1, organization?.companyToken?.address)) {
+    errors.push(`The proposal's company token (${collateralToken1 || 'unreadable'}) is not ${organization?.name || 'this organization'}'s.`);
+  }
+  if (!same(collateralToken2, organization?.currencyToken?.address)) {
+    errors.push(`The proposal's currency token (${collateralToken2 || 'unreadable'}) is not ${organization?.name || 'this organization'}'s.`);
+  }
+  if (typeof marketName !== 'string' || !marketName.trim()) {
+    errors.push('Could not read the proposal question.');
+  }
+  if (errors.length) return { ok: false, errors };
+  return {
+    ok: true,
+    errors: [],
+    closeTimestamp: opening - openingBufferSeconds,
+    question: marketName,
+  };
+}

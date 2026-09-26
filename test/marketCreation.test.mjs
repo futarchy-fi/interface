@@ -295,3 +295,27 @@ test('snapshot autofill fails closed: bad id, unknown proposal, hub down', async
   assert.equal(await fetchSnapshotVoteEnd(SNAP_ID, async () => ({ ok: true, json: async () => ({ data: { proposal: null } }) })), null);
   assert.equal(await fetchSnapshotVoteEnd(SNAP_ID, async () => { throw new Error('offline'); }), null);
 });
+
+test('step 2 binds close time and question to the on-chain proposal', async () => {
+  const { bindProposalToOrganization } = await import('../src/features/marketCreation/orgMetadataWrite.js');
+  const organization = {
+    name: 'Kleros',
+    companyToken: { address: '0xAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaa' },
+    currencyToken: { address: '0xBBbbBBbbBBbbBBbbBBbbBBbbBBbbBBbbBBbbBBbb' },
+  };
+  const base = {
+    openingTs: 1_800_172_800,
+    collateralToken1: organization.companyToken.address.toLowerCase(),
+    collateralToken2: organization.currencyToken.address,
+    marketName: 'Will KIP-90 be passed by Kleros?',
+    organization,
+    openingBufferSeconds: 48 * 3600,
+  };
+  assert.deepEqual(bindProposalToOrganization(base), {
+    ok: true, errors: [], closeTimestamp: 1_800_000_000, question: 'Will KIP-90 be passed by Kleros?',
+  });
+  assert.equal(bindProposalToOrganization({ ...base, collateralToken1: OTHER }).ok, false);
+  assert.equal(bindProposalToOrganization({ ...base, collateralToken2: null }).ok, false);
+  assert.equal(bindProposalToOrganization({ ...base, openingTs: 0 }).ok, false);
+  assert.equal(bindProposalToOrganization({ ...base, marketName: '' }).ok, false);
+});

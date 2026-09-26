@@ -9,12 +9,14 @@ import {
   buildMetadataDraft,
   deriveTwapTiming,
   GNOSIS_CHAIN_ID,
+  REALITY_OPENING_BUFFER_SECONDS,
 } from '../../../features/marketCreation/marketCreationWorkflow';
 import { validateMetadata, mergeMetadataForUpdate } from '../../../features/marketCreation/validateMetadata';
 import {
   buildProposalMetadataArgs,
   buildInvertContext,
   buildInvertPatch,
+  bindProposalToOrganization,
 } from '../../../features/marketCreation/orgMetadataWrite';
 import { fetchProposalFromChain } from '../../../adapters/subgraphConfigAdapter';
 import { useCreatePool } from '../../../hooks/useCreatePool';
@@ -26,6 +28,20 @@ const panelClass = 'border border-futarchyGray6 dark:border-futarchyGray7 bg-whi
 const inputClass = 'w-full px-3 py-2 bg-futarchyGray2 dark:bg-futarchyGray3 border border-futarchyGray6 dark:border-futarchyGray7 rounded-md text-sm text-futarchyGray12 dark:text-white focus:outline-none focus:ring-2 focus:ring-futarchyBlue9';
 const btnClass = 'inline-flex h-9 items-center rounded-md bg-futarchyBlue9 px-4 text-sm font-medium text-white disabled:opacity-50';
 const ADDR = /^0x[a-fA-F0-9]{40}$/;
+
+const PROPOSAL_BINDING_ABI = [
+  { name: 'marketName', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
+  { name: 'collateralToken1', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { name: 'collateralToken2', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { name: 'questionId', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
+  { name: 'realityProxy', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+];
+const REALITY_PROXY_ABI = [
+  { name: 'realitio', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+];
+const REALITIO_ABI = [
+  { name: 'getOpeningTS', type: 'function', stateMutability: 'view', inputs: [{ type: 'bytes32' }], outputs: [{ type: 'uint32' }] },
+];
 
 const TOKEN0_ABI = [
   { name: 'token0', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
@@ -50,6 +66,44 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
   const [roles, setRoles] = useState(null); // { owner, editor } | null
   const [phase, setPhase] = useState('idle'); // idle|simulating|simulated|writing|done|error
   const [message, setMessage] = useState('');
+  // Once a metadata transaction is sent, never offer a second one from this
+  // page: a retry would add a duplicate metadata entry to the organization.
+  const [submittedHash, setSubmittedHash] = useState(null);
+  // The proposal as created on chain: close time and question come from here,
+  // not from the (editable, refresh-reset) form.
+  const [binding, setBinding] = useState(null);
+
+  useEffect(() => {
+    let live = true;
+    if (!publicClient || !proposalAddress) return undefined;
+    setBinding(null);
+    (async () => {
+      const readProposal = (functionName) => publicClient.readContract({
+        address: proposalAddress, abi: PROPOSAL_BINDING_ABI, functionName,
+      });
+      try {
+        const [marketName, collateralToken1, collateralToken2, questionId, realityProxy] = await Promise.all([
+          readProposal('marketName'), readProposal('collateralToken1'), readProposal('collateralToken2'),
+          readProposal('questionId'), readProposal('realityProxy'),
+        ]);
+        const realitio = await publicClient.readContract({
+          address: realityProxy, abi: REALITY_PROXY_ABI, functionName: 'realitio',
+        });
+        const openingTs = await publicClient.readContract({
+          address: realitio, abi: REALITIO_ABI, functionName: 'getOpeningTS', args: [questionId],
+        });
+        if (live) {
+          setBinding(bindProposalToOrganization({
+            openingTs, collateralToken1, collateralToken2, marketName, organization,
+            openingBufferSeconds: REALITY_OPENING_BUFFER_SECONDS,
+          }));
+        }
+      } catch (e) {
+        if (live) setBinding({ ok: false, errors: [`Could not read the proposal from chain: ${e.shortMessage || e.message}`] });
+      }
+    })();
+    return () => { live = false; };
+  }, [publicClient, proposalAddress, organization]);
 
   useEffect(() => {
     let live = true;
@@ -80,9 +134,13 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
   // validator's past-start gate then only fires when the CLOSE DATE itself is
   // too near (needs >= 7 days out for the 5d window + 48h buffer).
   const buildDraft = () => {
+    if (!binding?.ok) {
+      return { draft: null, validation: { ok: false, errors: binding?.errors || ['Still reading the proposal from chain.'] } };
+    }
+    const bound = { ...form, closeTimestamp: binding.closeTimestamp, question: binding.question };
     const draft = {
-      ...buildMetadataDraft({ ...form, organizationId, proposalAddress }),
-      ...deriveTwapTiming(form.closeTimestamp),
+      ...buildMetadataDraft({ ...bound, organizationId, proposalAddress }),
+      ...deriveTwapTiming(binding.closeTimestamp),
       invertTwapPoolYes: false, // verified and corrected against real token0 in step 3
       invertTwapPoolNo: false,
     };
@@ -95,7 +153,7 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
     functionName: 'createAndAddProposalMetadata',
     args: buildProposalMetadataArgs({
       proposalAddress,
-      question: form.question,
+      question: binding.question,
       event: form.displayTitle1,
       description: form.description,
       metadata: draft,
@@ -124,6 +182,7 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
   };
 
   const onBroadcast = async () => {
+    if (submittedHash) return;
     const { draft, validation } = buildDraft();
     if (!validation.ok) {
       setPhase('error');
@@ -134,6 +193,7 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
     try {
       await ensureGnosis();
       const hash = await writeContractAsync(writeRequest(draft));
+      setSubmittedHash(hash);
       setMessage(`Submitted ${hash} — waiting for confirmation…`);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       const created = findCreatedMetadataAddress(
@@ -160,6 +220,18 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
         Registers the market&apos;s metadata (TWAP window recomputed now, Snapshot id, ticker) on the
         organization contract. Requires the org owner or editor key.
       </p>
+      {binding && !binding.ok && (
+        <StatusLine tone="warn">Cannot write metadata for this proposal: {binding.errors.join(' ')}</StatusLine>
+      )}
+      {binding?.ok && binding.closeTimestamp !== form.closeTimestamp && (
+        <StatusLine>
+          Using the proposal&apos;s on-chain close time ({new Date(binding.closeTimestamp * 1000).toUTCString()}),
+          not the date in the form.
+        </StatusLine>
+      )}
+      {submittedHash && phase === 'error' && (
+        <StatusLine tone="warn">A metadata transaction ({submittedHash}) was already sent. Check it on the explorer before trying again from a fresh page.</StatusLine>
+      )}
       {roles && !canWrite && (
         <StatusLine tone="warn">
           This wallet is not the org owner{roles.owner ? ` (${roles.owner})` : ''} or editor
@@ -170,10 +242,10 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
         <StatusLine tone="ok">Done — metadata contract {metadataAddress}</StatusLine>
       ) : (
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button className={btnClass} disabled={!isConnected || phase === 'simulating' || phase === 'writing'} onClick={onSimulate}>
+          <button className={btnClass} disabled={!isConnected || !binding?.ok || phase === 'simulating' || phase === 'writing'} onClick={onSimulate}>
             Simulate write
           </button>
-          <button className={btnClass} disabled={!isConnected || !canWrite || phase === 'writing'} onClick={onBroadcast}>
+          <button className={btnClass} disabled={!isConnected || !canWrite || !binding?.ok || Boolean(submittedHash) || phase === 'writing'} onClick={onBroadcast}>
             Sign & write metadata
           </button>
         </div>
