@@ -407,6 +407,32 @@ export function deriveTwapTiming(closeTimestamp, twapDurationHours = 120) {
   };
 }
 
+// Step 1 creates the proposal on chain and cannot be undone, so refuse to send
+// it when the market could never go live: the Reality question text is the
+// on-chain question forever, and a close date whose TWAP window has already
+// started is one that step 2's metadata validator will reject.
+export function stepOneBroadcastErrors({
+  question,
+  closeTimestamp,
+  twapDurationHours = 120,
+  nowSeconds = Math.floor(Date.now() / 1000),
+} = {}) {
+  const errors = [];
+  const text = typeof question === 'string' ? question.trim() : '';
+  if (!text) {
+    errors.push('Write the resolution question.');
+  } else {
+    if (!text.endsWith('?')) errors.push('The resolution question must end with "?".');
+    if (/["\\␟]/.test(text)) errors.push('The resolution question cannot contain double quotes, backslashes or the ␟ character.');
+  }
+  if (!Number.isFinite(closeTimestamp)) {
+    errors.push('Pick a valid close date.');
+  } else if (deriveTwapTiming(closeTimestamp, twapDurationHours).twapStartTimestamp <= nowSeconds) {
+    errors.push('The close date is too soon: the TWAP window would already have started. Pick a later close date.');
+  }
+  return errors;
+}
+
 export function createMarketWizardDefaults({
   organizationId = 'gnosis',
   nowSeconds = Math.floor(Date.now() / 1000),

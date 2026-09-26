@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateMetadata, mergeMetadataForUpdate } from '../src/features/marketCreation/validateMetadata.js';
 import { priceImpactConstantProduct, evaluateFloor } from '../src/features/marketCreation/liquidityFloor.js';
-import { deriveTwapTiming, TWAP_BUFFER_SECONDS } from '../src/features/marketCreation/marketCreationWorkflow.js';
+import { deriveTwapTiming, TWAP_BUFFER_SECONDS, stepOneBroadcastErrors } from '../src/features/marketCreation/marketCreationWorkflow.js';
 import { buildProposalParams } from '../src/features/marketCreation/proposalCalldata.js';
+import { findCreatedProposalAddress } from '../src/features/marketCreation/receiptEvents.js';
+import { ethers } from 'ethers';
 
 // Conditional (wrapped YES/NO) company tokens — what the pools actually hold.
 const COND_YES = '0x1111111111111111111111111111111111111111';
@@ -122,4 +124,30 @@ test('buildProposalParams: epoch openingTimeUnix is authoritative, no Date round
   const p = buildProposalParams({ ...base, openingTimeUnix: 1790172800 });
   assert.equal(p[6], 1790172800); // exact epoch, immune to operator timezone
   assert.throws(() => buildProposalParams({ ...base, openingTimeUnix: NaN, openingTime: '' }), /Invalid opening time/);
+});
+
+test('step 1 broadcast gate: full question and a close date whose TWAP has not started', () => {
+  const now = 1_800_000_000;
+  const close = now + 8 * 86400;
+  assert.deepEqual(stepOneBroadcastErrors({ question: 'Will KIP-90 be passed by Kleros?', closeTimestamp: close, nowSeconds: now }), []);
+  assert.equal(stepOneBroadcastErrors({ question: '  ', closeTimestamp: close, nowSeconds: now }).length, 1);
+  assert.match(stepOneBroadcastErrors({ question: 'KIP-90', closeTimestamp: close, nowSeconds: now })[0], /end with/);
+  assert.match(stepOneBroadcastErrors({ question: 'Will "x" pass?', closeTimestamp: close, nowSeconds: now })[0], /double quotes/);
+  assert.match(stepOneBroadcastErrors({ question: 'Will x pass?', closeTimestamp: NaN, nowSeconds: now })[0], /valid close date/);
+  // 120h TWAP + 48h buffer = 7 days before close; 6 days out has already started.
+  assert.match(stepOneBroadcastErrors({ question: 'Will x pass?', closeTimestamp: now + 6 * 86400, nowSeconds: now })[0], /too soon/);
+  assert.match(stepOneBroadcastErrors({ question: 'Will x pass?', closeTimestamp: now - 86400, nowSeconds: now })[0], /too soon/);
+});
+
+test('new proposal address comes only from the factory NewProposal event', () => {
+  const factory = '0x1000000000000000000000000000000000000001';
+  const otherFactory = '0x1000000000000000000000000000000000000002';
+  const proposal = '0x2000000000000000000000000000000000000001';
+  const iface = new ethers.utils.Interface([
+    'event NewProposal(address indexed proposal, string marketName, bytes32 conditionId, bytes32 questionId)',
+  ]);
+  const log = iface.encodeEventLog(iface.getEvent('NewProposal'), [proposal, 'Will x pass?', ethers.constants.HashZero, ethers.constants.HashZero]);
+  assert.equal(findCreatedProposalAddress([{ address: otherFactory, ...log }], factory), null);
+  assert.equal(findCreatedProposalAddress([{ address: factory, ...log }], factory), proposal);
+  assert.equal(findCreatedProposalAddress([], factory), null);
 });

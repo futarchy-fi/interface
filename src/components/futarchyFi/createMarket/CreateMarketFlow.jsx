@@ -8,6 +8,7 @@ import {
   KNOWN_ORGANIZATIONS,
   GNOSIS_CHAIN_ID,
   REALITY_OPENING_BUFFER_SECONDS,
+  stepOneBroadcastErrors,
 } from '../../../features/marketCreation/marketCreationWorkflow';
 import { validateMetadata } from '../../../features/marketCreation/validateMetadata';
 import { evaluateFloor, ZERO_TRADE_NOTICE, FLOOR_TRADE_USD, FLOOR_MAX_IMPACT } from '../../../features/marketCreation/liquidityFloor';
@@ -160,9 +161,11 @@ function ExecutePanel({ form, organization }) {
   // Epoch seconds end-to-end: an ISO string re-parsed as local time shifted the
   // on-chain openingTime by the operator's UTC offset.
   const closeValid = Number.isFinite(form.closeTimestamp);
+  // marketName becomes the Reality.eth question text on chain and can never be
+  // changed, so it must be the full question, not just the proposal code.
   const formData = closeValid ? {
     chainId: GNOSIS_CHAIN_ID,
-    marketName: form.proposalCode,
+    marketName: (form.question || '').trim(),
     companyToken: organization.companyToken.address,
     currencyToken: organization.currencyToken.address,
     category: 'crypto',
@@ -171,10 +174,31 @@ function ExecutePanel({ form, organization }) {
     openingTimeUnix: form.closeTimestamp + REALITY_OPENING_BUFFER_SECONDS,
   } : null;
 
+  // Re-evaluated on every render and again at click time so a page left open
+  // cannot broadcast a close date that has since become too soon.
+  const broadcastErrors = stepOneBroadcastErrors({
+    question: form.question,
+    closeTimestamp: form.closeTimestamp,
+    twapDurationHours: form.twapDurationHours,
+  });
+  // One proposal per wizard run: once a transaction was submitted, never offer
+  // a second broadcast (the factory would deploy a duplicate market).
+  const alreadySubmitted = Boolean(transactionHash || proposalAddress);
+
   const onRun = async () => {
     if (!formData) return;
     setSimResult(null);
     if (mode === 'broadcast') {
+      if (alreadySubmitted) return;
+      const errors = stepOneBroadcastErrors({
+        question: form.question,
+        closeTimestamp: form.closeTimestamp,
+        twapDurationHours: form.twapDurationHours,
+      });
+      if (errors.length) {
+        setSimResult({ ok: false, msg: errors.join(' ') });
+        return;
+      }
       await createProposal(formData);
       return;
     }
@@ -215,7 +239,8 @@ function ExecutePanel({ form, organization }) {
         </div>
         <button
           onClick={onRun}
-          disabled={!closeValid || isSubmitting || isSimulating || (mode === 'broadcast' && !isConnected)}
+          disabled={!closeValid || isSubmitting || isSimulating
+            || (mode === 'broadcast' && (!isConnected || alreadySubmitted || broadcastErrors.length > 0))}
           className="inline-flex h-9 items-center rounded-md bg-futarchyBlue9 px-4 text-sm font-medium text-white disabled:opacity-50"
         >
           {(isSubmitting || isSimulating) ? 'Working…' : mode === 'simulate' ? 'Simulate createProposal' : 'Create proposal'}
@@ -226,6 +251,18 @@ function ExecutePanel({ form, organization }) {
         {closeValid && mode === 'broadcast' && !isConnected && (
           <span className="text-xs text-amber-600 dark:text-amber-400">Connect a wallet to broadcast.</span>
         )}
+        {mode === 'broadcast' && alreadySubmitted && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">A proposal transaction was already sent from this page. Reload to start a new market.</span>
+        )}
+      </div>
+      {mode === 'broadcast' && !alreadySubmitted && broadcastErrors.length > 0 && (
+        <div className="mt-2">
+          {broadcastErrors.map((e) => (
+            <p key={e} className="text-xs text-amber-600 dark:text-amber-400">• {e}</p>
+          ))}
+        </div>
+      )}
+      <div>
       </div>
 
       {simResult && (
