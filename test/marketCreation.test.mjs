@@ -8,6 +8,7 @@ import { deriveTwapTiming, TWAP_BUFFER_SECONDS, stepOneBroadcastErrors } from '.
 import { buildProposalParams } from '../src/features/marketCreation/proposalCalldata.js';
 import { findCreatedMetadataAddress, findCreatedProposalAddress } from '../src/features/marketCreation/receiptEvents.js';
 import { ensureWalletChain } from '../src/features/marketCreation/chainGuard.js';
+import { nextPoolPublication } from '../src/features/marketCreation/poolPublication.js';
 
 // Conditional (wrapped YES/NO) company tokens — what the pools actually hold.
 const COND_YES = '0x1111111111111111111111111111111111111111';
@@ -219,6 +220,10 @@ test('PoolCreator publishes each created address once and uses stable parent cal
   assert.match(source, /const onYesPoolCreated = useCallback/);
   assert.match(source, /const onNoPoolCreated = useCallback/);
   assert.doesNotMatch(source, /onCreated=\{\(addr\) => setPools/);
+  assert.equal(nextPoolPublication(null, null), null);
+  assert.equal(nextPoolPublication(OTHER, OTHER), null);
+  assert.equal(nextPoolPublication(OTHER, null), OTHER);
+  assert.equal(nextPoolPublication(COND_YES, OTHER), COND_YES);
 });
 
 test('proposal organization is persisted and locked before metadata steps', () => {

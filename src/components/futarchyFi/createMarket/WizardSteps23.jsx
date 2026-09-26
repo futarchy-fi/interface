@@ -20,6 +20,7 @@ import { fetchProposalFromChain } from '../../../adapters/subgraphConfigAdapter'
 import { useCreatePool } from '../../../hooks/useCreatePool';
 import { ensureWalletChain, readInjectedWalletChainId } from '../../../features/marketCreation/chainGuard';
 import { findCreatedMetadataAddress } from '../../../features/marketCreation/receiptEvents';
+import { nextPoolPublication } from '../../../features/marketCreation/poolPublication';
 
 const panelClass = 'border border-futarchyGray6 dark:border-futarchyGray7 bg-white dark:bg-futarchyGray2 rounded-lg';
 const inputClass = 'w-full px-3 py-2 bg-futarchyGray2 dark:bg-futarchyGray3 border border-futarchyGray6 dark:border-futarchyGray7 rounded-md text-sm text-futarchyGray12 dark:text-white focus:outline-none focus:ring-2 focus:ring-futarchyBlue9';
@@ -189,9 +190,10 @@ function PoolCreator({ label, token0, token1, initialPrice, existingPool, onCrea
   const { createPool, status, poolAddress, isCreating } = useCreatePool();
   const publishedAddress = useRef(null);
   useEffect(() => {
-    if (!poolAddress || poolAddress === publishedAddress.current) return;
-    publishedAddress.current = poolAddress;
-    onCreated(poolAddress);
+    const nextAddress = nextPoolPublication(poolAddress, publishedAddress.current);
+    if (!nextAddress) return;
+    publishedAddress.current = nextAddress;
+    onCreated(nextAddress);
   }, [poolAddress, onCreated]);
 
   if (existingPool) {
