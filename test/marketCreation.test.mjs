@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { ethers } from 'ethers';
 import { validateMetadata, mergeMetadataForUpdate } from '../src/features/marketCreation/validateMetadata.js';
 import { priceImpactConstantProduct, evaluateFloor } from '../src/features/marketCreation/liquidityFloor.js';
 import { deriveTwapTiming, TWAP_BUFFER_SECONDS, stepOneBroadcastErrors } from '../src/features/marketCreation/marketCreationWorkflow.js';
 import { buildProposalParams } from '../src/features/marketCreation/proposalCalldata.js';
-import { findCreatedProposalAddress } from '../src/features/marketCreation/receiptEvents.js';
-import { ethers } from 'ethers';
+import { findCreatedMetadataAddress, findCreatedProposalAddress } from '../src/features/marketCreation/receiptEvents.js';
+import { ensureWalletChain } from '../src/features/marketCreation/chainGuard.js';
 
 // Conditional (wrapped YES/NO) company tokens — what the pools actually hold.
 const COND_YES = '0x1111111111111111111111111111111111111111';
@@ -150,6 +152,80 @@ test('new proposal address comes only from the factory NewProposal event', () =>
   assert.equal(findCreatedProposalAddress([{ address: otherFactory, ...log }], factory), null);
   assert.equal(findCreatedProposalAddress([{ address: factory, ...log }], factory), proposal);
   assert.equal(findCreatedProposalAddress([], factory), null);
+});
+
+test('receipt address selection uses only matching factory/org events', () => {
+  const factory = '0x1000000000000000000000000000000000000001';
+  const otherFactory = '0x1000000000000000000000000000000000000002';
+  const proposal = '0x2000000000000000000000000000000000000001';
+  const organization = '0x3000000000000000000000000000000000000001';
+  const metadata = '0x4000000000000000000000000000000000000001';
+  const factoryIface = new ethers.utils.Interface([
+    'event NewProposal(address indexed proposal, string marketName, bytes32 conditionId, bytes32 questionId)',
+  ]);
+  const orgIface = new ethers.utils.Interface([
+    'event ProposalCreatedAndAdded(address indexed proposalMetadata, address indexed proposalAddress)',
+  ]);
+  const factoryLog = factoryIface.encodeEventLog(
+    factoryIface.getEvent('NewProposal'),
+    [proposal, 'KIP-90', ethers.constants.HashZero, ethers.constants.HashZero],
+  );
+  const metadataLog = orgIface.encodeEventLog(
+    orgIface.getEvent('ProposalCreatedAndAdded'),
+    [metadata, proposal],
+  );
+
+  assert.equal(
+    findCreatedProposalAddress([{ address: otherFactory, ...factoryLog }], factory),
+    null,
+  );
+  assert.equal(
+    findCreatedProposalAddress([{ address: factory, ...factoryLog }], factory),
+    proposal,
+  );
+  assert.equal(
+    findCreatedMetadataAddress([{ address: organization, ...metadataLog }], organization, proposal),
+    metadata,
+  );
+  assert.equal(
+    findCreatedMetadataAddress([{ address: organization, ...metadataLog }], organization, otherFactory),
+    null,
+  );
+});
+
+test('metadata and pool writes switch and verify the target chain', async () => {
+  let switchedTo = null;
+  await ensureWalletChain({
+    currentChainId: 1,
+    targetChainId: 100,
+    switchChainAsync: async ({ chainId }) => { switchedTo = chainId; },
+    readWalletChainId: async () => 100,
+  });
+  assert.equal(switchedTo, 100);
+  await assert.rejects(
+    ensureWalletChain({
+      currentChainId: 100,
+      targetChainId: 100,
+      switchChainAsync: async () => {},
+      readWalletChainId: async () => 1,
+    }),
+    /Chain mismatch/,
+  );
+});
+
+test('PoolCreator publishes each created address once and uses stable parent callbacks', () => {
+  const source = readFileSync(new URL('../src/components/futarchyFi/createMarket/WizardSteps23.jsx', import.meta.url), 'utf8');
+  assert.match(source, /publishedAddress = useRef\(null\)/);
+  assert.match(source, /const onYesPoolCreated = useCallback/);
+  assert.match(source, /const onNoPoolCreated = useCallback/);
+  assert.doesNotMatch(source, /onCreated=\{\(addr\) => setPools/);
+});
+
+test('proposal organization is persisted and locked before metadata steps', () => {
+  const source = readFileSync(new URL('../src/components/futarchyFi/createMarket/CreateMarketFlow.jsx', import.meta.url), 'utf8');
+  assert.match(source, /organization: organizationId/);
+  assert.match(source, /disabled=\{Boolean\(proposalAddress\)\}/);
+  assert.match(source, /setProposalOrganizationId\(queryOrganization\)/);
 });
 
 // ---- increment C pure helpers ----

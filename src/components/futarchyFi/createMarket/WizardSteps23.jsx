@@ -2,8 +2,8 @@
 // the proposal's conditional tokens, then the invert-flag verification pass
 // against real on-chain token0 — the gate that makes the KIP-88/90 inverted
 // price bug unrepresentable. Spec: hub docs/specs/2026-08-06-selfserve-wizard-increment-C.md
-import React, { useEffect, useMemo, useState } from 'react';
-import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAccount, useChainId, usePublicClient, useSwitchChain, useWriteContract } from 'wagmi';
 import { CONTRACT_ABIS } from '../marketPage/constants/contracts';
 import {
   buildMetadataDraft,
@@ -18,6 +18,8 @@ import {
 } from '../../../features/marketCreation/orgMetadataWrite';
 import { fetchProposalFromChain } from '../../../adapters/subgraphConfigAdapter';
 import { useCreatePool } from '../../../hooks/useCreatePool';
+import { ensureWalletChain, readInjectedWalletChainId } from '../../../features/marketCreation/chainGuard';
+import { findCreatedMetadataAddress } from '../../../features/marketCreation/receiptEvents';
 
 const panelClass = 'border border-futarchyGray6 dark:border-futarchyGray7 bg-white dark:bg-futarchyGray2 rounded-lg';
 const inputClass = 'w-full px-3 py-2 bg-futarchyGray2 dark:bg-futarchyGray3 border border-futarchyGray6 dark:border-futarchyGray7 rounded-md text-sm text-futarchyGray12 dark:text-white focus:outline-none focus:ring-2 focus:ring-futarchyBlue9';
@@ -40,6 +42,8 @@ function StatusLine({ tone = 'info', children }) {
 // ---------------------------------------------------------------------------
 export function MetadataWritePanel({ proposalAddress, form, organization, organizationId, metadataAddress, onMetadataContract }) {
   const { address: account, isConnected } = useAccount();
+  const currentChainId = useChainId();
+  const { switchChainAsync } = useSwitchChain();
   const publicClient = usePublicClient({ chainId: GNOSIS_CHAIN_ID });
   const { writeContractAsync } = useWriteContract();
   const [roles, setRoles] = useState(null); // { owner, editor } | null
@@ -63,6 +67,13 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
 
   const canWrite = Boolean(account && roles
     && [roles.owner, roles.editor].some((a) => a && a.toLowerCase() === account.toLowerCase()));
+
+  const ensureGnosis = () => ensureWalletChain({
+    currentChainId,
+    targetChainId: GNOSIS_CHAIN_ID,
+    switchChainAsync,
+    readWalletChainId: readInjectedWalletChainId,
+  });
 
   // Recomputed at click time — never from a page-load-stale draft. The
   // validator's past-start gate then only fires when the CLOSE DATE itself is
@@ -101,6 +112,7 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
     }
     setPhase('simulating');
     try {
+      await ensureGnosis();
       await publicClient.simulateContract(writeRequest(draft));
       setPhase('simulated');
       setMessage('Simulation OK — the org write would succeed from this wallet.');
@@ -119,20 +131,21 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
     }
     setPhase('writing');
     try {
+      await ensureGnosis();
       const hash = await writeContractAsync(writeRequest(draft));
       setMessage(`Submitted ${hash} — waiting for confirmation…`);
-      await publicClient.waitForTransactionReceipt({ hash });
-      // The org appends a new metadata contract; the last list entry is ours.
-      const list = await publicClient.readContract({
-        address: organization.organizationAddress,
-        abi: CONTRACT_ABIS.ORGANIZATION,
-        functionName: 'getProposals',
-        args: [0n, 1000n],
-      });
-      const created = list?.[list.length - 1];
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const created = findCreatedMetadataAddress(
+        receipt.logs,
+        organization.organizationAddress,
+        proposalAddress,
+      );
+      if (!created) {
+        throw new Error('Transaction confirmed, but no matching ProposalCreatedAndAdded event was found.');
+      }
       setPhase('done');
-      setMessage(`Metadata written${created ? ` — contract ${created}` : ''}.`);
-      if (created) onMetadataContract(created);
+      setMessage(`Metadata written — contract ${created}.`);
+      onMetadataContract(created);
     } catch (e) {
       setPhase('error');
       setMessage(e.shortMessage || e.message);
@@ -143,7 +156,7 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
     <section className={`${panelClass} p-4`}>
       <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Step 2 — Write proposal metadata</h2>
       <p className="mt-1 text-sm text-futarchyGray11">
-        Registers the market's metadata (TWAP window recomputed now, Snapshot id, ticker) on the
+        Registers the market&apos;s metadata (TWAP window recomputed now, Snapshot id, ticker) on the
         organization contract. Requires the org owner or editor key.
       </p>
       {roles && !canWrite && (
@@ -174,7 +187,12 @@ export function MetadataWritePanel({ proposalAddress, form, organization, organi
 // ---------------------------------------------------------------------------
 function PoolCreator({ label, token0, token1, initialPrice, existingPool, onCreated }) {
   const { createPool, status, poolAddress, isCreating } = useCreatePool();
-  useEffect(() => { if (poolAddress) onCreated(poolAddress); }, [poolAddress, onCreated]);
+  const publishedAddress = useRef(null);
+  useEffect(() => {
+    if (!poolAddress || poolAddress === publishedAddress.current) return;
+    publishedAddress.current = poolAddress;
+    onCreated(poolAddress);
+  }, [poolAddress, onCreated]);
 
   if (existingPool) {
     return <StatusLine tone="ok">{label} pool exists — {existingPool}</StatusLine>;
@@ -195,6 +213,8 @@ function PoolCreator({ label, token0, token1, initialPrice, existingPool, onCrea
 
 export function PoolsPanel({ proposalAddress, organization, metadataAddress }) {
   const { address: account, isConnected } = useAccount();
+  const currentChainId = useChainId();
+  const { switchChainAsync } = useSwitchChain();
   const publicClient = usePublicClient({ chainId: GNOSIS_CHAIN_ID });
   const { writeContractAsync } = useWriteContract();
   const [chainInfo, setChainInfo] = useState(null); // fetchProposalFromChain result
@@ -202,6 +222,13 @@ export function PoolsPanel({ proposalAddress, organization, metadataAddress }) {
   const [pools, setPools] = useState({ yes: null, no: null });
   const [verify, setVerify] = useState(null); // { ok, patch, merged, message } | null
   const [fixing, setFixing] = useState(false);
+
+  const ensureGnosis = () => ensureWalletChain({
+    currentChainId,
+    targetChainId: GNOSIS_CHAIN_ID,
+    switchChainAsync,
+    readWalletChainId: readInjectedWalletChainId,
+  });
 
   useEffect(() => {
     let live = true;
@@ -284,6 +311,7 @@ export function PoolsPanel({ proposalAddress, organization, metadataAddress }) {
   const fixFlags = async () => {
     setFixing(true);
     try {
+      await ensureGnosis();
       const hash = await writeContractAsync({
         address: metadataAddress,
         abi: CONTRACT_ABIS.PROPOSAL,
@@ -302,6 +330,14 @@ export function PoolsPanel({ proposalAddress, organization, metadataAddress }) {
   };
 
   const bothPools = Boolean(pools.yes && pools.no);
+  const onYesPoolCreated = useCallback(
+    (addr) => setPools((p) => p.yes === addr ? p : ({ ...p, yes: addr })),
+    [],
+  );
+  const onNoPoolCreated = useCallback(
+    (addr) => setPools((p) => p.no === addr ? p : ({ ...p, no: addr })),
+    [],
+  );
 
   return (
     <section className={`${panelClass} p-4`}>
@@ -331,7 +367,7 @@ export function PoolsPanel({ proposalAddress, organization, metadataAddress }) {
             token1={tokens.yesCurrency}
             initialPrice={initialPrice}
             existingPool={pools.yes}
-            onCreated={(addr) => setPools((p) => ({ ...p, yes: addr }))}
+            onCreated={onYesPoolCreated}
           />
           <PoolCreator
             label="NO"
@@ -339,7 +375,7 @@ export function PoolsPanel({ proposalAddress, organization, metadataAddress }) {
             token1={tokens.noCurrency}
             initialPrice={initialPrice}
             existingPool={pools.no}
-            onCreated={(addr) => setPools((p) => ({ ...p, no: addr }))}
+            onCreated={onNoPoolCreated}
           />
 
           <div className="mt-4 border-t border-futarchyGray6 dark:border-futarchyGray7 pt-3">
@@ -351,7 +387,7 @@ export function PoolsPanel({ proposalAddress, organization, metadataAddress }) {
               <StatusLine tone={verify.ok ? 'ok' : 'warn'}>{verify.message}</StatusLine>
             )}
             {verify && verify.patch && (
-              <button className={`${btnClass} mt-2`} disabled={fixing} onClick={fixFlags}>
+              <button className={`${btnClass} mt-2`} disabled={!isConnected || fixing} onClick={fixFlags}>
                 {fixing ? 'Fixing…' : 'Fix flags (updateExtendedMetadata)'}
               </button>
             )}

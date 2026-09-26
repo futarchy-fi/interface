@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -295,22 +295,40 @@ export default function CreateMarketFlow() {
   // Steps 2–3 unlock once a proposal exists; ?proposal=0x… resumes after a
   // refresh instead of losing progress.
   const [proposalAddress, setProposalAddress] = useState(null);
+  const [proposalOrganizationId, setProposalOrganizationId] = useState(null);
   useEffect(() => {
     const q = router.query?.proposal;
-    if (typeof q === 'string' && /^0x[a-fA-F0-9]{40}$/.test(q)) setProposalAddress(q);
-  }, [router.query]);
-  const onProposalCreated = (address) => {
+    if (typeof q !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(q)) return;
+    const queryOrganization = typeof router.query?.organization === 'string'
+      && KNOWN_ORGANIZATIONS[router.query.organization]
+      ? router.query.organization
+      : null;
+    setProposalAddress(q);
+    setProposalOrganizationId(queryOrganization);
+    if (queryOrganization && queryOrganization !== organizationId) {
+      setOrganizationId(queryOrganization);
+      setForm(createMarketWizardDefaults({ organizationId: queryOrganization }));
+    }
+  }, [router.query, organizationId]);
+  const onProposalCreated = useCallback((address) => {
     setProposalAddress(address);
-    router.replace({ query: { ...router.query, proposal: address } }, undefined, { shallow: true });
-  };
+    setProposalOrganizationId(organizationId);
+    router.replace({ query: { ...router.query, proposal: address, organization: organizationId } }, undefined, { shallow: true });
+  }, [organizationId, router]);
   // Defaults are Date.now()-derived, and wallet panels use wagmi hooks — both
   // must stay out of the static export. form stays null until client mount, so
   // the exported HTML carries the page frame but no build-time timestamps
   // (which caused React 18 hydration mismatches and days-stale dates).
   const [form, setForm] = useState(null);
   useEffect(() => {
-    setForm(createMarketWizardDefaults({ organizationId: 'kleros' }));
-  }, []);
+    if (!router.isReady) return;
+    const queryOrganization = typeof router.query?.organization === 'string'
+      && KNOWN_ORGANIZATIONS[router.query.organization]
+      ? router.query.organization
+      : 'kleros';
+    setOrganizationId(queryOrganization);
+    setForm(createMarketWizardDefaults({ organizationId: queryOrganization }));
+  }, [router.isReady, router.query?.organization]);
 
   const selectedOrganization = KNOWN_ORGANIZATIONS[organizationId];
   const marketPlan = useMemo(
@@ -319,6 +337,7 @@ export default function CreateMarketFlow() {
   );
 
   const updateOrganization = (nextOrganizationId) => {
+    if (proposalAddress) return;
     setOrganizationId(nextOrganizationId);
     setForm(createMarketWizardDefaults({ organizationId: nextOrganizationId }));
   };
@@ -407,13 +426,18 @@ export default function CreateMarketFlow() {
             />
           </div>
 
-          {proposalAddress && (
+          {proposalAddress && proposalOrganizationId === organizationId && (
             <WizardSteps23
               proposalAddress={proposalAddress}
               form={form}
               organization={selectedOrganization}
               organizationId={organizationId}
             />
+          )}
+          {proposalAddress && (!proposalOrganizationId || proposalOrganizationId !== organizationId) && (
+            <p className="mt-6 text-sm text-amber-600 dark:text-amber-400">
+              This proposal is not safely bound to the selected organization. Restart the wizard instead of writing mismatched metadata.
+            </p>
           )}
 
           <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -427,12 +451,18 @@ export default function CreateMarketFlow() {
                     id="organization"
                     className={`${inputClass} mt-1`}
                     value={organizationId}
+                    disabled={Boolean(proposalAddress)}
                     onChange={(event) => updateOrganization(event.target.value)}
                   >
                     {Object.values(KNOWN_ORGANIZATIONS).map((org) => (
                       <option key={org.id} value={org.id}>{org.name}</option>
                     ))}
                   </select>
+                  {proposalAddress && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      Organization is locked after proposal creation so metadata cannot be written to a different organization.
+                    </p>
+                  )}
                 </div>
 
                 <div>
