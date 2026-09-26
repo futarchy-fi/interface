@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "generate-seo": "node scripts/generate-seo.mjs",
+    "test:unit": "node --test 'test/**/*.test.mjs'",
     "build-only": "next build",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",

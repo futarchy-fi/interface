@@ -1,16 +1,8 @@
-import dynamic from 'next/dynamic';
-
-const CreateMarketFlow = dynamic(
-  () => import('../../../components/futarchyFi/createMarket/CreateMarketFlow'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex min-h-screen items-center justify-center bg-white dark:bg-futarchyDarkGray2">
-        <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-futarchyLavender" />
-      </div>
-    ),
-  }
-);
+// Static import (not next/dynamic ssr:false): with output:'export' the dynamic
+// chunk 404'd, leaving /markets/new an empty shell in production (PR #81).
+// CreateMarketFlow renders its static planner during SSG and mounts the
+// wallet-connected panels client-side behind a mounted guard.
+import CreateMarketFlow from '../../../components/futarchyFi/createMarket/CreateMarketFlow';
 
 export default function NewMarketPage() {
   return <CreateMarketFlow />;
