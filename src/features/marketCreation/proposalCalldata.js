@@ -7,6 +7,7 @@ export const FUTARCHY_FACTORY_ABI = [
   'function createProposal((string,address,address,string,string,uint256,uint32)) returns (address)',
   'function proposals(uint256) view returns (address)',
   'function marketsCount() view returns (uint256)',
+  'event NewProposal(address indexed proposal, string marketName, bytes32 conditionId, bytes32 questionId)',
 ];
 
 /**

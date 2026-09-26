@@ -4,6 +4,7 @@ import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClien
 import { CHAIN_CONFIG, getExplorerTxUrl, getExplorerAddressUrl } from '../constants/chainConfig';
 import { getEthersSigner } from '../../../utils/ethersAdapters';
 import { FUTARCHY_FACTORY_ABI, buildProposalParams } from '../../../features/marketCreation/proposalCalldata';
+import { findCreatedProposalAddress } from '../../../features/marketCreation/receiptEvents';
 import { getRpcUrls } from '../../../utils/getRpcUrl';
 
 // ethers v5 error codes that mean the RPC transport failed (try the next
@@ -199,43 +200,20 @@ export const useCreateProposal = () => {
             const receipt = await tx.wait();
             console.log('Transaction confirmed:', receipt);
 
-            // Get new proposal address
-            let newProposalAddress = null;
-
-            // Try to parse event logs first
-            try {
-                const iface = new ethers.utils.Interface([
-                    'event ProposalCreated(address indexed proposal, string marketName)'
-                ]);
-                for (const log of receipt.logs) {
-                    try {
-                        const parsed = iface.parseLog({ topics: log.topics, data: log.data });
-                        if (parsed && parsed.name === 'ProposalCreated') {
-                            newProposalAddress = parsed.args[0];
-                            break;
-                        }
-                    } catch { }
-                }
-            } catch { }
-
-            // Fallback: get from marketsCount
-            if (!newProposalAddress) {
-                try {
-                    const count = await factory.marketsCount();
-                    if (count.gt(0)) {
-                        newProposalAddress = await factory.proposals(count.sub(1));
-                    }
-                } catch (e) {
-                    console.error('Failed to get proposal address:', e);
-                }
-            }
+            // The factory's NewProposal event is the only deterministic result
+            // for this transaction. Never use the latest global proposal entry:
+            // another transaction may have landed before this receipt is read.
+            const newProposalAddress = findCreatedProposalAddress(
+                receipt.logs,
+                chainConfig.factoryAddress,
+            );
 
             setProposalAddress(newProposalAddress);
             setStatus({
-                type: 'success',
+                type: newProposalAddress ? 'success' : 'error',
                 message: newProposalAddress
                     ? `✅ Proposal created successfully!`
-                    : '✅ Transaction confirmed! Check explorer for proposal address.'
+                    : 'Transaction confirmed, but the factory NewProposal event was missing; cannot safely continue.'
             });
 
             return {
