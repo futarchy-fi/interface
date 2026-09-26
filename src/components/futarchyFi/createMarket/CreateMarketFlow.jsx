@@ -1,11 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import {
   buildOneStepMarketPlan,
-  buildPermissionlessStackPlan,
   createMarketWizardDefaults,
   KNOWN_ORGANIZATIONS,
+  GNOSIS_CHAIN_ID,
 } from '../../../features/marketCreation/marketCreationWorkflow';
+import { validateMetadata } from '../../../features/marketCreation/validateMetadata';
+import { evaluateFloor, ZERO_TRADE_NOTICE, FLOOR_TRADE_USD, FLOOR_MAX_IMPACT } from '../../../features/marketCreation/liquidityFloor';
+import useCreateProposal from '../../debug/hooks/useCreateProposal';
 import RootLayout from '../../layout/RootLayout';
 import PageLayout from '../../layout/PageLayout';
 
@@ -83,7 +87,171 @@ function MetadataPreview({ metadata }) {
   );
 }
 
+const badge = (ok) => ok
+  ? 'text-emerald-600 dark:text-emerald-400'
+  : 'text-amber-600 dark:text-amber-400';
+
+// R1 floor gate + metadata validation + R3 honesty. Pre-creation, the floor is
+// evaluated against the planned bootstrap seed (the honest lower bound): a
+// pinhead seed correctly reads as DRAFT, which is the whole point — a wizard
+// that mints dead markets would be worse than no wizard.
+function ReadinessPanel({ metadataDraft, companyTokenAddress, bootstrap }) {
+  const validation = useMemo(
+    () => validateMetadata(metadataDraft, { companyTokenAddress }),
+    [metadataDraft, companyTokenAddress]
+  );
+  // Treat the currency seed (~sDAI ≈ $1) as the input reserve; company seed as output.
+  const floor = useMemo(() => evaluateFloor({
+    reserveInTokens: Number(bootstrap?.currencyToken || 0),
+    reserveOutTokens: Number(bootstrap?.companyToken || 0),
+    inputUsdPrice: 1,
+  }), [bootstrap]);
+
+  return (
+    <section className={`${panelClass} p-4`}>
+      <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Readiness gate</h2>
+      <p className="mt-1 text-sm text-futarchyGray11">
+        A market goes live only when its metadata is valid and a ${FLOOR_TRADE_USD} trade moves
+        price under {(FLOOR_MAX_IMPACT * 100)}%. Below the floor it stays a draft.
+      </p>
+
+      <div className="mt-4 rounded-md border border-futarchyGray6 dark:border-futarchyGray7 p-3">
+        <div className="flex items-center justify-between">
+          <span className={labelClass}>Liquidity floor</span>
+          <span className={`text-sm font-semibold ${badge(floor.passes)}`}>
+            {floor.state}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-futarchyGray10">{floor.reason} (from the planned seed).</p>
+      </div>
+
+      <div className="mt-3 rounded-md border border-futarchyGray6 dark:border-futarchyGray7 p-3">
+        <div className="flex items-center justify-between">
+          <span className={labelClass}>Metadata</span>
+          <span className={`text-sm font-semibold ${badge(validation.ok)}`}>
+            {validation.ok ? 'Valid' : `${validation.errors.length} issue${validation.errors.length === 1 ? '' : 's'}`}
+          </span>
+        </div>
+        {validation.errors.map((e, i) => (
+          <p key={i} className="mt-1 text-xs text-amber-600 dark:text-amber-400">• {e}</p>
+        ))}
+        {validation.warnings.map((w, i) => (
+          <p key={i} className="mt-1 text-xs text-futarchyGray10">• {w}</p>
+        ))}
+      </div>
+
+      <p className="mt-3 text-xs text-futarchyGray9 italic">{ZERO_TRADE_NOTICE}</p>
+    </section>
+  );
+}
+
+// Real, wallet-connected proposal creation. Simulate-first (no broadcast) so the
+// flow is demoable end-to-end without minting a market; Broadcast sends the tx.
+function ExecutePanel({ form, organization }) {
+  const { isConnected, isSubmitting, status, transactionHash, proposalAddress, createProposal } = useCreateProposal();
+  const [mode, setMode] = useState('simulate');
+  const [simResult, setSimResult] = useState(null);
+
+  const formData = {
+    chainId: GNOSIS_CHAIN_ID,
+    marketName: form.proposalCode,
+    companyToken: organization.companyToken.address,
+    currencyToken: organization.currencyToken.address,
+    category: 'crypto',
+    language: 'en',
+    minBond: form.minBondWei,
+    openingTime: new Date((Number(form.closeTimestamp) + 48 * 3600) * 1000).toISOString().slice(0, 16),
+  };
+
+  const onRun = async () => {
+    setSimResult(null);
+    if (mode === 'broadcast') {
+      await createProposal(formData);
+      return;
+    }
+    // Simulate: static-call the factory, no broadcast.
+    try {
+      const { ethers } = await import('ethers');
+      const { CHAIN_CONFIG } = await import('../../debug/constants/chainConfig');
+      const cfg = CHAIN_CONFIG[GNOSIS_CHAIN_ID];
+      const provider = new ethers.providers.JsonRpcProvider(
+        process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com'
+      );
+      const abi = ['function createProposal((string,address,address,string,string,uint256,uint32)) returns (address)'];
+      const factory = new ethers.Contract(cfg.factoryAddress, abi, provider);
+      const openingUnix = Math.floor(new Date(formData.openingTime).getTime() / 1000);
+      const params = [formData.marketName, formData.companyToken, formData.currencyToken,
+        formData.category, formData.language, formData.minBond, openingUnix];
+      const predicted = await factory.callStatic.createProposal(params, {
+        from: '0x000000000000000000000000000000000000dEaD',
+      });
+      setSimResult({ ok: true, msg: `Would succeed — new proposal ${predicted}` });
+    } catch (e) {
+      setSimResult({ ok: false, msg: e.reason || e.shortMessage || e.message });
+    }
+  };
+
+  return (
+    <section className={`${panelClass} p-4`}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Create proposal</h2>
+        <ConnectButton showBalance={false} chainStatus="icon" accountStatus="address" />
+      </div>
+      <p className="mt-1 text-sm text-futarchyGray11">
+        The permissionless, proven first step. Simulate runs a static call against Gnosis with no
+        broadcast; Broadcast sends the real transaction from your wallet. Pools, liquidity manager,
+        Snapshot, and arbitrage follow as the staged plan below.
+      </p>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-md border border-futarchyGray6 dark:border-futarchyGray7 p-0.5">
+          {['simulate', 'broadcast'].map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-3 py-1.5 text-sm rounded ${mode === m
+                ? 'bg-futarchyBlue9 text-white'
+                : 'text-futarchyGray11'}`}
+            >
+              {m === 'simulate' ? 'Simulate' : 'Sign & broadcast'}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onRun}
+          disabled={isSubmitting || (mode === 'broadcast' && !isConnected)}
+          className="inline-flex h-9 items-center rounded-md bg-futarchyBlue9 px-4 text-sm font-medium text-white disabled:opacity-50"
+        >
+          {isSubmitting ? 'Working…' : mode === 'simulate' ? 'Simulate createProposal' : 'Create proposal'}
+        </button>
+        {mode === 'broadcast' && !isConnected && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">Connect a wallet to broadcast.</span>
+        )}
+      </div>
+
+      {simResult && (
+        <p className={`mt-3 text-sm ${simResult.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+          {simResult.msg}
+        </p>
+      )}
+      {status && (
+        <p className="mt-3 text-sm text-futarchyGray11">{status.message}</p>
+      )}
+      {transactionHash && (
+        <p className="mt-1 text-xs font-mono text-futarchyBlue9 break-all">tx: {transactionHash}</p>
+      )}
+      {proposalAddress && (
+        <p className="mt-1 text-xs font-mono text-emerald-600 dark:text-emerald-400 break-all">proposal: {proposalAddress}</p>
+      )}
+    </section>
+  );
+}
+
 export default function CreateMarketFlow() {
+  // Wallet-connected panels use wagmi hooks that must not run during static
+  // export — render them only after client mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [organizationId, setOrganizationId] = useState('kleros');
   const defaults = useMemo(
     () => createMarketWizardDefaults({ organizationId }),
@@ -93,7 +261,6 @@ export default function CreateMarketFlow() {
 
   const selectedOrganization = KNOWN_ORGANIZATIONS[organizationId];
   const marketPlan = useMemo(() => buildOneStepMarketPlan({ ...form, organizationId }), [form, organizationId]);
-  const permissionlessPlan = useMemo(() => buildPermissionlessStackPlan(), []);
 
   const updateOrganization = (nextOrganizationId) => {
     setOrganizationId(nextOrganizationId);
@@ -135,20 +302,21 @@ export default function CreateMarketFlow() {
             </Link>
           </div>
 
-          <section className={`${panelClass} mb-6`}>
-            <div className="border-b border-futarchyGray6 px-4 py-3 dark:border-futarchyGray7">
-              <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Permissionless Chiado Stack</h2>
-              <p className="mt-1 text-sm text-futarchyGray11">
-                This is the target testnet lifecycle: any wallet creates an organization, it is listed
-                automatically, and the organization receives a default liquidity manager for proposal liquidity.
-              </p>
-            </div>
-            <StageList stages={permissionlessPlan.stages} />
-            <div className="border-t border-futarchyGray6 px-4 py-3 dark:border-futarchyGray7">
-              <h3 className="text-sm font-semibold text-futarchyGray12 dark:text-white">Contract Actions</h3>
-            </div>
-            <ActionList actions={permissionlessPlan.contractActions} />
-          </section>
+          <div className="grid gap-6 lg:grid-cols-2 mb-6">
+            {mounted ? (
+              <ExecutePanel form={form} organization={selectedOrganization} />
+            ) : (
+              <section className={`${panelClass} p-4`}>
+                <h2 className="text-lg font-semibold text-futarchyGray12 dark:text-white">Create proposal</h2>
+                <p className="mt-1 text-sm text-futarchyGray11">Loading wallet…</p>
+              </section>
+            )}
+            <ReadinessPanel
+              metadataDraft={marketPlan.metadataDraft}
+              companyTokenAddress={selectedOrganization.companyToken.address}
+              bootstrap={form.initialLiquidityBudget}
+            />
+          </div>
 
           <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
             <section className={`${panelClass} p-4`}>
