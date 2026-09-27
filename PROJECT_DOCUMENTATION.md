@@ -666,7 +666,7 @@ await updateBalances()  // Manual refresh
 
 **Documentation:**
 - README.md - Futarchy system overview
-- CLAUDE.md - Development guidelines
+- AGENTS.md - Development guidelines
 - Individual component documentation
 
 **Logs:**
@@ -693,7 +693,7 @@ await updateBalances()  // Manual refresh
 ### Documentation Files
 
 - `README.md` - Main documentation
-- `CLAUDE.md` - AI assistant guidelines
+- `AGENTS.md` - AI assistant guidelines
 - `LIQUIDITY_DOCUMENTATION.md` - Pool management guide
 - `API_TOKEN_MAPPING_GUIDE.md` - Token configuration
 - `SWAP_COMPARISON.md` - DEX comparison

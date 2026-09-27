@@ -142,7 +142,7 @@ test('rpc — getRpcUrl and providers Gnosis lists overlap by at least 3 URLs', 
 
 // ---------------------------------------------------------------------------
 // Pinned: the canonical drpc.org endpoint is in EVERY Gnosis list
-// (drpc is the user's primary per CLAUDE.md "first in priority")
+// (drpc is the user's primary per AGENTS.md "first in priority")
 // ---------------------------------------------------------------------------
 
 test('rpc — gnosis.drpc.org is in both Gnosis RPC lists', () => {
