@@ -65,9 +65,16 @@ import { UNISWAP_V3_POOL_ABI } from "./constants/contracts";
 // Subgraph pool fetcher instance for latest prices
 const subgraphPoolFetcher = createSubgraphPoolFetcher();
 
-const GNOSIS_DEFAULT_RPC = process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com';
+const TWAP_RPC_BY_CHAIN = {
+  1: process.env.NEXT_PUBLIC_ETHEREUM_RPC || 'https://ethereum-rpc.publicnode.com',
+  100: process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com'
+};
 const ALGEBRA_TWAP_ABI = [
   "function getTimepoints(uint32[] secondsAgos) external view returns (int56[] tickCumulatives, uint160[] secondsPerLiquidityCumulatives, uint112[] volatilityCumulatives, uint256[] volumePerAvgLiquiditys)",
+  "function token0() external view returns (address)"
+];
+const UNISWAP_V3_TWAP_ABI = [
+  "function observe(uint32[] secondsAgos) external view returns (int56[] tickCumulatives, uint160[] secondsPerLiquidityCumulativeX128s)",
   "function token0() external view returns (address)"
 ];
 const DEFAULT_TWAP_DESCRIPTION = "The Futarchy Test is considered passed if the time-weighted average price (TWAP) of the \u201cpass\u201d (yes) outcome over the final 24 hours of the Issuance KIP\u2019s voting period is greater than or equal to that of the \u201cfail\u201d (no) outcome. If not, the proposal fails the futarchy test, regardless of the Kleros DAO vote result.";
@@ -500,6 +507,7 @@ const Spinner = () => (
 
 // TWAP Countdown Component
 const TwapCountdown = ({
+  chainId = 100,
   twapStartTimestamp,
   twapDurationHours = 24,
   twapDescription = DEFAULT_TWAP_DESCRIPTION,
@@ -529,10 +537,19 @@ const TwapCountdown = ({
 
   const ensureProvider = useCallback(() => {
     if (!providerRef.current) {
-      providerRef.current = new ethers.providers.JsonRpcProvider(GNOSIS_DEFAULT_RPC);
+      const rpcUrl = TWAP_RPC_BY_CHAIN[Number(chainId)];
+      if (!rpcUrl) {
+        throw new Error(`TWAP is not configured for chain ${chainId}`);
+      }
+      providerRef.current = new ethers.providers.JsonRpcProvider(rpcUrl);
     }
     return providerRef.current;
-  }, []);
+  }, [chainId]);
+
+  useEffect(() => {
+    providerRef.current = null;
+    poolToken0CacheRef.current = {};
+  }, [chainId]);
 
   const fetchPoolTwap = useCallback(async (poolConfig, secondsAgoStart, shouldInvert = null, secondsAgoEnd = 0, companyTokenAddress = null) => {
     if (!poolConfig?.address) {
@@ -542,8 +559,12 @@ const TwapCountdown = ({
     const aEnd = Math.max(0, Math.floor(secondsAgoEnd));
     const secondsWindow = Math.max(1, aStart - aEnd);
     const provider = ensureProvider();
-    const poolContract = new ethers.Contract(poolConfig.address, ALGEBRA_TWAP_ABI, provider);
-    const { tickCumulatives } = await poolContract.getTimepoints([aStart, aEnd]);
+    const numericChainId = Number(chainId);
+    const poolAbi = numericChainId === 1 ? UNISWAP_V3_TWAP_ABI : ALGEBRA_TWAP_ABI;
+    const poolContract = new ethers.Contract(poolConfig.address, poolAbi, provider);
+    const { tickCumulatives } = numericChainId === 1
+      ? await poolContract.observe([aStart, aEnd])
+      : await poolContract.getTimepoints([aStart, aEnd]);
     const oldest = BigInt(tickCumulatives[0].toString());
     const latest = BigInt(tickCumulatives[1].toString());
     const tickDelta = latest - oldest;
@@ -602,7 +623,7 @@ const TwapCountdown = ({
 
     const normalizedPrice = useInversion ? 1 / rawPrice : rawPrice;
     return normalizedPrice;
-  }, [ensureProvider]);
+  }, [chainId, ensureProvider]);
 
   useEffect(() => {
     const calculateTimeRemaining = () => {
@@ -5105,6 +5126,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
             {/* TWAP Countdown Widget - always visible */}
             {!marketData.isLoading && config?.marketInfo?.twapStartTimestamp && (
               <TwapCountdown
+                chainId={config.chainId || 100}
                 twapStartTimestamp={config.marketInfo.twapStartTimestamp}
                 twapDurationHours={config.marketInfo.twapDurationHours || 24}
                 twapDescription={config.marketInfo.twapDescription || DEFAULT_TWAP_DESCRIPTION}
