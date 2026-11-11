@@ -155,7 +155,15 @@ class PoolManager {
     let sqrtPriceX96;
     if (logicalPrice && Number(logicalPrice) > 0) {
       // AMM price is token1 per token0 in AMM order; convert from logical price if needed
-      const ammPrice = needsReorder ? (1 / Number(logicalPrice)) : Number(logicalPrice);
+      // logicalPrice is in human units (token1 per token0, logical order). The pool price is in raw
+      // units, so scale by the decimals difference: raw = human * 10^(dec1 - dec0).
+      const [logical0Info, logical1Info] = await Promise.all([
+        this.tokenManager.loadToken(token0Address),
+        this.tokenManager.loadToken(token1Address)
+      ]);
+      const decimalsShift = Number(logical1Info.decimals) - Number(logical0Info.decimals);
+      const rawLogicalPrice = Number(logicalPrice) * (10 ** decimalsShift);
+      const ammPrice = needsReorder ? (1 / rawLogicalPrice) : rawLogicalPrice;
       // sqrtPriceX96 = sqrt(ammPrice) * 2^96
       const sqrtRatio = Math.sqrt(ammPrice);
       sqrtPriceX96 = BigInt(Math.floor(sqrtRatio * (2 ** 96)));
@@ -209,7 +217,7 @@ class PoolManager {
     // EIP-1559 fee with chain-appropriate minimums
     const feeData = await this.wallet.provider.getFeeData().catch(() => ({}));
     const chainId = (await this.wallet.provider.getNetwork()).chainId;
-    const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : '2');
+    const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : (chainId === 4663n ? '0.01' : '2'));
     const minTip = ethers.parseUnits(minTipGwei, 'gwei');
     let maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? minTip;
     if (maxPriorityFeePerGas < minTip) maxPriorityFeePerGas = minTip;
@@ -235,7 +243,7 @@ class PoolManager {
     const maxAffordableTotal = ethBalance * 95n / 100n; // Use 95% of balance, leave 5% buffer
     const maxAffordableGasPrice = maxAffordableTotal / createGasLimit;
 
-    console.log(`  ⛽ Gas limit: ${createGasLimit} (needs ${gasNeeded} + 10% margin)`);
+    console.log(`  ⛽ Gas limit: ${createGasLimit}`);
     console.log(`  ⛽ Network gas prices (with 10% boost): Base ${ethers.formatUnits(baseFee, 'gwei')} Gwei, Priority ${ethers.formatUnits(maxPriorityFeePerGas, 'gwei')} Gwei, Max ${ethers.formatUnits(maxFeePerGas, 'gwei')} Gwei`);
     console.log(`  ⛽ Max affordable gas price: ${ethers.formatUnits(maxAffordableGasPrice, 'gwei')} Gwei`);
 
@@ -568,7 +576,7 @@ class PoolManager {
     // EIP-1559 fee data with chain-appropriate minimums
     const feeData = await this.wallet.provider.getFeeData().catch(() => ({}));
     const chainId = (await this.wallet.provider.getNetwork()).chainId;
-    const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : '2');
+    const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : (chainId === 4663n ? '0.01' : '2'));
     const minTip = ethers.parseUnits(minTipGwei, 'gwei');
     let maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? minTip;
     if (maxPriorityFeePerGas < minTip) maxPriorityFeePerGas = minTip;

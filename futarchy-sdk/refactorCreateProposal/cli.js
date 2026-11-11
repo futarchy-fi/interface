@@ -174,6 +174,8 @@ class FutarchyCLI {
       category: config.category, // Use category from config if provided
       language: config.language  // Use language from config if provided
     };
+    // Reality.eth minimum bond in wei of the chain's native token (default 1e18 from chains.config.json)
+    if (config.minBond !== undefined && config.minBond !== null) proposalConfig.minBond = config.minBond;
 
     const result = await this.proposalCreator.createProposal(proposalConfig);
     

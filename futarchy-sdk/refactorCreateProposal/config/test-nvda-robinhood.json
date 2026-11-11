@@ -1,0 +1,22 @@
+{
+  "chainId": 4663,
+  "amm": "uniswap",
+  "marketName": "TEST MARKET, please ignore: plumbing test of the futarchy stack on Robinhood Chain (NVDA/USDG). Not a real question; resolves No.",
+  "description": "Plumbing test. Not a real question.",
+  "openingTime": 1794526773,
+  "minBond": "100000000000000",
+  "display_text_1": "TEST MARKET: plumbing test",
+  "display_text_2": "on Robinhood Chain (ignore)",
+  "companyToken": {"symbol": "NVDA", "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"},
+  "currencyToken": {"symbol": "USDG", "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"},
+  "spotPrice": 160.9,
+  "eventProbability": 0.5,
+  "impact": -5,
+  "liquidityAmounts": [1, 1, 1, 1, 1, 1],
+  "forceAddLiquidity": [],
+  "adapterAddress": "0x7834bb7f4724393043701b2a944feae0496e00ad",
+  "companyId": "0",
+  "feeTier": 500,
+  "category": "governance",
+  "language": "en"
+}

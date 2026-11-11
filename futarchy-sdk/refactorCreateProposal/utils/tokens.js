@@ -78,7 +78,7 @@ class TokenManager {
         // Use lower minimums for Ethereum (chainId 1), higher for Polygon (chainId 137)
         const chainId = (await this.provider.getNetwork()).chainId;
         // Ultra-low for Ethereum when gas is cheap, normal for Polygon
-        const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : '2');
+        const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : (chainId === 4663n ? '0.01' : '2'));
         const minTip = ethers.parseUnits(minTipGwei, 'gwei');
         let maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? minTip;
         if (maxPriorityFeePerGas < minTip) maxPriorityFeePerGas = minTip;

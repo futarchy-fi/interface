@@ -101,14 +101,28 @@ class LiquidityOrchestrator {
     console.log(`  NO Price: ${conditionalPrices.noPriceFormatted}`);
     console.log('─'.repeat(40));
 
-    // Calculate pool configurations (default 18 decimals for both tokens)
+    // Calculate pool configurations with the real decimals of each token. Outcome tokens are read
+    // on-chain too: some factories give them 18 decimals, others the collateral's decimals.
+    const [companyInfo, currencyInfo, yesCurrencyInfo] = await Promise.all([
+      this.tokenManager.loadToken(companyToken.address),
+      this.tokenManager.loadToken(currencyToken.address),
+      this.tokenManager.loadToken(proposal.yesCurrencyToken)
+    ]);
+    const companyTokenDecimals = Number(companyInfo.decimals);
+    const currencyTokenDecimals = Number(currencyInfo.decimals);
+    const conditionalDecimalsFollowCollateral = Number(yesCurrencyInfo.decimals) === currencyTokenDecimals && currencyTokenDecimals !== 18;
+    if (!conditionalDecimalsFollowCollateral && (companyTokenDecimals !== 18 || currencyTokenDecimals !== 18)) {
+      throw new Error(`Outcome tokens have 18 decimals but collateral has ${companyTokenDecimals}/${currencyTokenDecimals}: amounts and pool prices would be mis-scaled. Use a factory that gives outcome tokens the collateral's decimals.`);
+    }
+    console.log(`Decimals: company ${companyTokenDecimals}, currency ${currencyTokenDecimals}, outcome tokens follow collateral: ${conditionalDecimalsFollowCollateral}`);
     const poolConfigs = this.priceCalculator.calculatePoolConfigurations({
       spotPrice,
       eventProbability,
       impactPercentage: impact,
       liquidityAmounts,
-      companyTokenDecimals: 18,
-      currencyTokenDecimals: 18
+      companyTokenDecimals,
+      currencyTokenDecimals,
+      conditionalDecimalsFollowCollateral
     });
 
     // Capture global fee tier once to avoid shadowing inside loop
@@ -133,8 +147,8 @@ class LiquidityOrchestrator {
       console.log(`  Price: 1 ${config.token0} = ${config.targetPrice.toFixed(6)} ${config.token1}`);
       console.log(`  Liquidity (${config.token1}): ${config.liquidity}`);
       console.log(`  Required amounts:`);
-      console.log(`    ${config.token0}: ${ethers.formatEther(config.amount0Wei)}`);
-      console.log(`    ${config.token1}: ${ethers.formatEther(config.amount1Wei)}`);
+      console.log(`    ${config.token0}: ${ethers.formatUnits(config.amount0Wei, config.decimals0)}`);
+      console.log(`    ${config.token1}: ${ethers.formatUnits(config.amount1Wei, config.decimals1)}`);
     }
     console.log('='.repeat(60));
 
