@@ -64,6 +64,14 @@ test('subgraphEndpoints — both chain endpoints point to api.futarchy.fi (pinne
     assert.equal(m100[1], 'https://api.futarchy.fi/candles/graphql');
 });
 
+test('subgraphEndpoints — Robinhood Chain (4663) routes to the candles service with an explicit chainId', () => {
+    // Chain 4663 markets (Uniswap V3 on Robinhood Chain) are selected explicitly,
+    // like chain 1; dropping this entry makes the market page fall back to Gnosis.
+    const m = SRC.match(/\b4663\s*:\s*['"]([^'"]+)['"]/);
+    assert.ok(m, 'SUBGRAPH_ENDPOINTS missing chain id "4663" entry');
+    assert.equal(m[1], 'https://api.futarchy.fi/candles/graphql?chainId=4663');
+});
+
 // ---------------------------------------------------------------------------
 // POOL_TYPES + OUTCOME_SIDES — frozen enums
 // ---------------------------------------------------------------------------

@@ -3,6 +3,23 @@ import { ethers } from 'ethers';
 export const UNISWAP_V3_QUOTER_V2 = '0x61fFE014bA17989E743c5F6cB21bF9697530B21e';
 export const UNISWAP_V3_FACTORY = '0x1F98431c8aD98523631AE4a59f267346ea31F984';
 
+// Per-chain Uniswap V3 deployments. Kept in this file (mirrors
+// src/config/chains.js) because node scripts import this module directly.
+// Robinhood Chain (4663) does NOT use the canonical addresses.
+export const UNISWAP_V3_DEPLOYMENTS = {
+  1: { factory: UNISWAP_V3_FACTORY, quoterV2: UNISWAP_V3_QUOTER_V2 },
+  4663: {
+    factory: '0x1f7d7550B1b028f7571E69A784071F0205FD2EfA',
+    quoterV2: '0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7'
+  }
+};
+
+export function getUniswapV3Deployment(chainId = 1) {
+  const deployment = UNISWAP_V3_DEPLOYMENTS[Number(chainId)];
+  if (!deployment) throw new Error(`Uniswap V3 is not configured for chain ${chainId}`);
+  return deployment;
+}
+
 const ERC20_ABI = ['function decimals() view returns (uint8)'];
 const FACTORY_ABI = ['function getPool(address tokenA, address tokenB, uint24 fee) view returns (address)'];
 const POOL_ABI = [
@@ -12,6 +29,16 @@ const POOL_ABI = [
 const QUOTER_V2_ABI = [
   'function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96) params) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)'
 ];
+
+// Drop fractional digits beyond the token's decimals so parseUnits does not
+// throw on over-precise input (e.g. "10.1234567" for a 6-decimal token).
+export const truncateAmountToDecimals = (amount, decimals) => {
+  const str = String(amount).trim();
+  if (!str.includes('.') || /e/i.test(str)) return str;
+  const [whole, frac = ''] = str.split('.');
+  const d = Number(decimals);
+  return d > 0 ? `${whole || '0'}.${frac.slice(0, d)}` : (whole || '0');
+};
 
 const token1PerToken0 = (sqrtPriceX96, decimals0, decimals1) => {
   const sqrtRatio = Number(sqrtPriceX96.toString()) / (2 ** 96);
@@ -25,7 +52,8 @@ export async function quoteUniswapV3ExactInput({
   amountIn,
   fee = 500,
   slippageBps = 50,
-  blockTag
+  blockTag,
+  chainId = 1
 }) {
   if (!provider) throw new Error('Provider is required');
   if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps >= 10000) {
@@ -33,7 +61,8 @@ export async function quoteUniswapV3ExactInput({
   }
 
   const callOverrides = blockTag == null ? {} : { blockTag };
-  const factory = new ethers.Contract(UNISWAP_V3_FACTORY, FACTORY_ABI, provider);
+  const deployment = getUniswapV3Deployment(chainId);
+  const factory = new ethers.Contract(deployment.factory, FACTORY_ABI, provider);
   const poolAddress = await factory.getPool(tokenIn, tokenOut, fee, callOverrides);
   if (poolAddress === ethers.constants.AddressZero) {
     throw new Error(`No Uniswap V3 ${fee} pool for this token pair`);
@@ -48,10 +77,10 @@ export async function quoteUniswapV3ExactInput({
     pool.token0(callOverrides),
     pool.slot0(callOverrides)
   ]);
-  const amountInRaw = ethers.utils.parseUnits(amountIn.toString(), decimalsIn);
+  const amountInRaw = ethers.utils.parseUnits(truncateAmountToDecimals(amountIn, decimalsIn), decimalsIn);
   if (amountInRaw.isZero()) throw new Error('Amount in must be greater than zero');
 
-  const quoter = new ethers.Contract(UNISWAP_V3_QUOTER_V2, QUOTER_V2_ABI, provider);
+  const quoter = new ethers.Contract(deployment.quoterV2, QUOTER_V2_ABI, provider);
   const result = await quoter.callStatic.quoteExactInputSingle({
     tokenIn,
     tokenOut,

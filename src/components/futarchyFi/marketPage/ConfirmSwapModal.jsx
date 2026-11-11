@@ -54,6 +54,8 @@ import { getEthersSigner, getEthersProvider, isSafeWallet } from '../../../utils
 import { waitForSafeTxReceipt } from '../../../utils/waitForSafeTxReceipt';
 import { useSubgraphRefresh } from '../../../contexts/SubgraphRefreshContext';
 import { approvalAmountFor } from '../../../utils/approvalAmount';
+import { toSdkAmount, parseTokenAmount, normalizeDecimals } from '../../../utils/tokenDecimals';
+import { isUniswapChain, getUniswapAddresses, getExplorerUrl, getChainInfo } from '../../../config/chains';
 
 // Define ERC20 ABI in viem-compatible format
 const ERC20_ABI_VIEM = [
@@ -650,8 +652,8 @@ const ConfirmSwapModal = memo(({
 
     // Effect to update swap method when chain changes
     useEffect(() => {
-        if (chain?.id === 1) {
-            // Force UniswapSDK on Ethereum mainnet
+        if (isUniswapChain(chain?.id)) {
+            // Force UniswapSDK on Uniswap V3 chains (Ethereum mainnet, Robinhood Chain)
             setSelectedSwapMethod('uniswapSdk');
         } else if (selectedSwapMethod === 'uniswapSdk' || selectedSwapMethod === 'uniswap') {
             // If switching away from Ethereum and using Uniswap, switch to Algebra
@@ -659,9 +661,19 @@ const ConfirmSwapModal = memo(({
         }
     }, [chain?.id, selectedSwapMethod]);
 
+    // Point the "View on explorer" link at the connected chain's explorer
+    // (Etherscan / Blockscout) instead of the GnosisScan default.
+    useEffect(() => {
+        const info = getChainInfo(chain?.id);
+        if (info && chain?.id !== 100) {
+            setUiExplorerUrl(`${info.explorer}/tx/`);
+            setUiExplorerName(info.explorerName || 'Explorer');
+        }
+    }, [chain?.id]);
+
     // Effect to save the selected swap method to localStorage
     useEffect(() => {
-        if (typeof window !== 'undefined' && selectedSwapMethod && chain?.id !== 1) {
+        if (typeof window !== 'undefined' && selectedSwapMethod && !isUniswapChain(chain?.id)) {
             // Only save preference for non-Ethereum chains
             localStorage.setItem('lastSwapMethod', selectedSwapMethod);
         }
@@ -982,7 +994,15 @@ const ConfirmSwapModal = memo(({
     };
 
     // Add this helper function after the DEFAULT_PRECISION definition
-    const safeParseToWei = (value) => {
+    // Decimals of the token being sold: Sell spends company-side tokens; Buy /
+    // Redeem / Recover spend currency-side tokens. Outcome tokens share their
+    // collateral's decimals (18 on Gnosis/Ethereum, 6 for USDG on Robinhood Chain).
+    const inputDecimalsForAction = (action) => {
+        const baseCfg = config?.BASE_TOKENS_CONFIG || BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG;
+        return normalizeDecimals(action === 'Sell' ? baseCfg?.company?.decimals : baseCfg?.currency?.decimals);
+    };
+
+    const safeParseToWei = (value, decimals = 18) => {
         console.log('=== safeParseToWei Input ===', {
             value,
             type: typeof value
@@ -998,11 +1018,13 @@ const ConfirmSwapModal = memo(({
             const decimalValue = new Decimal(value);
             console.log('Decimal value:', decimalValue.toString());
 
-            const weiValue = decimalValue.times(new Decimal(10).pow(18));
+            const tokenDecimals = normalizeDecimals(decimals);
+            const weiValue = decimalValue.times(new Decimal(10).pow(tokenDecimals));
             console.log('Wei value:', weiValue.toString());
 
-            // Convert to string and remove any decimal part (shouldn't have any, but just in case)
-            const weiString = weiValue.toFixed(0);
+            // Convert to string and remove any decimal part (shouldn't have any, but just in case).
+            // Non-18-decimal tokens (e.g. 6-decimal USDG) truncate so we never round above the balance.
+            const weiString = tokenDecimals === 18 ? weiValue.toFixed(0) : weiValue.toFixed(0, Decimal.ROUND_DOWN);
             console.log('Wei string:', weiString);
 
             // Convert to BigNumber for compatibility with ethers
@@ -1257,7 +1279,8 @@ const ConfirmSwapModal = memo(({
                 const iterator = cartridge.completeSplit({
                     proposal: marketAddress,
                     collateralToken: baseToken.address,
-                    amount: amount.toString(), // Match CollateralModal exactly (relies on SDK parseEther)
+                    // 18-decimal tokens: string (SDK parseEther). Others (e.g. 6-decimal USDG): raw bigint.
+                    amount: toSdkAmount(amount, baseToken.decimals),
                     exactApproval: !useUnlimitedApproval,
                     useBlockExplorer
                 }, { publicClient, walletClient, account });
@@ -1550,16 +1573,16 @@ const ConfirmSwapModal = memo(({
             // This fixes the 2-wei precision issue that causes STF errors when swapping max balance
             const amountInWei = transactionData.amountInRaw
                 ? ethers.BigNumber.from(transactionData.amountInRaw)
-                : safeParseToWei(amount);
+                : safeParseToWei(amount, inputDecimalsForAction(transactionData.action));
             if (amountInWei.isZero()) throw new Error("Invalid amount");
 
             console.log('[DEBUG] Amount precision:', {
                 hasRawWei: !!transactionData.amountInRaw,
                 rawWei: transactionData.amountInRaw,
-                parsedWei: safeParseToWei(amount).toString(),
+                parsedWei: safeParseToWei(amount, inputDecimalsForAction(transactionData.action)).toString(),
                 usedWei: amountInWei.toString(),
                 difference: transactionData.amountInRaw ?
-                    ethers.BigNumber.from(transactionData.amountInRaw).sub(safeParseToWei(amount)).toString() : '0'
+                    ethers.BigNumber.from(transactionData.amountInRaw).sub(safeParseToWei(amount, inputDecimalsForAction(transactionData.action))).toString() : '0'
             });
 
             console.log('[DEBUG] Transaction data parsed:', {
@@ -1637,8 +1660,8 @@ const ConfirmSwapModal = memo(({
                     console.log('[ConfirmSwapModal] Initializing UniswapRouterCartridge');
                     cartridge = new UniswapRouterCartridge({
                         chainId: chain?.id || 1,
-                        routerAddress: UNISWAP_UNIVERSAL_ROUTER,
-                        permit2Address: PERMIT2_ADDRESS
+                        routerAddress: getUniswapAddresses(chain?.id)?.universalRouter || UNISWAP_UNIVERSAL_ROUTER,
+                        permit2Address: getUniswapAddresses(chain?.id)?.permit2 || PERMIT2_ADDRESS
                     });
 
                     const minAmountOut = minimumFromQuote(
@@ -2909,7 +2932,7 @@ const ConfirmSwapModal = memo(({
                 // Prefer raw wei value to avoid precision loss (same fix as handleConfirmSwapToggle)
                 const amountInWei = transactionData.amountInRaw
                     ? ethers.BigNumber.from(transactionData.amountInRaw)
-                    : safeParseToWei(amount);
+                    : safeParseToWei(amount, inputDecimalsForAction(transactionData.action));
                 if (amountInWei.isZero()) throw new Error("Invalid amount");
 
                 let tokenIn, tokenOut;
@@ -3092,8 +3115,12 @@ const ConfirmSwapModal = memo(({
                             shouldInvertPoolPrices = (tokenOut.toLowerCase() < tokenIn.toLowerCase());
                         }
 
-                        const currentPrice = shouldInvertPoolPrices ? (1 / rawCurrentPrice) : rawCurrentPrice;
-                        const poolPriceAfter = shouldInvertPoolPrices ? (1 / rawPoolPriceAfter) : rawPoolPriceAfter;
+                        // sqrtPriceX96 prices are in raw base units; scale to human units when the
+                        // two sides have different decimals (e.g. 18-decimal NVDA vs 6-decimal USDG).
+                        const priceBaseCfg = config?.BASE_TOKENS_CONFIG || BASE_TOKENS_CONFIG || DEFAULT_BASE_TOKENS_CONFIG;
+                        const priceDecimalsScale = 10 ** (normalizeDecimals(priceBaseCfg?.company?.decimals) - normalizeDecimals(priceBaseCfg?.currency?.decimals));
+                        const currentPrice = (shouldInvertPoolPrices ? (1 / rawCurrentPrice) : rawCurrentPrice) * priceDecimalsScale;
+                        const poolPriceAfter = (shouldInvertPoolPrices ? (1 / rawPoolPriceAfter) : rawPoolPriceAfter) * priceDecimalsScale;
 
                         // Execution price: rawExecutionPrice = output/input
                         // For Buy: output=company, input=currency → rawExecutionPrice = company/currency → INVERT
@@ -3622,7 +3649,7 @@ const ConfirmSwapModal = memo(({
                             <label className="block text-sm font-medium text-futarchyGray11 dark:text-futarchyGray112 mb-2">Swap Method:</label>
                             <div className="flex items-center space-x-4">
                                 {/* Only show UniswapSDK on Ethereum mainnet (chain 1) */}
-                                {chain?.id === 1 ? (
+                                {isUniswapChain(chain?.id) ? (
                                     <label className="flex items-center space-x-2 cursor-pointer">
                                         <input
                                             type="radio"
@@ -3907,7 +3934,7 @@ const ConfirmSwapModal = memo(({
                                                 ) : swapRouteData.data?.buyAmount ? (
                                                     <>
                                                         {(() => {
-                                                            const amountFormatted = ethers.utils.formatUnits(swapRouteData.data.buyAmount, 18);
+                                                            const amountFormatted = ethers.utils.formatUnits(swapRouteData.data.buyAmount, swapRouteData.data.decimalsOut ?? 18);
                                                             return formatTokenAmount(amountFormatted);
                                                         })()} {transactionData.receiveToken ||
                                                             (transactionData.action === 'Buy'
@@ -3938,7 +3965,7 @@ const ConfirmSwapModal = memo(({
                                                 ) : swapRouteData.data?.buyAmount ? (
                                                     <>
                                                         {(() => {
-                                                            const amountFormatted = ethers.utils.formatUnits(swapRouteData.data.buyAmount, 18);
+                                                            const amountFormatted = ethers.utils.formatUnits(swapRouteData.data.buyAmount, swapRouteData.data.decimalsOut ?? 18);
                                                             const minReceive = parseFloat(amountFormatted) * (1 - getSafeSlippageTolerance() / 100);
                                                             return formatTokenAmount(minReceive);
                                                         })()} {transactionData.receiveToken ||
@@ -4093,7 +4120,7 @@ const ConfirmSwapModal = memo(({
                                                 ) : swapRouteData.data?.buyAmount ? (
                                                     <>
                                                         {(() => {
-                                                            const amountFormatted = ethers.utils.formatUnits(swapRouteData.data.buyAmount, 18);
+                                                            const amountFormatted = ethers.utils.formatUnits(swapRouteData.data.buyAmount, swapRouteData.data.decimalsOut ?? 18);
                                                             return formatTokenAmount(amountFormatted);
                                                         })()} {transactionData.receiveToken ||
                                                             (transactionData.action === 'Buy'
@@ -4266,7 +4293,7 @@ const ConfirmSwapModal = memo(({
                                                 // For Uniswap SDK, use QuoterV2 result
                                                 let outputAmount;
                                                 if (selectedSwapMethod === 'uniswapSdk' && swapRouteData.data?.buyAmount) {
-                                                    outputAmount = parseFloat(ethers.utils.formatUnits(swapRouteData.data.buyAmount, 18));
+                                                    outputAmount = parseFloat(ethers.utils.formatUnits(swapRouteData.data.buyAmount, swapRouteData.data.decimalsOut ?? 18));
                                                 } else {
                                                     outputAmount = parseFloat(transactionData.expectedReceiveAmount);
                                                 }

@@ -5,6 +5,7 @@
 
 import { AGGREGATOR_SUBGRAPH_URL as REGISTRY_SUBGRAPH_URL } from '../config/subgraphEndpoints';
 
+import { isSupportedChain } from '../config/chains';
 // Default Aggregator address (Futarchy Finance production)
 const DEFAULT_AGGREGATOR = '0xc5eb43d53e2fe5fdde5faf400cc4167e5b5d4fc1';
 
@@ -94,7 +95,7 @@ export function extractChainFromMetadata(proposalEntity) {
         // Handle both number and string formats (100 or "100")
         const chainInt = typeof chain === 'string' ? parseInt(chain) : chain;
 
-        if (chainInt && (chainInt === 1 || chainInt === 100)) {
+        if (chainInt && isSupportedChain(chainInt)) {
             console.log('[Registry] Extracted chain from metadata:', chainInt);
             return chainInt;
         }

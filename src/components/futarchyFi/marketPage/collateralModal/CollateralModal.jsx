@@ -19,6 +19,7 @@ import { getEthersSigner, isSafeWallet } from "../../../../utils/ethersAdapters"
 import { waitForSafeTxReceipt } from "../../../../utils/waitForSafeTxReceipt";
 import { useSafeDetection } from "../../../../hooks/useSafeDetection";
 import { approvalAmountFor } from "../../../../utils/approvalAmount";
+import { toSdkAmount, parseTokenAmount, normalizeDecimals } from "../../../../utils/tokenDecimals";
 
 const toBN = (value) => ethers.BigNumber.from(value.toString());
 
@@ -408,6 +409,8 @@ const CollateralModal = ({
       case 42161: // Arbitrum
         return 'ETH';
       case 10: // Optimism
+        return 'ETH';
+      case 4663: // Robinhood Chain
         return 'ETH';
       default:
         return 'xDAI'; // Default fallback
@@ -1160,7 +1163,8 @@ const CollateralModal = ({
           const iterator = cartridge.completeSplit({
             proposal: marketAddress,
             collateralToken: baseToken.address,
-            amount: amount.toString(),
+            // 18-decimal tokens: string (SDK parseEther). Others (e.g. 6-decimal USDG): raw bigint.
+            amount: toSdkAmount(amount, baseToken.decimals),
             exactApproval: !useUnlimitedApproval,
             useBlockExplorer
           }, { publicClient, walletClient, account });
@@ -1211,7 +1215,7 @@ const CollateralModal = ({
           const iterator = cartridge.completeMerge({
             proposal: marketAddress,
             collateralToken: baseToken.address,
-            amount: amount.toString(),
+            amount: toSdkAmount(amount, baseToken.decimals),
             yesToken: yesTokenAddress,
             noToken: noTokenAddress,
             exactApproval: !useUnlimitedApproval,
@@ -1281,8 +1285,8 @@ const CollateralModal = ({
           ? baseTokensConfig.currency
           : baseTokensConfig.company;
 
-        // Convert amount to wei
-        const amountInWei = ethers.utils.parseUnits(amount.toString(), 18);
+        // Convert amount to base units using the token's own decimals
+        const amountInWei = parseTokenAmount(amount, baseToken.decimals);
 
         // Check base token balance using publicClient
         const balanceRaw = await publicClient.readContract({
@@ -1455,8 +1459,11 @@ const CollateralModal = ({
         setLocalProcessingStep("yesApproval");
         setCurrentSubstep({ step: 1, substep: 1 });
 
-        // Convert amount to wei
-        const amountInWei = ethers.utils.parseUnits(amount.toString(), 18);
+        // Convert amount to base units (outcome tokens share their collateral's decimals)
+        const removeTokenDecimals = normalizeDecimals(
+          (config?.BASE_TOKENS_CONFIG || BASE_TOKENS_CONFIG)?.[tokenType === "currency" ? "currency" : "company"]?.decimals
+        );
+        const amountInWei = parseTokenAmount(amount, removeTokenDecimals);
 
         // Get YES and NO token addresses from config MERGE_CONFIG
         const mergeConfig = config?.MERGE_CONFIG;
@@ -1525,15 +1532,15 @@ const CollateralModal = ({
 
         if (yesBalanceBN.lt(amountInWei) || noBalanceBN.lt(amountInWei)) {
           console.error('[CollateralModal] Insufficient balance detected:', {
-            yesBalance: ethers.utils.formatUnits(yesBalance, 18),
-            noBalance: ethers.utils.formatUnits(noBalance, 18),
+            yesBalance: ethers.utils.formatUnits(yesBalance, removeTokenDecimals),
+            noBalance: ethers.utils.formatUnits(noBalance, removeTokenDecimals),
             amountRequested: amount,
             shortfall: {
               yes: yesBalanceBN.lt(amountInWei)
-                ? ethers.utils.formatUnits(amountInWei.sub(yesBalanceBN), 18)
+                ? ethers.utils.formatUnits(amountInWei.sub(yesBalanceBN), removeTokenDecimals)
                 : '0',
               no: noBalanceBN.lt(amountInWei)
-                ? ethers.utils.formatUnits(amountInWei.sub(noBalanceBN), 18)
+                ? ethers.utils.formatUnits(amountInWei.sub(noBalanceBN), removeTokenDecimals)
                 : '0',
             }
           });

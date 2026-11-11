@@ -787,6 +787,9 @@ export function openTransactionInExplorer(txHash, config = null) {
       case 42161:
         explorerUrl = 'https://arbiscan.io/tx/';
         break;
+      case 4663:
+        explorerUrl = 'https://robinhoodchain.blockscout.com/tx/';
+        break;
       default:
         explorerUrl = 'https://gnosisscan.io/tx/'; // Default fallback
     }

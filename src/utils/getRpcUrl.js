@@ -16,6 +16,12 @@ const ETHEREUM_RPCS = [
   "https://rpc.ankr.com/eth",
 ];
 
+// Robinhood Chain (4663) RPC endpoints
+const ROBINHOOD_RPCS = [
+  "https://rpc.mainnet.chain.robinhood.com",
+  "https://robinhood-rpc.publicnode.com",
+];
+
 /**
  * Get RPC URLs based on chain ID
  * @param {number} chainId - Chain ID (1 for Ethereum, 100 for Gnosis)
@@ -27,6 +33,8 @@ export function getRpcUrls(chainId) {
       return ETHEREUM_RPCS;
     case 100:
       return GNOSIS_RPCS;
+    case 4663:
+      return ROBINHOOD_RPCS;
     default:
       // Default to Gnosis for futarchy contracts
       return GNOSIS_RPCS;

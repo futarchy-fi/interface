@@ -17,6 +17,7 @@ export const AGGREGATOR_SUBGRAPH_URL = 'https://api.futarchy.fi/registry/graphql
 export const SUBGRAPH_ENDPOINTS = {
     1:   'https://api.futarchy.fi/candles/graphql?chainId=1',
     100: 'https://api.futarchy.fi/candles/graphql',
+    4663: 'https://api.futarchy.fi/candles/graphql?chainId=4663',
 };
 
 // Default Aggregator Contract (same as futarchy-complete-sdk)

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { parseTokenAmount, normalizeDecimals } from "../../../../utils/tokenDecimals";
+import { getExplorerUrl } from "../../../../config/chains";
 import ReactDOM from "react-dom";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -572,8 +574,9 @@ const RedemptionModal = ({
     if (!routerAddress || !marketAddress) return null;
 
     try {
-      const currencyAmountInWei = ethers.utils.parseUnits(winningTokens.currencyAmount.toString(), 18);
-      const companyAmountInWei = ethers.utils.parseUnits(winningTokens.companyAmount.toString(), 18);
+      // Outcome tokens share their collateral's decimals (18, or 6 for USDG on Robinhood Chain)
+      const currencyAmountInWei = parseTokenAmount(winningTokens.currencyAmount, config?.BASE_TOKENS_CONFIG?.currency?.decimals);
+      const companyAmountInWei = parseTokenAmount(winningTokens.companyAmount, config?.BASE_TOKENS_CONFIG?.company?.decimals);
 
       return {
         // Substep 1: Approve Company Tokens (Collateral1)
@@ -725,7 +728,11 @@ const RedemptionModal = ({
       }
 
       // --- SDK INTEGRATION START ---
-      if (useSDK) {
+      // The SDK redeem cartridge parses amounts with parseEther (18 decimals only), so
+      // markets with other decimals fall through to the direct router path below.
+      const allTokens18 = normalizeDecimals(config?.BASE_TOKENS_CONFIG?.currency?.decimals) === 18
+        && normalizeDecimals(config?.BASE_TOKENS_CONFIG?.company?.decimals) === 18;
+      if (useSDK && allTokens18) {
         console.log('[RedemptionModal] Using SDK for redemption');
 
         // Initialize Cartridge
@@ -794,8 +801,9 @@ const RedemptionModal = ({
       // --- SDK INTEGRATION END ---
 
       // Convert amounts to wei
-      const currencyAmountInWei = ethers.utils.parseUnits(winningTokens.currencyAmount.toString(), 18);
-      const companyAmountInWei = ethers.utils.parseUnits(winningTokens.companyAmount.toString(), 18);
+      // Outcome tokens share their collateral's decimals (18, or 6 for USDG on Robinhood Chain)
+      const currencyAmountInWei = parseTokenAmount(winningTokens.currencyAmount, config?.BASE_TOKENS_CONFIG?.currency?.decimals);
+      const companyAmountInWei = parseTokenAmount(winningTokens.companyAmount, config?.BASE_TOKENS_CONFIG?.company?.decimals);
 
       // Step 1: Approve company tokens first (Collateral1)
       console.log('Approving company tokens (Collateral1)...');
@@ -1129,7 +1137,7 @@ const RedemptionModal = ({
                 <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                   <div className="font-semibold text-gray-500 mb-1">On-Chain Tx Hash:</div>
                   <a
-                    href={`https://gnosisscan.io/tx/${debugInfo.txHash}`}
+                    href={`${getExplorerUrl(config?.chainId)}/tx/${debugInfo.txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-green-500 hover:underline break-all block"

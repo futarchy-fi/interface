@@ -16,6 +16,12 @@ const CHAIN_STYLE_MAP = {
     accentBg: 'bg-futarchyGreen3',
     accentBorder: 'border-futarchyGreen5',
     accentText: 'text-futarchyGreen11'
+  },
+  4663: {
+    name: 'Robinhood Chain',
+    accentBg: 'bg-futarchyGreen3',
+    accentBorder: 'border-futarchyGreen5',
+    accentText: 'text-futarchyGreen11'
   }
 };
 

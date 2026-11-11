@@ -2,12 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { PRECISION_CONFIG } from '../components/futarchyFi/marketPage/constants/contracts';
 import { fetchMarketEventData, parseContractSource } from '../adapters/subgraphConfigAdapter';
+import { getDefaultCurrencySymbol } from '../config/chains';
 import { fetchProposalMetadataFromRegistry, extractChainFromMetadata, extractSpotPriceFromMetadata, extractStartCandleFromMetadata, extractCloseTimestampFromMetadata, extractTwapFromMetadata, extractResolutionFromMetadata, extractDisplayConfigFromMetadata, extractSnapshotIdFromMetadata } from '../adapters/registryAdapter';
+
+// Token decimals from metadata; 18 unless the market says otherwise
+// (Robinhood Chain USDG markets use 6 for the currency side).
+const tokenDecimals = (value) => {
+  const n = Number(value);
+  return value != null && Number.isInteger(n) && n >= 0 && n <= 36 ? n : 18;
+};
 
 // Public RPCs for the on-chain resolution fallback check
 const RESOLUTION_RPC_BY_CHAIN = {
   1: 'https://eth.llamarpc.com',
-  100: process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com'
+  100: process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com',
+  4663: 'https://rpc.mainnet.chain.robinhood.com'
 };
 
 /**
@@ -333,15 +342,15 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
             currency: {
               address: metadata.currencyTokens?.base?.wrappedCollateralTokenAddress || metadata?.baseTokens?.currency?.address || '0xaf204776c7245bF4147c2612BF6e5972Ee483701',
               // Use explicit symbol from metadata, or fallback to chain-specific defaults
-              symbol: metadata.currencyTokens?.base?.tokenSymbol || metadata?.baseTokens?.currency?.symbol || (metadata.chain === 1 ? 'USDS' : 'sDAI'),
-              name: metadata.currencyTokens?.base?.tokenName || metadata?.baseTokens?.currency?.name || (metadata.chain === 1 ? 'USDS' : 'sDAI'),
-              decimals: 18
+              symbol: metadata.currencyTokens?.base?.tokenSymbol || metadata?.baseTokens?.currency?.symbol || getDefaultCurrencySymbol(metadata.chain),
+              name: metadata.currencyTokens?.base?.tokenName || metadata?.baseTokens?.currency?.name || getDefaultCurrencySymbol(metadata.chain),
+              decimals: tokenDecimals(metadata.currencyTokens?.base?.decimals ?? metadata?.baseTokens?.currency?.decimals)
             },
             company: {
               address: metadata.companyTokens?.base?.wrappedCollateralTokenAddress || metadata?.baseTokens?.company?.address || '0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb',
               symbol: metadata.companyTokens?.base?.tokenSymbol || metadata?.baseTokens?.company?.symbol || 'GNO',
               name: metadata.companyTokens?.base?.tokenName || metadata?.baseTokens?.company?.name || 'Gnosis',
-              decimals: 18
+              decimals: tokenDecimals(metadata.companyTokens?.base?.decimals ?? metadata?.baseTokens?.company?.decimals)
             }
           },
 
@@ -469,7 +478,7 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
             display: data._registryMetadata?.display || metadata?.display || metadata?.precisions?.display || PRECISION_CONFIG.display,
             tokens: metadata?.precisions?.tokens || PRECISION_CONFIG.tokens || {
               default: 18,
-              [metadata.currencyTokens?.base?.tokenSymbol || (metadata.chain === 1 ? 'USDS' : 'sDAI')]: 18,
+              [metadata.currencyTokens?.base?.tokenSymbol || getDefaultCurrencySymbol(metadata.chain)]: 18,
               [metadata.companyTokens?.base?.tokenSymbol || 'GNO']: 18
             },
             rounding: metadata?.precisions?.rounding || PRECISION_CONFIG.rounding || {

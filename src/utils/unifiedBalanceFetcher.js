@@ -86,10 +86,10 @@ const ERC1155_ABI = [
 /**
  * Helper to format balance safely
  */
-function formatBalanceSafely(balance) {
+function formatBalanceSafely(balance, decimals = 18) {
   try {
     if (!balance) return '0';
-    const formatted = ethers.utils.formatEther(balance);
+    const formatted = ethers.utils.formatUnits(balance, decimals);
     return formatted === 'NaN' ? '0' : formatted;
   } catch (error) {
     console.error('[UNIFIED-BALANCE] Error formatting balance:', error);
@@ -281,24 +281,33 @@ export async function fetchAllBalancesAndPositions(config, address, chainId = 10
     positions: positionBalances.map(b => b.toString())
   });
 
+  // Token decimals: outcome tokens share their collateral's decimals. 18 on
+  // Gnosis/Ethereum markets; 6 for the USDG currency side on Robinhood Chain.
+  const safeDecimals = (value) => {
+    const n = Number(value);
+    return value != null && Number.isInteger(n) && n >= 0 && n <= 36 ? n : 18;
+  };
+  const currencyDecimals = safeDecimals(BASE_TOKENS_CONFIG.currency?.decimals);
+  const companyDecimals = safeDecimals(BASE_TOKENS_CONFIG.company?.decimals);
+
   // Format all balances
   const formattedBalances = {
     // Base tokens
-    currency: formatBalanceSafely(currencyBalance),
-    company: formatBalanceSafely(companyBalance),
+    currency: formatBalanceSafely(currencyBalance, currencyDecimals),
+    company: formatBalanceSafely(companyBalance, companyDecimals),
     native: formatBalanceSafely(nativeBalance),
 
     // Position tokens (ERC1155)
-    currencyYes: formatBalanceSafely(positionBalances[0]),
-    currencyNo: formatBalanceSafely(positionBalances[1]),
-    companyYes: formatBalanceSafely(positionBalances[2]),
-    companyNo: formatBalanceSafely(positionBalances[3]),
+    currencyYes: formatBalanceSafely(positionBalances[0], currencyDecimals),
+    currencyNo: formatBalanceSafely(positionBalances[1], currencyDecimals),
+    companyYes: formatBalanceSafely(positionBalances[2], companyDecimals),
+    companyNo: formatBalanceSafely(positionBalances[3], companyDecimals),
 
     // Wrapped position tokens (ERC20)
-    wrappedCurrencyYes: formatBalanceSafely(wrappedCurrencyYesBalance),
-    wrappedCurrencyNo: formatBalanceSafely(wrappedCurrencyNoBalance),
-    wrappedCompanyYes: formatBalanceSafely(wrappedCompanyYesBalance),
-    wrappedCompanyNo: formatBalanceSafely(wrappedCompanyNoBalance)
+    wrappedCurrencyYes: formatBalanceSafely(wrappedCurrencyYesBalance, currencyDecimals),
+    wrappedCurrencyNo: formatBalanceSafely(wrappedCurrencyNoBalance, currencyDecimals),
+    wrappedCompanyYes: formatBalanceSafely(wrappedCompanyYesBalance, companyDecimals),
+    wrappedCompanyNo: formatBalanceSafely(wrappedCompanyNoBalance, companyDecimals)
   };
 
   // Calculate totals

@@ -8,6 +8,7 @@
 import { createPublicClient, http, fallback } from 'viem';
 import { gnosis, mainnet } from 'viem/chains';
 import { SUBGRAPH_ENDPOINTS } from '../config/subgraphEndpoints';
+import { robinhoodChain, getDefaultCurrencySymbol } from '../config/chains';
 
 // Re-export for backward compatibility
 export { SUBGRAPH_ENDPOINTS };
@@ -35,6 +36,19 @@ const CHAIN_CONFIG = {
         ammFactory: '0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766',
         viemChain: gnosis,
         rpcUrls: ['https://gnosis.drpc.org', 'https://rpc.gnosischain.com', 'https://gnosis-rpc.publicnode.com', 'https://rpc.gnosis.gateway.fm']
+    },
+    // Robinhood Chain (Arbitrum Orbit L2) — Uniswap V3 at NON-canonical addresses
+    4663: {
+        factoryAddress: '0xebb2bf1cbdd625a8118b720877a7e361696e7a14',
+        routerAddress: '0x7834bb7f4724393043701b2a944feae0496e00ad',
+        futarchyAdapter: '0x7834bb7f4724393043701b2a944feae0496e00ad',
+        conditionalTokens: '0x3aee58842a1d76c50f36eb5a34e79ef958d082c7',
+        wrapperService: '0x9d0bb3418b1834e40bd106c0dbb9318cdc847468',
+        ammFactory: '0x1f7d7550B1b028f7571E69A784071F0205FD2EfA',
+        // Fee tiers probed by the on-chain pool-discovery fallback (500 first)
+        poolFeeTiers: [500, 3000, 10000],
+        viemChain: robinhoodChain,
+        rpcUrls: ['https://rpc.mainnet.chain.robinhood.com', 'https://robinhood-rpc.publicnode.com']
     }
 };
 
@@ -121,8 +135,15 @@ export async function fetchProposalFromChain(proposalAddress, chainId) {
             return null;
         }
 
-        // Read base + outcome token symbols (best-effort; default decimals 18).
+        // Read base + outcome token symbols and decimals (best-effort; default decimals 18).
+        // Decimals are read on-chain because they are NOT always 18: on Robinhood
+        // Chain (4663) USDG and its YES/NO outcome tokens have 6 decimals.
         const symbolOf = (addr) => client.readContract({ address: addr, abi: ERC20_SYMBOL_ABI, functionName: 'symbol' }).catch(() => null);
+        const decimalsOf = (addr) => client.readContract({ address: addr, abi: ERC20_SYMBOL_ABI, functionName: 'decimals' })
+            .then(d => (Number.isFinite(Number(d)) ? Number(d) : 18)).catch(() => 18);
+        const [companyDec, currencyDec, yCoDec, nCoDec, yCuDec, nCuDec] = await Promise.all([
+            decimalsOf(c1), decimalsOf(c2), decimalsOf(yesCompanyAddr), decimalsOf(noCompanyAddr), decimalsOf(yesCurrencyAddr), decimalsOf(noCurrencyAddr)
+        ]);
         const [companySym, currencySym, yCoSym, nCoSym, yCuSym, nCuSym] = await Promise.all([
             symbolOf(c1), symbolOf(c2), symbolOf(yesCompanyAddr), symbolOf(noCompanyAddr), symbolOf(yesCurrencyAddr), symbolOf(noCurrencyAddr)
         ]);
@@ -132,10 +153,15 @@ export async function fetchProposalFromChain(proposalAddress, chainId) {
             try {
                 return await client.readContract({ address: cfg.ammFactory, abi: ALGEBRA_FACTORY_ABI, functionName: 'poolByPair', args: [tokenA, tokenB] });
             } catch {
-                // UniV3 (Ethereum): default 1% fee tier used by these markets.
-                try {
-                    return await client.readContract({ address: cfg.ammFactory, abi: UNIV3_FACTORY_ABI, functionName: 'getPool', args: [tokenA, tokenB, 10000] });
-                } catch { return null; }
+                // UniV3: probe the chain's fee tiers (Ethereum default: the 1% tier
+                // used by those markets; Robinhood Chain: 0.05% first).
+                for (const fee of (cfg.poolFeeTiers || [10000])) {
+                    try {
+                        const pool = await client.readContract({ address: cfg.ammFactory, abi: UNIV3_FACTORY_ABI, functionName: 'getPool', args: [tokenA, tokenB, fee] });
+                        if (pool && pool !== ZERO_ADDR) return pool;
+                    } catch { /* try next tier */ }
+                }
+                return null;
             }
         };
         const [yesPool, noPool] = await Promise.all([
@@ -148,15 +174,15 @@ export async function fetchProposalFromChain(proposalAddress, chainId) {
         if (noPool && noPool !== ZERO_ADDR) pools.push({ id: noPool.toLowerCase(), name: 'CONDITIONAL_NO', type: 'CONDITIONAL', outcomeSide: 'NO', price: null });
 
         const companySymbol = companySym || 'COMPANY';
-        const currencySymbol = currencySym || (chainId === 1 ? 'USDS' : 'sDAI');
+        const currencySymbol = currencySym || getDefaultCurrencySymbol(chainId);
 
         // Outcome-token symbols must match `${PREFIX}_${baseSymbol}` for
         // transformSubgraphToSupabaseFormat's findToken() to pair them.
         const outcomeTokens = [
-            { id: yesCompanyAddr.toLowerCase(), symbol: yCoSym || `YES_${companySymbol}`, decimals: 18 },
-            { id: noCompanyAddr.toLowerCase(), symbol: nCoSym || `NO_${companySymbol}`, decimals: 18 },
-            { id: yesCurrencyAddr.toLowerCase(), symbol: yCuSym || `YES_${currencySymbol}`, decimals: 18 },
-            { id: noCurrencyAddr.toLowerCase(), symbol: nCuSym || `NO_${currencySymbol}`, decimals: 18 },
+            { id: yesCompanyAddr.toLowerCase(), symbol: yCoSym || `YES_${companySymbol}`, decimals: yCoDec },
+            { id: noCompanyAddr.toLowerCase(), symbol: nCoSym || `NO_${companySymbol}`, decimals: nCoDec },
+            { id: yesCurrencyAddr.toLowerCase(), symbol: yCuSym || `YES_${currencySymbol}`, decimals: yCuDec },
+            { id: noCurrencyAddr.toLowerCase(), symbol: nCuSym || `NO_${currencySymbol}`, decimals: nCuDec },
         ];
 
         console.log(`[OnChainFallback] Assembled config for ${proposalAddress} (${pools.length} conditional pools found on-chain)`);
@@ -164,8 +190,8 @@ export async function fetchProposalFromChain(proposalAddress, chainId) {
         return {
             id: proposalAddress.toLowerCase(),
             marketName: marketName || '',
-            companyToken: { id: c1.toLowerCase(), symbol: companySymbol, decimals: 18 },
-            currencyToken: { id: c2.toLowerCase(), symbol: currencySymbol, decimals: 18 },
+            companyToken: { id: c1.toLowerCase(), symbol: companySymbol, decimals: companyDec },
+            currencyToken: { id: c2.toLowerCase(), symbol: currencySymbol, decimals: currencyDec },
             outcomeTokens,
             pools,
             _fromChain: true,
@@ -278,6 +304,10 @@ export async function fetchProposalFromSubgraph(proposalAddress, chainId) {
         // Default decimals to 18 (true for all current tokens; if a future token
         // differs we'll add an on-chain fallback). Outcome tokens carry their own.
         const decimalsDefault = yesCompany?.decimals ?? 18;
+        // Outcome tokens take their collateral's decimals on chains where they are
+        // not 18 (Robinhood Chain: USDG / YES_USDG / NO_USDG = 6), so derive the
+        // currency side from the currency outcome tokens, not the company side.
+        const currencyDecimals = yesCurrency?.decimals ?? noCurrency?.decimals ?? decimalsDefault;
 
         // Assemble a Graph-Node-style object so transformSubgraphToSupabaseFormat
         // doesn't need to know about the schema difference.
@@ -294,7 +324,7 @@ export async function fetchProposalFromSubgraph(proposalAddress, chainId) {
                 ? { id: companyAddr, symbol: companySymbol, decimals: decimalsDefault }
                 : null,
             currencyToken: currencySymbol
-                ? { id: currencyAddr, symbol: currencySymbol, decimals: decimalsDefault }
+                ? { id: currencyAddr, symbol: currencySymbol, decimals: currencyDecimals }
                 : null,
             outcomeTokens,
             pools: pools.map(p => ({
@@ -318,6 +348,12 @@ export async function fetchProposalFromSubgraph(proposalAddress, chainId) {
  * @param {number} chainId - The chain ID
  * @returns {Object} - Data in Supabase market_event format
  */
+// Token decimals as a number (indexer returns numbers or numeric strings); default 18.
+function toDecimals(value) {
+    const n = Number(value);
+    return Number.isInteger(n) && n >= 0 && n <= 36 ? n : 18;
+}
+
 export function transformSubgraphToSupabaseFormat(subgraphData, proposalAddress, chainId) {
     if (!subgraphData) {
         return null;
@@ -389,17 +425,20 @@ export function transformSubgraphToSupabaseFormat(subgraphData, proposalAddress,
                 base: companyToken ? {
                     tokenName: companyToken.symbol,
                     tokenSymbol: companyToken.symbol,
-                    wrappedCollateralTokenAddress: companyToken.id
+                    wrappedCollateralTokenAddress: companyToken.id,
+                    decimals: toDecimals(companyToken.decimals)
                 } : null,
                 yes: yesCompany ? {
                     tokenName: yesCompany.symbol,
                     tokenSymbol: yesCompany.symbol,
-                    wrappedCollateralTokenAddress: yesCompany.id
+                    wrappedCollateralTokenAddress: yesCompany.id,
+                    decimals: toDecimals(yesCompany.decimals)
                 } : null,
                 no: noCompany ? {
                     tokenName: noCompany.symbol,
                     tokenSymbol: noCompany.symbol,
-                    wrappedCollateralTokenAddress: noCompany.id
+                    wrappedCollateralTokenAddress: noCompany.id,
+                    decimals: toDecimals(noCompany.decimals)
                 } : null
             },
 
@@ -407,17 +446,20 @@ export function transformSubgraphToSupabaseFormat(subgraphData, proposalAddress,
                 base: currencyToken ? {
                     tokenName: currencyToken.symbol,
                     tokenSymbol: currencyToken.symbol,
-                    wrappedCollateralTokenAddress: currencyToken.id
+                    wrappedCollateralTokenAddress: currencyToken.id,
+                    decimals: toDecimals(currencyToken.decimals)
                 } : null,
                 yes: yesCurrency ? {
                     tokenName: yesCurrency.symbol,
                     tokenSymbol: yesCurrency.symbol,
-                    wrappedCollateralTokenAddress: yesCurrency.id
+                    wrappedCollateralTokenAddress: yesCurrency.id,
+                    decimals: toDecimals(yesCurrency.decimals)
                 } : null,
                 no: noCurrency ? {
                     tokenName: noCurrency.symbol,
                     tokenSymbol: noCurrency.symbol,
-                    wrappedCollateralTokenAddress: noCurrency.id
+                    wrappedCollateralTokenAddress: noCurrency.id,
+                    decimals: toDecimals(noCurrency.decimals)
                 } : null
             },
 

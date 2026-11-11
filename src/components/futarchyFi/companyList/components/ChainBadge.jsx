@@ -16,6 +16,13 @@ const CHAIN_CONFIG = {
     borderColor: "border-emerald-300 dark:border-emerald-700",
     textColor: "text-emerald-700 dark:text-emerald-400",
   },
+  4663: {
+    name: "Robinhood Chain",
+    shortName: "Robinhood",
+    color: "bg-lime-100 dark:bg-lime-900/30",
+    borderColor: "border-lime-300 dark:border-lime-700",
+    textColor: "text-lime-700 dark:text-lime-400",
+  },
   137: {
     name: "Polygon",
     shortName: "Polygon",

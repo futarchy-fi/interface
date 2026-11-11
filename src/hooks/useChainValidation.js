@@ -93,6 +93,8 @@ export const useChainValidation = (config, configLoading = false) => {
         return 'Gnosis Chain';
       case 137:
         return 'Polygon';
+      case 4663:
+        return 'Robinhood Chain';
       case 42161:
         return 'Arbitrum';
       default:

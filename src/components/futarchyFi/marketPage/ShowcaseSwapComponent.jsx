@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { isUniswapChain } from '../../../config/chains';
+import { normalizeDecimals, parseTokenAmount } from '../../../utils/tokenDecimals';
 import ConfirmSwapModal from './ConfirmSwapModal';
 import SwapNativeToCurrencyModal from './SwapNativeToCurrencyModal';
 import { STEPS_CONFIG } from './constants/swapSteps';
@@ -146,6 +148,14 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
   // Use the market's chain (from config/registry) for quoting, not the wallet's chain.
   // The wallet may be on Ethereum while viewing a Gnosis market.
   const chainId = config?.chainId || walletChainId;
+  // Uniswap V3 chains (Ethereum, Robinhood Chain) quote through QuoterV2; Gnosis uses Algebra.
+  const isUniswapMarket = isUniswapChain(chainId);
+  const hasOnchainQuoter = isUniswapMarket || chainId === 100;
+  // Token decimals per side (18 except e.g. 6-decimal USDG on Robinhood Chain).
+  const currencyDecimals = normalizeDecimals(config?.BASE_TOKENS_CONFIG?.currency?.decimals);
+  const companyDecimals = normalizeDecimals(config?.BASE_TOKENS_CONFIG?.company?.decimals);
+  // sqrtPriceX96 prices are raw base-unit ratios; this scales "currency per company" to human units.
+  const priceDecimalsScale = 10 ** (companyDecimals - currencyDecimals);
 
   const {
     signer,
@@ -195,7 +205,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
   // Debounced QuoterV2/Swapr SDK preview - for Ethereum (chainId === 1) and Gnosis (chainId === 100)
   useEffect(() => {
     // Only run on Ethereum mainnet or Gnosis Chain
-    if (chainId !== 1 && chainId !== 100) {
+    if (!hasOnchainQuoter) {
       setQuoterPreview({ isLoading: false, amountOut: null, error: null });
       return;
     }
@@ -353,7 +363,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
           // Always fetch pool current price first (needed even if quote fails)
           let poolData;
           try {
-            poolData = await getPoolSqrtPrice(tokenIn, tokenOut, 500, ethersProvider, 1);
+            poolData = await getPoolSqrtPrice(tokenIn, tokenOut, 500, ethersProvider, chainId);
             currentPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
           } catch (poolErr) {
             console.warn('[QUOTER SHOWCASE] Could not get pool price:', poolErr.message);
@@ -365,7 +375,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             amountIn: amount,
             fee: 500,
             provider: ethersProvider,
-            chainId: 1,
+            chainId,
             slippageBps: 50
           });
 
@@ -373,7 +383,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
 
           // If pool price wasn't fetched above (different fee tier), try with the quoter's fee tier
           if (!poolData && quoteResult.feeTier !== 500) {
-            poolData = await getPoolSqrtPrice(tokenIn, tokenOut, quoteResult.feeTier, ethersProvider, 1);
+            poolData = await getPoolSqrtPrice(tokenIn, tokenOut, quoteResult.feeTier, ethersProvider, chainId);
             currentPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
           }
 
@@ -383,7 +393,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         // Determine if we need to invert based on action (Buy/Sell)
         // Goal: Always show prices as "currency per company"
         // Swapr SDK already returns displayPrice in the correct direction
-        if (chainId === 1) {
+        if (isUniswapMarket) {
           // Uniswap: Simplify using action
           const isBuy = selectedAction === 'Buy';
 
@@ -402,6 +412,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             currentPrice = 1 / currentPrice;
             executionPrice = 1 / executionPrice;
           }
+          // Raw base-unit ratio -> human "currency per company" (no-op when both sides are 18 decimals)
+          currentPrice = currentPrice * priceDecimalsScale;
+          executionPrice = executionPrice * priceDecimalsScale;
 
           console.log('[QUOTER SHOWCASE] Uniswap Prices:', {
             action: selectedAction,
@@ -459,8 +472,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
           try {
             const { getBestRpcProvider } = await import('../../../utils/getBestRpc');
             const ethersProvider = await getBestRpcProvider(chainId);
-            if (chainId === 1) {
-              const poolData = await getPoolSqrtPrice(tokenIn, tokenOut, 500, ethersProvider, 1);
+            if (isUniswapMarket) {
+              const poolData = await getPoolSqrtPrice(tokenIn, tokenOut, 500, ethersProvider, chainId);
               fallbackPrice = sqrtPriceX96ToPrice(poolData.sqrtPriceX96);
               // Apply same inversion logic as the main path
               const isBuy = selectedAction === 'Buy';
@@ -468,6 +481,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                 ? (tokenIn.toLowerCase() < tokenOut.toLowerCase())
                 : (tokenOut.toLowerCase() < tokenIn.toLowerCase());
               if (shouldInvert) fallbackPrice = 1 / fallbackPrice;
+              fallbackPrice = fallbackPrice * priceDecimalsScale;
             } else if (chainId === 100) {
               // Gnosis: try the Algebra pool
               const { getAlgebraQuoteWithSlippage } = await import('../../../utils/algebraQuoter');
@@ -507,6 +521,9 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
 
   // Handle max amount click without formatting
   const handleMaxClick = useCallback(() => {
+    // Raw base units must use the decimals of the token being spent
+    // (Buy spends currency-side tokens, Sell spends company-side tokens).
+    const rawInputDecimals = selectedAction === 'Buy' ? currencyDecimals : companyDecimals;
     try {
       let totalAvailable;
 
@@ -575,8 +592,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             ? (positions?.currencyYes?.total || '0')
             : (positions?.currencyNo?.total || '0');
           const baseBalance = balances?.currencyBalance || balances?.sdaiBalance || '0';
-          const outcomeBN = ethers.utils.parseUnits(outcomeBalance, 18);
-          const baseBN = ethers.utils.parseUnits(baseBalance, 18);
+          const outcomeBN = parseTokenAmount(outcomeBalance, rawInputDecimals);
+          const baseBN = parseTokenAmount(baseBalance, rawInputDecimals);
           rawWeiValue = outcomeBN.add(baseBN).toString();
         } else if (selectedCurrency === 'WXDAI') {
           if (redirectToCOW) {
@@ -584,8 +601,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
               ? (positions?.currencyYes?.total || '0')
               : (positions?.currencyNo?.total || '0');
             const baseBalance = balances?.sdaiBalance || '0';
-            const outcomeBN = ethers.utils.parseUnits(outcomeBalance, 18);
-            const baseBN = ethers.utils.parseUnits(baseBalance, 18);
+            const outcomeBN = parseTokenAmount(outcomeBalance, rawInputDecimals);
+            const baseBN = parseTokenAmount(baseBalance, rawInputDecimals);
             rawWeiValue = outcomeBN.add(baseBN).toString();
           } else {
             rawWeiValue = ethers.utils.parseUnits(balances?.nativeBalance || '0', 18).toString();
@@ -595,8 +612,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
             ? (positions?.currencyYes?.total || '0')
             : (positions?.currencyNo?.total || '0');
           const baseBalance = positions?.wxdai || '0';
-          const outcomeBN = ethers.utils.parseUnits(outcomeBalance, 18);
-          const baseBN = ethers.utils.parseUnits(baseBalance, 18);
+          const outcomeBN = parseTokenAmount(outcomeBalance, rawInputDecimals);
+          const baseBN = parseTokenAmount(baseBalance, rawInputDecimals);
           rawWeiValue = outcomeBN.add(baseBN).toString();
         }
       } else {
@@ -604,8 +621,8 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
           ? (positions?.companyYes?.total || '0')
           : (positions?.companyNo?.total || '0');
         const baseBalance = positions?.faot || '0';
-        const outcomeBN = ethers.utils.parseUnits(outcomeBalance, 18);
-        const baseBN = ethers.utils.parseUnits(baseBalance, 18);
+        const outcomeBN = parseTokenAmount(outcomeBalance, rawInputDecimals);
+        const baseBN = parseTokenAmount(baseBalance, rawInputDecimals);
         rawWeiValue = outcomeBN.add(baseBN).toString();
       }
       setAmountRawWei(rawWeiValue);
@@ -622,12 +639,12 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
       setAmount(fallbackBalance);
       // Also set raw wei for fallback
       try {
-        setAmountRawWei(ethers.utils.parseUnits(fallbackBalance, 18).toString());
+        setAmountRawWei(parseTokenAmount(fallbackBalance, rawInputDecimals).toString());
       } catch (e) {
         setAmountRawWei(null);
       }
     }
-  }, [selectedAction, selectedOutcome, selectedCurrency, positions, balances, redirectToCOW, getCurrencySymbol]);
+  }, [selectedAction, selectedOutcome, selectedCurrency, positions, balances, redirectToCOW, getCurrencySymbol, currencyDecimals, companyDecimals]);
 
   // Memoized transaction data object
   const transactionData = useMemo(() => ({
@@ -642,7 +659,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
       console.error("Invalid amount entered");
       return;
     }
-    if ((chainId === 1 || chainId === 100) && (quoterPreview.isLoading || quoterPreview.quotedAmountIn !== amount || !quoterPreview.amountOut)) {
+    if (hasOnchainQuoter && (quoterPreview.isLoading || quoterPreview.quotedAmountIn !== amount || !quoterPreview.amountOut)) {
       console.error('A current on-chain pool quote is required');
       return;
     }
@@ -677,7 +694,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         } else {
           receiveToken = getCurrencySymbol();
         }
-      } else if (chainId !== 1 && chainId !== 100 && currentPrice && currentPrice > 0) {
+      } else if (!hasOnchainQuoter && currentPrice && currentPrice > 0) {
         // Fallback to legacy calc — spot price estimate with conservative fee deduction
         const APPROX_POOL_FEE = 0.01; // 1% conservative estimate for pool fees
         if (selectedAction === 'Buy') {
@@ -727,6 +744,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
         isApproximate: !(USING_FUTARCHY_QUOTER && quoterPreview?.amountOut && !quoterPreview.error),
         insufficientLiquidity: quoterPreview?.insufficientLiquidity || false,
         outputDecimals: quoterPreview?.decimalsOut || 18,
+        inputDecimals: selectedAction === 'Buy' ? currencyDecimals : companyDecimals,
         tradeAnywayAcknowledged,
       };
       console.log("Opening ConfirmSwapModal directly with data:", directConfirmData);
@@ -1228,7 +1246,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
   const displayedPriceImpact = Number(quoterPreview.priceImpactPct);
   const hasPriceImpact = Number.isFinite(displayedPriceImpact);
   const priceImpactTooHigh = hasPriceImpact && displayedPriceImpact > 15;
-  const quoteUnavailable = (chainId === 1 || chainId === 100) && (quoterPreview.quotedAmountIn !== amount || !quoterPreview.amountOut);
+  const quoteUnavailable = hasOnchainQuoter && (quoterPreview.quotedAmountIn !== amount || !quoterPreview.amountOut);
 
   return (
     <>
@@ -1485,7 +1503,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                 Outcomes
               </h3>
               {/* Show toggle on Ethereum mainnet and Gnosis Chain when quote data is available */}
-              {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && (
+              {hasOnchainQuoter && quoterPreview.currentPrice && (
                 <button
                   onClick={() => setShowPriceInfo(!showPriceInfo)}
                   className="flex items-center gap-1 text-[10px] text-futarchyGray11 dark:text-futarchyGray8 hover:text-futarchyGray12 dark:hover:text-futarchyGray3 transition-colors"
@@ -1514,7 +1532,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                     <span className="text-sm font-semibold h-6 flex items-center text-futarchyGold9">
                       {(() => {
                         // Show quoter preview on Ethereum and Gnosis Chain
-                        if ((chainId === 1 || chainId === 100) && quoterPreview.isLoading) {
+                        if (hasOnchainQuoter && quoterPreview.isLoading) {
                           return (
                             <span className="inline-flex items-center gap-1">
                               <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1527,11 +1545,11 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                         }
 
                         // Insufficient liquidity check — covers both quoter success (extreme impact) and failure (no liquidity)
-                        if ((chainId === 1 || chainId === 100) && quoterPreview.insufficientLiquidity) {
+                        if (hasOnchainQuoter && quoterPreview.insufficientLiquidity) {
                           return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
                         }
 
-                        if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
+                        if (hasOnchainQuoter && quoterPreview.amountOut) {
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
                           return `${formatTokenAmount(quoterPreview.amountOut)} ${symbol}`;
                         }
@@ -1549,10 +1567,10 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       })()}
                     </span>
                     <span className="text-xs text-futarchyGray11 dark:text-futarchyGray112">
-                      {chainId === 1 && quoterPreview.amountOut ? 'Receive' : 'Receive'}
+                      {isUniswapMarket && quoterPreview.amountOut ? 'Receive' : 'Receive'}
                     </span>
                     {/* Price info - on Ethereum mainnet and Gnosis Chain when we have quote data */}
-                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && showPriceInfo && (
+                    {hasOnchainQuoter && quoterPreview.currentPrice && showPriceInfo && (
                       <div className="mt-2 pt-2 border-t border-futarchyGold6 dark:border-futarchyGold6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
@@ -1613,7 +1631,7 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                     <span className="text-sm font-semibold h-6 flex items-center text-futarchyBlue9">
                       {(() => {
                         // Show quoter preview on Ethereum and Gnosis Chain
-                        if ((chainId === 1 || chainId === 100) && quoterPreview.isLoading) {
+                        if (hasOnchainQuoter && quoterPreview.isLoading) {
                           return (
                             <span className="inline-flex items-center gap-1">
                               <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1626,11 +1644,11 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                         }
 
                         // Insufficient liquidity check — covers both quoter success (extreme impact) and failure (no liquidity)
-                        if ((chainId === 1 || chainId === 100) && quoterPreview.insufficientLiquidity) {
+                        if (hasOnchainQuoter && quoterPreview.insufficientLiquidity) {
                           return <span className="text-futarchyOrange11 dark:text-futarchyOrangeDark11 text-[10px]">Insufficient liquidity</span>;
                         }
 
-                        if ((chainId === 1 || chainId === 100) && quoterPreview.amountOut) {
+                        if (hasOnchainQuoter && quoterPreview.amountOut) {
                           const symbol = selectedAction === 'Buy' ? getCompanySymbol() : getCurrencySymbol();
                           return `${formatTokenAmount(quoterPreview.amountOut)} ${symbol}`;
                         }
@@ -1648,10 +1666,10 @@ const ShowcaseSwapComponent = ({ positions, prices, walletBalances, isLoadingBal
                       })()}
                     </span>
                     <span className="text-xs text-futarchyGray11 dark:text-futarchyGray112">
-                      {chainId === 1 && quoterPreview.amountOut ? 'Receive' : 'Receive'}
+                      {isUniswapMarket && quoterPreview.amountOut ? 'Receive' : 'Receive'}
                     </span>
                     {/* Price info - on Ethereum mainnet and Gnosis Chain when we have quote data */}
-                    {(chainId === 1 || chainId === 100) && quoterPreview.currentPrice && showPriceInfo && (
+                    {hasOnchainQuoter && quoterPreview.currentPrice && showPriceInfo && (
                       <div className="mt-2 pt-2 border-t border-futarchyBlue6 dark:border-futarchyBlue6/30 w-full space-y-1">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="text-futarchyGray11 dark:text-white/50">Price Now</span>
