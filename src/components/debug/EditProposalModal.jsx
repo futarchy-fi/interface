@@ -23,7 +23,7 @@ const LoadingSpinner = ({ className = "" }) => (
 async function fetchProposalFromSubgraph(proposalMetadataAddress) {
     const query = `
         query GetProposal($id: ID!) {
-            proposalEntity(id: $id) {
+            proposalentity(id: $id) {
                 id
                 displayNameQuestion
                 displayNameEvent
@@ -51,7 +51,7 @@ async function fetchProposalFromSubgraph(proposalMetadataAddress) {
         throw new Error(result.errors[0]?.message || 'Subgraph query failed');
     }
 
-    return result.data?.proposalEntity || null;
+    return result.data?.proposalentity || null;
 }
 
 /**
