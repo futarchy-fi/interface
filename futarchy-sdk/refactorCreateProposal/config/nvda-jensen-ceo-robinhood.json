@@ -1,0 +1,40 @@
+{
+  "chainId": 4663,
+  "amm": "uniswap",
+  "marketName": "Will Jensen Huang cease to be Chief Executive Officer of NVIDIA Corporation before 2026-12-01 05:00 UTC (the end of 30 November 2026, US Eastern Time)? Resolves Yes if NVIDIA states, in an SEC filing (for example a Form 8-K under Item 5.02) or an official press release, that Jensen Huang has ceased to be CEO, effective before that time, for any reason. A leave of absence, a reduction of duties, or a departure that is announced but takes effect after that time does not count. Otherwise resolves No.",
+  "description": "Will Jensen Huang cease to be Chief Executive Officer of NVIDIA Corporation before 2026-12-01 05:00 UTC (the end of 30 November 2026, US Eastern Time)? Resolves Yes if NVIDIA states, in an SEC filing (for example a Form 8-K under Item 5.02) or an official press release, that Jensen Huang has ceased to be CEO, effective before that time, for any reason. A leave of absence, a reduction of duties, or a departure that is announced but takes effect after that time does not count. Otherwise resolves No.",
+  "openingTime": 1796101200,
+  "minBond": "50000000000000000",
+  "display_text_1": "What will the impact on NVDA price be",
+  "display_text_2": "if Jensen Huang ceases to be NVIDIA's CEO by 30 November 2026?",
+  "companyToken": {
+    "symbol": "NVDA",
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"
+  },
+  "currencyToken": {
+    "symbol": "USDG",
+    "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+  },
+  "spotPrice": 160.13,
+  "eventProbability": 0.5,
+  "impact": 0,
+  "liquidityAmounts": [
+    1740,
+    1740,
+    0,
+    0,
+    0,
+    0
+  ],
+  "onlyPools": [
+    1,
+    2
+  ],
+  "tickWidthSteps": 95,
+  "forceAddLiquidity": [],
+  "adapterAddress": "0x7834bb7f4724393043701b2a944feae0496e00ad",
+  "companyId": "0",
+  "feeTier": 500,
+  "category": "governance",
+  "language": "en"
+}

@@ -39,7 +39,7 @@ const CHAIN_CONFIG = {
     },
     // Robinhood Chain (Arbitrum Orbit L2) — Uniswap V3 at NON-canonical addresses
     4663: {
-        factoryAddress: '0xebb2bf1cbdd625a8118b720877a7e361696e7a14',
+        factoryAddress: '0x9b93fdcc9380a7e3df4978d856eaca4f7ee36fa2',
         routerAddress: '0x7834bb7f4724393043701b2a944feae0496e00ad',
         futarchyAdapter: '0x7834bb7f4724393043701b2a944feae0496e00ad',
         conditionalTokens: '0x3aee58842a1d76c50f36eb5a34e79ef958d082c7',

@@ -52,7 +52,7 @@ export const CHAIN_CONFIG = {
         id: 4663,
         name: 'Robinhood Chain',
         rpcUrl: 'https://rpc.mainnet.chain.robinhood.com',
-        factoryAddress: '0xebb2bf1cbdd625a8118b720877a7e361696e7a14',
+        factoryAddress: '0x9b93fdcc9380a7e3df4978d856eaca4f7ee36fa2',
         adapterAddress: '0x7834bb7f4724393043701b2a944feae0496e00ad',
         positionManager: '0x73991a25c818bf1f1128deaab1492d45638de0d3',
         poolFactory: '0x1f7d7550B1b028f7571E69A784071F0205FD2EfA',

@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { createSubgraphPoolFetcher } from "../../../../utils/SubgraphPoolFetcher";
 import { generateFallbackImage } from "../../../../utils/imageUtils";
 import { getMarketUrl } from "../../../../utils/urlUtils";
+import { getDefaultCurrencySymbol } from '../../../../config/chains';
 
 // Subgraph-backed pool fetcher (replaces SupabasePoolFetcher)
 const poolFetcher = createSubgraphPoolFetcher();
@@ -300,7 +301,7 @@ const ProposalsPrices = ({ approvalPrice, refusalPrice, approvalStatus, isLoadin
   // Extract base token symbol from metadata
   const baseTokenSymbol = metadata?.currencyTokens?.base?.tokenSymbol ||
     metadata?.BASE_TOKENS_CONFIG?.currency?.symbol ||
-    (Number(metadata?.chain || chainId) === 1 ? 'USDS' : 'sDAI');
+    getDefaultCurrencySymbol(Number(metadata?.chain || chainId));
 
   // Use high precision for inverted prices or small prices
   const shouldUseHighPrecision = metadata?.invertCondPoolPrice === true ||
