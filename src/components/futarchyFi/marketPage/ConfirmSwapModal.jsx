@@ -1509,7 +1509,22 @@ const ConfirmSwapModal = memo(({
     };
 
     // Refactor handleConfirmSwap
+    // A second click (or a second wallet prompt) while a confirmation is still
+    // running used to start the whole flow again and submit the same swap twice:
+    // `isProcessing` is React state, so two calls in the same render both saw
+    // false. The duplicate then reverted because the tokens were already sold.
+    const confirmInFlightRef = useRef(false);
     const handleConfirmSwap = async () => {
+        if (confirmInFlightRef.current) return;
+        confirmInFlightRef.current = true;
+        try {
+            await runConfirmSwap();
+        } finally {
+            confirmInFlightRef.current = false;
+        }
+    };
+
+    const runConfirmSwap = async () => {
         // --- Basic Setup and Validation ---
         if (isProcessing) return;
         if (quoteUnavailableForExecution) {
@@ -2622,9 +2637,15 @@ const ConfirmSwapModal = memo(({
                             });
                         }
                     } else {
-                        // Wait for Uniswap transaction confirmation
+                        // Wait for Uniswap transaction confirmation. A viem-sent swap comes back as
+                        // { hash } without wait(): calling it threw after the swap had already been
+                        // sent, which showed a failure for a swap that succeeded.
                         console.log('[ConfirmSwapCow Debug - Toggle] Waiting for Uniswap V3 Tx confirmation...');
-                        receipt = await swapTx.wait();
+                        receipt = typeof swapTx.wait === 'function'
+                            ? await swapTx.wait()
+                            : await publicClient.waitForTransactionReceipt({ hash: swapTx.hash });
+                        if (receipt && receipt.status === 'success') receipt = { ...receipt, status: 1 };
+                        if (receipt && receipt.status === 'reverted') receipt = { ...receipt, status: 0 };
                     }
 
                     try {
