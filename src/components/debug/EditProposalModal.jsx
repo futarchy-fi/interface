@@ -22,7 +22,7 @@ const LoadingSpinner = ({ className = "" }) => (
  */
 async function fetchProposalFromSubgraph(proposalMetadataAddress) {
     const query = `
-        query GetProposal($id: ID!) {
+        query GetProposal($id: String!) {
             proposalentity(id: $id) {
                 id
                 displayNameQuestion
