@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import { isSafeWallet } from './ethersAdapters';
 import { approvalAmountFor } from './approvalAmount';
-import { quoteUniswapV3ExactInput, UNISWAP_V3_DEPLOYMENTS, truncateAmountToDecimals } from './uniswapV3Quote.mjs';
+import { quoteUniswapV3ExactInput, UNISWAP_V3_DEPLOYMENTS, truncateAmountToDecimals, encodeUniversalRouterV3ExactIn } from './uniswapV3Quote.mjs';
 
 // Universal Router addresses by chain
 const UNIVERSAL_ROUTER_ADDRESSES = {
@@ -574,38 +574,17 @@ export async function executeUniswapV3Swap({
   const minAmountOutWei = ethers.utils.parseUnits(truncateAmountToDecimals(minAmountOut, decimalsOut), decimalsOut);
   if (minAmountOutWei.isZero()) throw new Error('minAmountOut must come from a non-zero pool quote');
 
-  // Build the path: tokenIn + fee (3 bytes) + tokenOut
-  // Using ethers encodePacked equivalent
-  const path = ethers.utils.solidityPack(
-    ['address', 'uint24', 'address'],
-    [tokenIn, fee, tokenOut]
-  );
-
-  // Encode V3_SWAP_EXACT_IN parameters
-  const v3SwapParams = ethers.utils.defaultAbiCoder.encode(
-    ['address', 'uint256', 'uint256', 'bytes', 'bool'],
-    [
-      recipient || RECIPIENT_MSG_SENDER,
-      amountInWei,
-      minAmountOutWei,
-      path,
-      true // payerIsUser
-    ]
-  );
-
-  // Encode SWEEP parameters
-  const sweepParams = ethers.utils.defaultAbiCoder.encode(
-    ['address', 'address', 'uint256'],
-    [
-      tokenOut,
-      recipient || ownerAddress,
-      minAmountOutWei
-    ]
-  );
-
-  // Build commands (following exact SDK pattern)
-  const commands = ethers.utils.hexlify([Commands.V3_SWAP_EXACT_IN, Commands.SWEEP]);
-  const inputs = [v3SwapParams, sweepParams];
+  // V3_SWAP_EXACT_IN (output parked on the router) + SWEEP (to the user, at
+  // least minAmountOut). The encoding depends on the chain's router version.
+  const { commands, inputs } = encodeUniversalRouterV3ExactIn({
+    chainId,
+    tokenIn,
+    tokenOut,
+    fee,
+    amountIn: amountInWei,
+    minAmountOut: minAmountOutWei,
+    recipient: recipient || ownerAddress
+  });
   const deadline = ethers.BigNumber.from(Math.floor(Date.now() / 1000) + 1200); // 20 minutes
 
   let tx;

@@ -10,9 +10,42 @@ export const UNISWAP_V3_DEPLOYMENTS = {
   1: { factory: UNISWAP_V3_FACTORY, quoterV2: UNISWAP_V3_QUOTER_V2 },
   4663: {
     factory: '0x1f7d7550B1b028f7571E69A784071F0205FD2EfA',
-    quoterV2: '0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7'
+    quoterV2: '0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7',
+    // The Universal Router on Robinhood Chain decodes V3 swaps as
+    // (address, uint256, uint256, bytes, bool, uint256[] minHopPriceX36).
+    // Without the trailing array it reverts with SliceOutOfBounds().
+    universalRouterHopPrices: true
   }
 };
+
+// Universal Router constant: "send to the router itself". The swap output is
+// parked on the router and the SWEEP command then pays the user, enforcing the
+// minimum. Sending the swap output straight to the user and sweeping afterwards
+// reverts with InsufficientToken(), because the router then holds nothing.
+export const UNIVERSAL_ROUTER_ADDRESS_THIS = '0x0000000000000000000000000000000000000002';
+const UR_V3_SWAP_EXACT_IN = 0x00;
+const UR_SWEEP = 0x04;
+
+/**
+ * Commands and inputs for a single-hop exact-input V3 swap through the
+ * Universal Router: V3_SWAP_EXACT_IN (output to the router) then SWEEP (to
+ * the recipient, at least minAmountOut). Pure: no network access.
+ */
+export function encodeUniversalRouterV3ExactIn({ chainId, tokenIn, tokenOut, fee, amountIn, minAmountOut, recipient }) {
+  const coder = ethers.utils.defaultAbiCoder;
+  const path = ethers.utils.solidityPack(['address', 'uint24', 'address'], [tokenIn, fee, tokenOut]);
+  const swapTypes = ['address', 'uint256', 'uint256', 'bytes', 'bool'];
+  const swapValues = [UNIVERSAL_ROUTER_ADDRESS_THIS, amountIn, minAmountOut, path, true]; // payerIsUser
+  if (UNISWAP_V3_DEPLOYMENTS[Number(chainId)]?.universalRouterHopPrices) {
+    swapTypes.push('uint256[]');
+    swapValues.push([]); // no per-hop minimum prices; amountOutMinimum still applies
+  }
+  const sweep = coder.encode(['address', 'address', 'uint256'], [tokenOut, recipient, minAmountOut]);
+  return {
+    commands: ethers.utils.hexlify([UR_V3_SWAP_EXACT_IN, UR_SWEEP]),
+    inputs: [coder.encode(swapTypes, swapValues), sweep]
+  };
+}
 
 export function getUniswapV3Deployment(chainId = 1) {
   const deployment = UNISWAP_V3_DEPLOYMENTS[Number(chainId)];
