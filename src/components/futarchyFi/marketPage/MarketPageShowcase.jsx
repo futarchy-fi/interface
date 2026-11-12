@@ -4908,6 +4908,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                 normalize={poolData?.source !== 'subgraph'}
               />
 
+              {!(config?.marketInfo?.hideCloseCountdown && !config?.marketInfo?.resolved) && (
               <StatDisplay
                 label={(() => {
                   // Check if market is resolved
@@ -4961,6 +4962,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                 Icon={TimeIcon}
                 isLoading={configLoading}
               />
+              )}
             </div>
 
             <div className={`flex items-center gap-3 transition-all duration-300 ease-in-out ${isScrolled ? 'lg:hidden' : ''

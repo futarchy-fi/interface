@@ -231,6 +231,16 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
                 coingecko_ticker: registrySpotPrice, // Add spot price ticker
                 startCandleUnix: registryStartCandle, // Add chart start filter
                 closeTimestamp: registryCloseTimestamp, // Add close timestamp
+                // Markets that can settle before their deadline hide the countdown
+                hideCloseCountdown: (() => {
+                  try {
+                    const raw = registryMetadata?.metadata;
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    return Boolean(parsed?.hideCloseCountdown);
+                  } catch (_) {
+                    return false;
+                  }
+                })(),
                 owner: registryMetadata?.owner, // Proposal metadata owner for edit permissions
                 proposalMetadataAddress: registryMetadata?.id, // ProposalMetadata contract address for editing
                 // TWAP configuration
@@ -533,6 +543,7 @@ export const useContractConfig = (proposalId, forceTestPools = false) => {
               || (onChainResolution?.resolved ? 'resolved' : null),
             finalOutcome: data.resolution_outcome || data._registryMetadata?.resolution_outcome || metadata?.finalOutcome
               || onChainResolution?.outcome || null,
+            hideCloseCountdown: Boolean(data._registryMetadata?.hideCloseCountdown || metadata?.hideCloseCountdown),
             // TWAP configuration (prioritize Registry metadata, then direct metadata)
             twapStartTimestamp: data._registryMetadata?.twapStartTimestamp || metadata?.twapStartTimestamp || null,
             twapDurationHours: data._registryMetadata?.twapDurationHours || metadata?.twapDurationHours || 24,

@@ -391,12 +391,14 @@ const EventHighlightCard = ({
                 proposalTitle || "Untitled Event"
               )}
             </h3>
-            <EventTimestamp
-              countdownFinish={countdownFinish}
-              timestamp={startTime}
-              endTime={endTime}
-              resolutionStatus={resolutionStatus}
-            />
+            {!metadata?.hideCloseCountdown && (
+              <EventTimestamp
+                countdownFinish={countdownFinish}
+                timestamp={startTime}
+                endTime={endTime}
+                resolutionStatus={resolutionStatus}
+              />
+            )}
           </div>
         </div>
 

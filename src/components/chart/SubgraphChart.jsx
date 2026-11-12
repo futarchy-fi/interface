@@ -34,7 +34,7 @@ const SubgraphChart = ({
     height = 448,
     candleLimit = 500,
     config = null,
-    autoResyncInterval = 60, // Auto-resync every X seconds (configurable)
+    autoResyncInterval = 15, // Auto-resync every X seconds (configurable)
     // NEW: External spot price props
     spotData = null,        // External spot candles [{ time, value }]
     spotPrice = null,       // Latest spot price for impact formula
