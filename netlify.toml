@@ -56,6 +56,57 @@
   force = true
   query = {proposalId = "0x9693989EF16C43274D0b85138BaF22F21651970a"}
 
+# Short links to share. Each one is a single edge redirect to the market's static page,
+# which carries the link-preview tags, so it costs no extra page load work.
+# 302, not 301, so a short link can be pointed at a later market.
+[[redirects]]
+  from = "/nvda"
+  to = "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/NVDA"
+  to = "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/nvidia"
+  to = "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/NVIDIA"
+  to = "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/nvidia/1"
+  to = "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/NVIDIA/1"
+  to = "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/nvda/1"
+  to = "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/NVDA/1"
+  to = "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e"
+  status = 302
+  force = true
+
 # Security headers
 [[headers]]
   for = "/*"
