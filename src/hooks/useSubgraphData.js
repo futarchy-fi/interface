@@ -23,14 +23,14 @@ function buildPoolsQuery(proposalId) {
     }`;
 }
 
-function buildCandlesQuery(poolIds, limit, closeTimestamp) {
+function buildCandlesQuery(poolIds, limit, closeTimestamp, period = 3600) {
     const idList = poolIds.map(id => `"${id}"`).join(', ');
     return `{
       candles(
         first: ${limit},
         orderBy: periodStartUnix,
         orderDirection: desc,
-        where: { pool_in: [${idList}], period: 3600, periodStartUnix_lte: ${closeTimestamp} }
+        where: { pool_in: [${idList}], period: ${period}, periodStartUnix_lte: ${closeTimestamp} }
       ) {
         pool
         periodStartUnix
@@ -74,7 +74,7 @@ async function executeQuery(endpoint, query, variables = {}) {
  * Deduplicates timestamps, sorts chronologically, and FILLS MISSING HOURS
  * by carrying forward the previous close price (lightweight-charts requires unique ascending times)
  */
-function adaptCandlesToChartFormat(candles) {
+function adaptCandlesToChartFormat(candles, stepSeconds = 3600) {
     if (!candles || !Array.isArray(candles) || candles.length === 0) {
         return [];
     }
@@ -101,8 +101,8 @@ function adaptCandlesToChartFormat(candles) {
 
     if (uniquePoints.length === 0) return [];
 
-    // 4. Fill in missing hours (1 hour = 3600 seconds)
-    const HOUR_SECONDS = 3600;
+    // 4. Fill in missing periods (hourly by default; 300 s for fine candles)
+    const HOUR_SECONDS = stepSeconds;
     const filled = [];
     const startTime = uniquePoints[0].time;
     const endTime = uniquePoints[uniquePoints.length - 1].time;
@@ -233,8 +233,35 @@ export function useSubgraphData(proposalId, chainId, candleLimit = 500, closeTim
                     else if (poolAddr === noId) noCandles.push(c);
                 }
 
-                const yesData = adaptCandlesToChartFormat(yesCandles);
-                const noData = adaptCandlesToChartFormat(noCandles);
+                // Young markets: hourly candles leave the chart nearly empty for the
+                // first day or two. Where the indexer also produces 5-minute candles
+                // (it does on Robinhood Chain), use those until there are too many to
+                // fetch in one page; then fall back to hourly. Chains without fine
+                // candles return nothing here and keep the hourly series.
+                let candlePeriod = 3600;
+                let yesSeries = yesCandles;
+                let noSeries = noCandles;
+                const FINE_PERIOD = 300;
+                const FINE_LIMIT = 1000;
+                if (yesCandles.length + noCandles.length <= 96) {
+                    try {
+                        const fine = await executeQuery(
+                            endpoint,
+                            buildCandlesQuery(poolIds, FINE_LIMIT, candlesCutoff, FINE_PERIOD)
+                        );
+                        const fineCandles = fine?.candles || [];
+                        if (fineCandles.length > 0 && fineCandles.length < FINE_LIMIT) {
+                            yesSeries = fineCandles.filter(c => (c.pool || '').toLowerCase() === yesId);
+                            noSeries = fineCandles.filter(c => (c.pool || '').toLowerCase() === noId);
+                            candlePeriod = FINE_PERIOD;
+                        }
+                    } catch (_) {
+                        // keep hourly candles
+                    }
+                }
+
+                const yesData = adaptCandlesToChartFormat(yesSeries, candlePeriod);
+                const noData = adaptCandlesToChartFormat(noSeries, candlePeriod);
 
                 // Get latest prices from the last candle (pure data, no artificial live candle)
                 const yesPrice = yesData.length > 0
@@ -245,6 +272,7 @@ export function useSubgraphData(proposalId, chainId, candleLimit = 500, closeTim
                     : (noPool ? parseFloat(noPool.price) : null);
 
                 return {
+                    candlePeriod,
                     yesData,
                     noData,
                     yesPrice,
