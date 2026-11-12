@@ -79,8 +79,11 @@ const SubgraphChart = ({
         loading,
         error,
         refetch,
-        lastUpdated
+        lastUpdated,
+        candlePeriod
     } = useSubgraphData(proposalId, chainId, candleLimit);
+    // Spacing of the YES/NO series in seconds: 3600 for hourly candles, 300 for fine ones.
+    const seriesStepSeconds = candlePeriod || 3600;
 
     // Subscribe to context refresh triggers
     const { chartRefreshKey } = useSubgraphRefresh();
@@ -340,7 +343,7 @@ const SubgraphChart = ({
 
             const filled = [];
             const sorted = [...candles].sort((a, b) => a.time - b.time);
-            const hourInSeconds = 3600;
+            const hourInSeconds = seriesStepSeconds;
 
             for (let i = 0; i < sorted.length; i++) {
                 filled.push(sorted[i]);
@@ -387,7 +390,7 @@ const SubgraphChart = ({
             ];
             if (allTimes.length > 0) {
                 const maxTime = Math.max(...allTimes);
-                const hourInSeconds = 3600;
+                const hourInSeconds = seriesStepSeconds;
 
                 // Extend YES to maxTime
                 if (filteredYes.length > 0) {
@@ -511,7 +514,7 @@ const SubgraphChart = ({
                 chartInstanceRef.current = null;
             }
         };
-    }, [containerWidth, height, isDarkMode, hasData, yesData, noData, dynamicPrecision, showSpot, spotData, config, lineVisibility]);
+    }, [containerWidth, height, isDarkMode, hasData, yesData, noData, dynamicPrecision, showSpot, spotData, config, lineVisibility, seriesStepSeconds]);
 
     // Calculate impact - use spotPrice when available (better formula)
     let impact = 0;
