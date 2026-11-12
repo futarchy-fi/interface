@@ -1739,11 +1739,11 @@ export const MARKETS_CONFIG = {
       "closeTimestamp": 1782486884
     }
   },
-  "0x9693989ef16c43274d0b85138baf22f21651970a": {
+  "0x9693b5d541b64c370987a3b2a569d8db96c4d38e": {
     "title": "What will the impact on NVDA price be if Jensen Huang ceases to be NVIDIA's CEO by 30 November 2026?",
     "description": "Will Jensen Huang cease to be CEO of NVIDIA before 1 December 2026? Trade NVDA in USDG under each outcome on Robinhood Chain: the gap between the YES and NO prices is the market's estimate of the effect on NVDA.",
     "image": "/assets/nvda-jensen-market-card.png",
-    "path": "/markets/0x9693989ef16c43274d0b85138baf22f21651970a",
+    "path": "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e",
     "openGraph": {
       "title": "What will the impact on NVDA price be if Jensen Huang ceases to be NVIDIA's CEO by 30 November 2026? | Futarchy.fi",
       "description": "Will Jensen Huang cease to be CEO of NVIDIA before 1 December 2026? Trade NVDA in USDG under each outcome on Robinhood Chain: the gap between the YES and NO prices is the market's estimate of the effect on NVDA.",

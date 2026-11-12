@@ -33,6 +33,29 @@
   status = 301
   force = true
 
+# The first NVDA / Jensen Huang market (2026-11-12) could only be settled after
+# its deadline. It was replaced within hours by one that can settle as soon as
+# the event happens. Links to the old one, in both URL forms, go to the new one.
+[[redirects]]
+  from = "/markets/0x9693989ef16c43274d0b85138baf22f21651970a"
+  to = "/markets/0x9693b5d541b64c370987a3b2a569d8db96c4d38e"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/market"
+  to = "/market?proposalId=0x9693b5d541B64c370987A3b2A569d8db96c4D38E"
+  status = 302
+  force = true
+  query = {proposalId = "0x9693989ef16c43274d0b85138baf22f21651970a"}
+
+[[redirects]]
+  from = "/market"
+  to = "/market?proposalId=0x9693b5d541B64c370987A3b2A569d8db96c4D38E"
+  status = 302
+  force = true
+  query = {proposalId = "0x9693989EF16C43274D0b85138BaF22F21651970a"}
+
 # Security headers
 [[headers]]
   for = "/*"
