@@ -18,6 +18,10 @@ const RPC_LISTS = {
     'https://gnosis-rpc.publicnode.com',
     'https://1rpc.io/gnosis',
     'https://rpc.ankr.com/gnosis'
+  ],
+  4663: [ // Robinhood Chain
+    'https://rpc.mainnet.chain.robinhood.com',
+    'https://robinhood-rpc.publicnode.com'
   ]
 };
 

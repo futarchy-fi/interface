@@ -319,9 +319,11 @@ test('source — positionIds batch is 4-tuple in canonical order: currencyYes, c
 
 test('source — positionBalances destructured in same order as positionIds (mapping invariant)', () => {
     // Pinned: positionBalances[0]=currencyYes, [1]=currencyNo, [2]=companyYes,
-    // [3]=companyNo. Drift here silently swaps balances.
+    // [3]=companyNo. Drift here silently swaps balances. Each side is formatted
+    // with its own decimals (currency vs company) — 6-decimal USDG on Robinhood
+    // Chain would otherwise display 1e-12 of the real balance.
     assert.match(SRC,
-        /currencyYes:\s*formatBalanceSafely\(positionBalances\[0\]\),\s*currencyNo:\s*formatBalanceSafely\(positionBalances\[1\]\),\s*companyYes:\s*formatBalanceSafely\(positionBalances\[2\]\),\s*companyNo:\s*formatBalanceSafely\(positionBalances\[3\]\)/,
+        /currencyYes:\s*formatBalanceSafely\(positionBalances\[0\],\s*currencyDecimals\),\s*currencyNo:\s*formatBalanceSafely\(positionBalances\[1\],\s*currencyDecimals\),\s*companyYes:\s*formatBalanceSafely\(positionBalances\[2\],\s*companyDecimals\),\s*companyNo:\s*formatBalanceSafely\(positionBalances\[3\],\s*companyDecimals\)/,
         `positionBalances destructure order drifted from [currencyYes, currencyNo, companyYes, companyNo]`);
 });
 

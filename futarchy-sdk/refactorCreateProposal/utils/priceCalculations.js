@@ -139,7 +139,8 @@ class PriceCalculator {
       impactPercentage,
       liquidityAmounts, // Array of 6 values
       companyTokenDecimals = 18,
-      currencyTokenDecimals = 18
+      currencyTokenDecimals = 18,
+      conditionalDecimalsFollowCollateral = false
     } = params;
 
     const conditionalPrices = this.calculateConditionalPrices(spotPrice, eventProbability, impactPercentage);
@@ -200,12 +201,11 @@ class PriceCalculator {
     return pools.map(pool => {
       const isCond0 = pool.token0.startsWith('YES') || pool.token0.startsWith('NO');
       const isCond1 = pool.token1.startsWith('YES') || pool.token1.startsWith('NO');
-      const decimals0 = isCond0
-        ? 18
-        : (pool.token0.includes('Company') ? companyTokenDecimals : currencyTokenDecimals);
-      const decimals1 = isCond1
-        ? 18
-        : (pool.token1.includes('Company') ? companyTokenDecimals : currencyTokenDecimals);
+      // Outcome tokens normally carry 18 decimals (Seer factory default). Factories that give outcome
+      // tokens their collateral's decimals pass conditionalDecimalsFollowCollateral = true.
+      const collateralDecimals = (name) => (name.includes('Company') ? companyTokenDecimals : currencyTokenDecimals);
+      const decimals0 = (isCond0 && !conditionalDecimalsFollowCollateral) ? 18 : collateralDecimals(pool.token0);
+      const decimals1 = (isCond1 && !conditionalDecimalsFollowCollateral) ? 18 : collateralDecimals(pool.token1);
       
       // The liquidity amount is always for token1 (sDAI or conditional sDAI)
       const amounts = this.calculateLiquidityAmounts(

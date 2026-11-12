@@ -60,6 +60,8 @@ import { createSubgraphPoolFetcher } from "../../../utils/SubgraphPoolFetcher";
 
 //lets import from contract.js 
 import { UNISWAP_V3_POOL_ABI } from "./constants/contracts";
+import { isUniswapChain, getChainRpcUrl, getExplorerUrl, getDefaultCurrencySymbol, getUniswapSwapUrl } from "../../../config/chains";
+import { normalizeDecimals } from "../../../utils/tokenDecimals";
 // Swap Configuration
 
 // Subgraph pool fetcher instance for latest prices
@@ -68,6 +70,11 @@ const subgraphPoolFetcher = createSubgraphPoolFetcher();
 const GNOSIS_DEFAULT_RPC = process.env.NEXT_PUBLIC_GNOSIS_RPC || 'https://rpc.gnosischain.com';
 const ALGEBRA_TWAP_ABI = [
   "function getTimepoints(uint32[] secondsAgos) external view returns (int56[] tickCumulatives, uint160[] secondsPerLiquidityCumulatives, uint112[] volatilityCumulatives, uint256[] volumePerAvgLiquiditys)",
+  "function token0() external view returns (address)"
+];
+// Uniswap V3 pools (Ethereum, Robinhood Chain) expose the oracle via observe()
+const UNISWAP_V3_TWAP_ABI = [
+  "function observe(uint32[] secondsAgos) external view returns (int56[] tickCumulatives, uint160[] secondsPerLiquidityCumulativeX128s)",
   "function token0() external view returns (address)"
 ];
 const DEFAULT_TWAP_DESCRIPTION = "The Futarchy Test is considered passed if the time-weighted average price (TWAP) of the \u201cpass\u201d (yes) outcome over the final 24 hours of the Issuance KIP\u2019s voting period is greater than or equal to that of the \u201cfail\u201d (no) outcome. If not, the proposal fails the futarchy test, regardless of the Kleros DAO vote result.";
@@ -509,7 +516,9 @@ const TwapCountdown = ({
   invertTwapPoolYes = false,
   invertTwapPoolNo = false,
   yesCompanyTokenAddress = null,
-  noCompanyTokenAddress = null
+  noCompanyTokenAddress = null,
+  chainId = 100,
+  priceDecimalsScale = 1
 }) => {
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [timeUntilStart, setTimeUntilStart] = useState(null);
@@ -527,12 +536,18 @@ const TwapCountdown = ({
 
   const twapDurationSeconds = useMemo(() => Math.max(1, Math.floor(twapDurationHours * 60 * 60)), [twapDurationHours]);
 
+  // Read the TWAP on the market's own chain: Uniswap V3 chains (Ethereum,
+  // Robinhood Chain) use that chain's RPC + observe(); Gnosis keeps Algebra getTimepoints().
+  const isUniswapTwap = isUniswapChain(chainId);
+  const twapRpcUrl = isUniswapTwap ? (getChainRpcUrl(chainId) || GNOSIS_DEFAULT_RPC) : GNOSIS_DEFAULT_RPC;
+
   const ensureProvider = useCallback(() => {
-    if (!providerRef.current) {
-      providerRef.current = new ethers.providers.JsonRpcProvider(GNOSIS_DEFAULT_RPC);
+    if (!providerRef.current || providerRef.current.__rpcUrl !== twapRpcUrl) {
+      providerRef.current = new ethers.providers.JsonRpcProvider(twapRpcUrl);
+      providerRef.current.__rpcUrl = twapRpcUrl;
     }
     return providerRef.current;
-  }, []);
+  }, [twapRpcUrl]);
 
   const fetchPoolTwap = useCallback(async (poolConfig, secondsAgoStart, shouldInvert = null, secondsAgoEnd = 0, companyTokenAddress = null) => {
     if (!poolConfig?.address) {
@@ -542,8 +557,10 @@ const TwapCountdown = ({
     const aEnd = Math.max(0, Math.floor(secondsAgoEnd));
     const secondsWindow = Math.max(1, aStart - aEnd);
     const provider = ensureProvider();
-    const poolContract = new ethers.Contract(poolConfig.address, ALGEBRA_TWAP_ABI, provider);
-    const { tickCumulatives } = await poolContract.getTimepoints([aStart, aEnd]);
+    const poolContract = new ethers.Contract(poolConfig.address, isUniswapTwap ? UNISWAP_V3_TWAP_ABI : ALGEBRA_TWAP_ABI, provider);
+    const { tickCumulatives } = isUniswapTwap
+      ? await poolContract.observe([aStart, aEnd])
+      : await poolContract.getTimepoints([aStart, aEnd]);
     const oldest = BigInt(tickCumulatives[0].toString());
     const latest = BigInt(tickCumulatives[1].toString());
     const tickDelta = latest - oldest;
@@ -600,9 +617,11 @@ const TwapCountdown = ({
       useInversion
     });
 
-    const normalizedPrice = useInversion ? 1 / rawPrice : rawPrice;
+    // Raw tick price is a base-unit ratio; scale "currency per company" to human units
+    // when the two sides have different decimals (scale is 1 for 18/18 markets).
+    const normalizedPrice = (useInversion ? 1 / rawPrice : rawPrice) * (priceDecimalsScale || 1);
     return normalizedPrice;
-  }, [ensureProvider]);
+  }, [ensureProvider, isUniswapTwap, priceDecimalsScale]);
 
   useEffect(() => {
     const calculateTimeRemaining = () => {
@@ -1583,8 +1602,8 @@ const PredictionMarketModal = ({ isOpen, onClose, config }) => {
   const createSwapUrl = (inputToken, outputToken) => {
     if (!inputToken || !outputToken) return null;
 
-    if (config?.chainId === 1) {
-      return `https://app.uniswap.org/swap?inputCurrency=${inputToken}&outputCurrency=${outputToken}`;
+    if (isUniswapChain(config?.chainId)) {
+      return getUniswapSwapUrl(config.chainId, inputToken, outputToken);
     }
 
     return `https://v3.swapr.eth.limo/#/swap?inputCurrency=${inputToken}&outputCurrency=${outputToken}`;
@@ -2402,7 +2421,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
   // Get currency symbol from config (used for display throughout component)
   const currencySymbol = config?.BASE_TOKENS_CONFIG?.currency?.symbol ||
     config?.metadata?.currencyTokens?.base?.tokenSymbol ||
-    (Number(config?.chainId || proposal?.chainId) === 1 ? 'USDS' : 'sDAI');
+    getDefaultCurrencySymbol(config?.chainId || proposal?.chainId);
   const companySymbol = config?.BASE_TOKENS_CONFIG?.company?.symbol || DEFAULT_BASE_TOKENS_CONFIG?.company?.symbol || 'GNO';
 
   // Check if connected user is the proposal owner (for edit permissions)
@@ -5023,7 +5042,7 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                     badges.push({
                       text: 'Arbitrage Contract',
                       colorScheme: 'default',
-                      link: `https://gnosisscan.io/address/${config.marketInfo.arbitrageContractAddress}`
+                      link: `${getExplorerUrl(config?.chainId)}/address/${config.marketInfo.arbitrageContractAddress}`
                     });
                   }
 
@@ -5115,6 +5134,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                 invertTwapPoolNo={config.marketInfo.invertTwapPoolNo || config.marketInfo.invertTwapPoolNO || false}
                 yesCompanyTokenAddress={config.metadata?.companyTokens?.yes?.wrappedCollateralTokenAddress || null}
                 noCompanyTokenAddress={config.metadata?.companyTokens?.no?.wrappedCollateralTokenAddress || null}
+                chainId={config.chainId || 100}
+                priceDecimalsScale={10 ** (normalizeDecimals(config.BASE_TOKENS_CONFIG?.company?.decimals) - normalizeDecimals(config.BASE_TOKENS_CONFIG?.currency?.decimals))}
               />
             )}
           </div>
@@ -5190,8 +5211,8 @@ const MarketPageShowcase = ({ hidden = false, debugMode = false, proposal = null
                               chartFilters={chartFilters}
                               onFilterClick={handleChartFilterClick}
                               predictionMarketLink={config?.BASE_TOKENS_CONFIG?.currency?.address && config?.MERGE_CONFIG?.currencyPositions?.yes?.wrap?.wrappedCollateralTokenAddress
-                                ? (config?.chainId === 1
-                                  ? `https://app.uniswap.org/swap?inputCurrency=${config.BASE_TOKENS_CONFIG.currency.address}&outputCurrency=${config.MERGE_CONFIG.currencyPositions.yes.wrap.wrappedCollateralTokenAddress}`
+                                ? (isUniswapChain(config?.chainId)
+                                  ? getUniswapSwapUrl(config.chainId, config.BASE_TOKENS_CONFIG.currency.address, config.MERGE_CONFIG.currencyPositions.yes.wrap.wrappedCollateralTokenAddress)
                                   : `https://v3.swapr.eth.limo/#/swap?inputCurrency=${config.BASE_TOKENS_CONFIG.currency.address}&outputCurrency=${config.MERGE_CONFIG.currencyPositions.yes.wrap.wrappedCollateralTokenAddress}`)
                                 : null}
                               config={config}

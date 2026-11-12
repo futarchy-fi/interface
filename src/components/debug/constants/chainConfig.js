@@ -47,6 +47,29 @@ export const CHAIN_CONFIG = {
                 symbol: 'sDAI'
             }
         }
+    },
+    4663: {
+        id: 4663,
+        name: 'Robinhood Chain',
+        rpcUrl: 'https://rpc.mainnet.chain.robinhood.com',
+        factoryAddress: '0xebb2bf1cbdd625a8118b720877a7e361696e7a14',
+        adapterAddress: '0x7834bb7f4724393043701b2a944feae0496e00ad',
+        positionManager: '0x73991a25c818bf1f1128deaab1492d45638de0d3',
+        poolFactory: '0x1f7d7550B1b028f7571E69A784071F0205FD2EfA',
+        amm: 'uniswap',
+        defaultFeeTier: 500,
+        explorerUrl: 'https://robinhoodchain.blockscout.com',
+        nativeCurrency: 'ETH',
+        defaultTokens: {
+            company: {
+                address: '0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC',
+                symbol: 'NVDA'
+            },
+            currency: {
+                address: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168',
+                symbol: 'USDG'
+            }
+        }
     }
 };
 
@@ -90,6 +113,10 @@ export const REALITY_CONFIG = {
     100: {
         contract: '0xE78996A233895bE74a66F451f1019cA9734205cc',
         token: 'XDAI'
+    },
+    4663: {
+        contract: '0x13279f59e694369e1d591e95b08a3107b8520ed3',
+        token: 'ETH'
     }
 };
 

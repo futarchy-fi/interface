@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { isUniswapChain, getChainInfo } from '../../../config/chains';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount, usePublicClient } from 'wagmi';
 import { ethers } from 'ethers';
@@ -15,7 +16,7 @@ const AddLiquidityModal = ({ isOpen, onClose, config }) => {
     // Fetch positions when modal opens
     useEffect(() => {
         const fetchPositions = async () => {
-            if (!isOpen || !isConnected || !config || !publicClient || config.chainId !== 1) {
+            if (!isOpen || !isConnected || !config || !publicClient || config.chainId !== 1) { // Ethereum-only position scan (canonical NFPM)
                 setPositions([]);
                 return;
             }
@@ -120,12 +121,13 @@ const AddLiquidityModal = ({ isOpen, onClose, config }) => {
 
     const createLiquidityUrl = (tokenA, tokenB) => {
         // Use Uniswap V3 for Ethereum mainnet (chain 1), Swapr for other chains
-        if (config?.chainId === 1) {
+        if (isUniswapChain(config?.chainId)) {
+            const uniswapAppChain = getChainInfo(config.chainId)?.uniswapAppChain || 'ethereum';
             // Uniswap V3 add liquidity URL format with proper fee structure
             const feeParam = encodeURIComponent(JSON.stringify({ feeAmount: 500, tickSpacing: 10, isDynamic: false }));
             const priceRangeParam = encodeURIComponent(JSON.stringify({ priceInverted: false, fullRange: true, minPrice: "", maxPrice: "", initialPrice: "" }));
             const depositParam = encodeURIComponent(JSON.stringify({ exactField: "TOKEN0", exactAmounts: {} }));
-            return `https://app.uniswap.org/positions/create/v3?currencyA=${tokenA}&currencyB=${tokenB}&chain=ethereum&fee=${feeParam}&hook=undefined&priceRangeState=${priceRangeParam}&depositState=${depositParam}`;
+            return `https://app.uniswap.org/positions/create/v3?currencyA=${tokenA}&currencyB=${tokenB}&chain=${uniswapAppChain}&fee=${feeParam}&hook=undefined&priceRangeState=${priceRangeParam}&depositState=${depositParam}`;
         }
         return `https://v3.swapr.eth.limo/#/add/${tokenA}/${tokenB}/select-pair`;
     };
@@ -249,7 +251,7 @@ const AddLiquidityModal = ({ isOpen, onClose, config }) => {
 
                         <div className="text-sm text-futarchyGray11 dark:text-futarchyGray112 mb-6">
                             Add liquidity to earn fees from trades.
-                            {config?.chainId === 1
+                            {isUniswapChain(config?.chainId)
                                 ? " Click on any pool to open Uniswap V3 and add liquidity."
                                 : " Click on any pool to open Swapr and add liquidity."
                             }

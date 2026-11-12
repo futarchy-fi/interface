@@ -51,7 +51,7 @@ class FutarchyAdapter {
     const feeData = await this.wallet.provider.getFeeData().catch(() => ({}));
     const chainId = (await this.wallet.provider.getNetwork()).chainId;
     // Ultra-low for Ethereum when gas is cheap, higher for Polygon
-    const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : '2');
+    const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : (chainId === 4663n ? '0.01' : '2'));
     const minTip = ethers.parseUnits(minTipGwei, 'gwei');
     let maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? minTip;
     if (maxPriorityFeePerGas < minTip) maxPriorityFeePerGas = minTip;
@@ -132,7 +132,7 @@ class FutarchyAdapter {
     // Execute merge with chain-appropriate gas settings
     const feeData2 = await this.wallet.provider.getFeeData().catch(() => ({}));
     const chainId = (await this.wallet.provider.getNetwork()).chainId;
-    const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : '2');
+    const minTipGwei = chainId === 1n ? '0.04' : (chainId === 137n ? '25' : (chainId === 4663n ? '0.01' : '2'));
     const minTip = ethers.parseUnits(minTipGwei, 'gwei');
     let maxPriorityFeePerGas2 = feeData2.maxPriorityFeePerGas ?? minTip;
     if (maxPriorityFeePerGas2 < minTip) maxPriorityFeePerGas2 = minTip;

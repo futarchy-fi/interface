@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import { isSafeWallet } from './ethersAdapters';
 import { approvalAmountFor } from './approvalAmount';
-import { quoteUniswapV3ExactInput } from './uniswapV3Quote.mjs';
+import { quoteUniswapV3ExactInput, UNISWAP_V3_DEPLOYMENTS, truncateAmountToDecimals } from './uniswapV3Quote.mjs';
 
 // Universal Router addresses by chain
 const UNIVERSAL_ROUTER_ADDRESSES = {
@@ -10,6 +10,7 @@ const UNIVERSAL_ROUTER_ADDRESSES = {
   10: '0xb555edF5dcF85f42cEeF1f3630a52A108E55A654',     // Optimism
   42161: '0x4C60051384bd2d3C01bfc845Cf5F4b44bcbE9de5', // Arbitrum
   100: '0x1095692a6237d83c6a72f3f5efedb9a670c49223',    // Gnosis (if deployed)
+  4663: '0x8876789976decbfcbbbe364623c63652db8c0904',   // Robinhood Chain
 };
 
 // QuoterV2 addresses by chain
@@ -20,6 +21,7 @@ const QUOTER_V2_ADDRESSES = {
   42161: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e', // Arbitrum
   8453: '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a',  // Base
   100: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',    // Gnosis (assuming same pattern)
+  4663: '0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7',   // Robinhood Chain
 };
 
 // Permit2 address (same on all chains)
@@ -76,6 +78,20 @@ const GAS_CONFIG = {
       merge: 1500000,
       swap: 500000,
       approve: 100000
+    }
+  },
+  // Robinhood Chain (Arbitrum Orbit L2): base fee ~0.02 gwei and the sequencer
+  // ignores priority tips, so price from eth_gasPrice with a small hard cap.
+  // Gas limits are generous because Orbit gas units include the L1 data cost.
+  4663: {
+    minPriorityFeeGwei: "0",
+    maxFeeGwei: "0.5",
+    noPriorityFee: true,
+    gasLimits: {
+      split: 1500000,
+      merge: 1500000,
+      swap: 1000000,
+      approve: 200000
     }
   }
 };
@@ -198,6 +214,22 @@ function getGasConfig(chainId) {
 async function calculateGasPrice(provider, chainId = 1) {
   const config = getGasConfig(chainId);
   const minPriorityFee = ethers.utils.parseUnits(config.minPriorityFeeGwei, "gwei");
+
+  // Chains whose sequencer ignores tips (Arbitrum Orbit, e.g. Robinhood Chain):
+  // ethers v5 getFeeData() hardcodes a 1.5 gwei tip, which would exceed the
+  // tiny base fee and the cap, so derive both values from eth_gasPrice instead.
+  if (config.noPriorityFee) {
+    const maxFeeCap = ethers.utils.parseUnits(config.maxFeeGwei, "gwei");
+    try {
+      const gasPrice = await provider.getGasPrice();
+      let maxFeePerGas = gasPrice.mul(3); // headroom for base-fee moves
+      if (maxFeePerGas.gt(maxFeeCap)) maxFeePerGas = maxFeeCap;
+      return { maxPriorityFeePerGas: ethers.BigNumber.from(0), maxFeePerGas };
+    } catch (error) {
+      console.warn("Error reading gas price, using chain cap:", error);
+      return { maxPriorityFeePerGas: ethers.BigNumber.from(0), maxFeePerGas: maxFeeCap };
+    }
+  }
 
   try {
     const feeData = await provider.getFeeData();
@@ -538,8 +570,8 @@ export async function executeUniswapV3Swap({
   }
 
   // Parse amounts
-  const amountInWei = ethers.utils.parseUnits(amountIn.toString(), decimalsIn);
-  const minAmountOutWei = ethers.utils.parseUnits(minAmountOut.toString(), decimalsOut);
+  const amountInWei = ethers.utils.parseUnits(truncateAmountToDecimals(amountIn, decimalsIn), decimalsIn);
+  const minAmountOutWei = ethers.utils.parseUnits(truncateAmountToDecimals(minAmountOut, decimalsOut), decimalsOut);
   if (minAmountOutWei.isZero()) throw new Error('minAmountOut must come from a non-zero pool quote');
 
   // Build the path: tokenIn + fee (3 bytes) + tokenOut
@@ -704,7 +736,9 @@ export async function getUniswapV3QuoteWithPriceImpact({
   chainId = 1,
   slippageBps = 50
 }) {
-  if (chainId !== 1) throw new Error(`Uniswap V3 depth quotes are not configured for chain ${chainId}`);
+  if (!UNISWAP_V3_DEPLOYMENTS[Number(chainId)]) {
+    throw new Error(`Uniswap V3 depth quotes are not configured for chain ${chainId}`);
+  }
 
   const quote = await quoteUniswapV3ExactInput({
     provider,
@@ -712,7 +746,8 @@ export async function getUniswapV3QuoteWithPriceImpact({
     tokenOut,
     amountIn,
     fee,
-    slippageBps
+    slippageBps,
+    chainId: Number(chainId)
   });
 
   return {
@@ -800,7 +835,8 @@ export async function getPoolSqrtPrice(tokenIn, tokenOut, fee, provider, chainId
       137: '0x1F98431c8aD98523631AE4a59f267346ea31F984',
       10: '0x1F98431c8aD98523631AE4a59f267346ea31F984',
       42161: '0x1F98431c8aD98523631AE4a59f267346ea31F984',
-      100: '0x1F98431c8aD98523631AE4a59f267346ea31F984'
+      100: '0x1F98431c8aD98523631AE4a59f267346ea31F984',
+      4663: '0x1f7d7550B1b028f7571E69A784071F0205FD2EfA' // Robinhood Chain (non-canonical)
     };
 
     const factoryAddress = FACTORY_ADDRESSES[chainId];

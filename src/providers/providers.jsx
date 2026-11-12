@@ -11,6 +11,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider, createConfig } from "wagmi";
 import { http, fallback } from 'viem';
 import { mainnet, gnosis } from "wagmi/chains";
+import { defineChain } from "viem";
+import { robinhoodChain, getChainRpcUrls, ROBINHOOD_CHAIN_ID } from "../config/chains";
 import {
   metaMaskWallet,
   walletConnectWallet,
@@ -37,7 +39,11 @@ const ETHEREUM_RPCS = [
   "https://rpc.ankr.com/eth"
 ];
 
-const chains = [mainnet, gnosis];
+// Robinhood Chain (4663) — Arbitrum Orbit L2, Uniswap V3 futarchy markets
+const robinhood = defineChain(robinhoodChain);
+const ROBINHOOD_RPCS = getChainRpcUrls(ROBINHOOD_CHAIN_ID);
+
+const chains = [mainnet, gnosis, robinhood];
 const projectId = "76fa3deb89f7aa56f09cf1ac472eccb4";
 
 // Enhanced app metadata for better mobile wallet recognition
@@ -104,6 +110,16 @@ const ethereumTransport = fallback(
   }
 );
 
+// Create fallback transport for Robinhood Chain
+const robinhoodTransport = fallback(
+  ROBINHOOD_RPCS.map(rpc => http(rpc)),
+  {
+    rank: false,
+    retryCount: 3,
+    retryDelay: 1500,
+  }
+);
+
 // Create a new WagmiConfig instance
 const wagmiConfig = createConfig({
   connectors,
@@ -111,6 +127,7 @@ const wagmiConfig = createConfig({
   transports: {
     [mainnet.id]: ethereumTransport,
     [gnosis.id]: gnosisTransport,
+    [robinhood.id]: robinhoodTransport,
 
   },
   ssr: false, // Disable SSR for better client-side wallet detection

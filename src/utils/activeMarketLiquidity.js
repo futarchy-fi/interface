@@ -5,6 +5,7 @@ export const MIN_ACTIVE_MARKET_LIQUIDITY_USD = 1_000;
 const DEFAULT_RPC_URLS = {
   1: process.env.NEXT_PUBLIC_MAINNET_RPC_URL || 'https://ethereum-rpc.publicnode.com',
   100: process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.gnosischain.com',
+  4663: 'https://rpc.mainnet.chain.robinhood.com',
 };
 
 const BALANCE_OF_SELECTOR = '70a08231';
