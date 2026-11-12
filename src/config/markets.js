@@ -1738,6 +1738,47 @@ export const MARKETS_CONFIG = {
       "visibility": "public",
       "closeTimestamp": 1782486884
     }
+  },
+  "0x9693989ef16c43274d0b85138baf22f21651970a": {
+    "title": "What will the impact on NVDA price be if Jensen Huang ceases to be NVIDIA's CEO by 30 November 2026?",
+    "description": "Will Jensen Huang cease to be CEO of NVIDIA before 1 December 2026? Trade NVDA in USDG under each outcome on Robinhood Chain: the gap between the YES and NO prices is the market's estimate of the effect on NVDA.",
+    "image": "/assets/nvda-jensen-market-card.png",
+    "path": "/markets/0x9693989ef16c43274d0b85138baf22f21651970a",
+    "openGraph": {
+      "title": "What will the impact on NVDA price be if Jensen Huang ceases to be NVIDIA's CEO by 30 November 2026? | Futarchy.fi",
+      "description": "Will Jensen Huang cease to be CEO of NVIDIA before 1 December 2026? Trade NVDA in USDG under each outcome on Robinhood Chain: the gap between the YES and NO prices is the market's estimate of the effect on NVDA.",
+      "image": "https://futarchy.fi/assets/nvda-jensen-market-card.png",
+      "type": "website",
+      "siteName": "Futarchy.fi"
+    },
+    "twitter": {
+      "card": "summary_large_image",
+      "title": "What will the impact on NVDA price be if Jensen Huang ceases to be NVIDIA's CEO by 30 November 2026? | Futarchy.fi",
+      "description": "Will Jensen Huang cease to be CEO of NVIDIA before 1 December 2026? Trade NVDA in USDG under each outcome on Robinhood Chain: the gap between the YES and NO prices is the market's estimate of the effect on NVDA.",
+      "image": "https://futarchy.fi/assets/nvda-jensen-market-card.png"
+    },
+    "keywords": [
+      "futarchy",
+      "prediction market",
+      "governance",
+      "blockchain",
+      "PNK",
+      "Kleros",
+      "arbitration",
+      "NVIDIA"
+    ],
+    "category": "trading",
+    "isActive": true,
+    "metadata": {
+      "source": "registry",
+      "organization": "NVIDIA",
+      "organizationId": "0x07b4263f80779165eb2f73801b73059250be0109",
+      "chainId": 4663,
+      "resolutionStatus": null,
+      "resolutionOutcome": null,
+      "visibility": "public",
+      "closeTimestamp": 1796101200
+    }
   }
 };
 
