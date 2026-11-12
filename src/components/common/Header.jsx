@@ -10,6 +10,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useCurrency } from "../../contexts/CurrencyContext";
 import { useAccount, useSwitchChain, useDisconnect } from 'wagmi';
 import RpcRefreshButton from './RpcRefreshButton';
+import { getChainIconUrl } from '../../config/chains';
 
 const Header = ({ config = 'landing' }) => {
   const { selectedCurrency, setSelectedCurrency, baseTokenSymbol, allowWXDAI } = useCurrency();
@@ -184,11 +185,11 @@ const Header = ({ config = 'landing' }) => {
                             className="h-12 w-12 bg-transparent border-2 border-futarchyDarkGray42 rounded-xl text-futarchyGray122 hover:text-futarchyGray122/70 hover:border-futarchyGray122 dark:border-futarchyDarkGray42 dark:text-white dark:hover:text-white/70 dark:hover:border-white transition-colors flex items-center justify-center"
                             aria-label="Switch network"
                           >
-                            {chain.hasIcon && chain.iconUrl && (
+                            {(chain.iconUrl || getChainIconUrl(chain.id)) && (
                               <img
                                 alt={chain.name ?? 'Chain icon'}
-                                src={chain.iconUrl}
-                                className="w-6 h-6"
+                                src={chain.iconUrl || getChainIconUrl(chain.id)}
+                                className="w-6 h-6 rounded-full"
                               />
                             )}
                           </button>

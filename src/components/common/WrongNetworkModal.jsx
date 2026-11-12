@@ -19,6 +19,7 @@ const CHAIN_STYLE_MAP = {
   },
   4663: {
     name: 'Robinhood Chain',
+    logoSrc: '/assets/robinhood-chain.png',
     accentBg: 'bg-futarchyGreen3',
     accentBorder: 'border-futarchyGreen5',
     accentText: 'text-futarchyGreen11'

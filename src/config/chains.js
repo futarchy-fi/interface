@@ -80,6 +80,7 @@ export const CHAINS = {
         explorer: 'https://robinhoodchain.blockscout.com',
         explorerName: 'Blockscout',
         amm: 'uniswap',
+        iconUrl: '/assets/robinhood-chain.png',
         // Chain slug for app.uniswap.org deep links (unverified for Robinhood Chain)
         uniswapAppChain: 'robinhood',
         defaultCurrencySymbol: 'USDG',
@@ -152,6 +153,11 @@ export function getUniswapSwapUrl(chainId, inputToken, outputToken) {
     const base = `https://app.uniswap.org/swap?inputCurrency=${inputToken}&outputCurrency=${outputToken}`;
     const slug = getChainInfo(chainId)?.uniswapAppChain;
     return toChainId(chainId) === ETHEREUM_CHAIN_ID || !slug ? base : `${base}&chain=${slug}`;
+}
+
+/** Icon for chains the wallet kit has no built-in icon for (null otherwise). */
+export function getChainIconUrl(chainId) {
+    return getChainInfo(chainId)?.iconUrl || null;
 }
 
 export function getChainName(chainId) {
