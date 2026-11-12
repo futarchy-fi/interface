@@ -5,6 +5,7 @@ import CircularProgressBar from "../../components/CircularProgressBar";
 import { createSubgraphPoolFetcher } from "../../../../../utils/SubgraphPoolFetcher";
 import ChainBadge from "../../components/ChainBadge";
 import { USE_QUERY_PARAM_URLS } from "../../../../../config/featureFlags";
+import { getDefaultCurrencySymbol } from '../../../../../config/chains';
 
 // Subgraph-backed pool fetcher (replaces SupabasePoolFetcher)
 const poolFetcher = createSubgraphPoolFetcher();
@@ -293,7 +294,7 @@ const EventHighlightCard = ({
   // Extract base token symbol from metadata
   const baseTokenSymbol = metadata?.currencyTokens?.base?.tokenSymbol ||
     metadata?.BASE_TOKENS_CONFIG?.currency?.symbol ||
-    (Number(metadata?.chain || chainId) === 1 ? 'USDS' : 'sDAI');
+    getDefaultCurrencySymbol(Number(metadata?.chain || chainId));
 
   // Use high precision for small prices
   const shouldUseHighPrecision = (prices.no !== null && prices.no < 1) ||

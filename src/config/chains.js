@@ -93,7 +93,7 @@ export const CHAINS = {
             swapRouter02: '0xcaf681a66d020601342297493863e78c959e5cb2',
         },
         futarchy: {
-            factory: '0xebb2bf1cbdd625a8118b720877a7e361696e7a14',
+            factory: '0x9b93fdcc9380a7e3df4978d856eaca4f7ee36fa2',
             router: '0x7834bb7f4724393043701b2a944feae0496e00ad',
             conditionalTokens: '0x3aee58842a1d76c50f36eb5a34e79ef958d082c7',
             wrapped1155Factory: '0x9d0bb3418b1834e40bd106c0dbb9318cdc847468',
@@ -198,4 +198,7 @@ export const robinhoodChain = {
         multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11' },
     },
     testnet: false,
+    // RainbowKit network icon
+    iconUrl: '/assets/robinhood-chain.png',
+    iconBackground: '#CCFF00',
 };

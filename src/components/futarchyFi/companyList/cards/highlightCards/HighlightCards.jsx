@@ -4,6 +4,7 @@ import { createSubgraphPoolFetcher } from "../../../../../utils/SubgraphPoolFetc
 import { generateMarketUrl } from "../../constants/staticPaths";
 import ChainBadge from "../../components/ChainBadge";
 import { SHOW_DATA_DEBUG } from "../../../../../config/featureFlags";
+import { getDefaultCurrencySymbol } from '../../../../../config/chains';
 
 // Subgraph-backed pool fetcher (replaces SupabasePoolFetcher)
 const poolFetcher = createSubgraphPoolFetcher();
@@ -323,7 +324,7 @@ const HighlightCard = ({
   const baseTokenSymbol = metadata?.currencyTokens?.base?.tokenSymbol ||
     metadata?.BASE_TOKENS_CONFIG?.currency?.symbol ||
     currencySymbol ||
-    (Number(metadata?.chain || chainId) === 1 ? 'USDS' : 'sDAI');
+    getDefaultCurrencySymbol(Number(metadata?.chain || chainId));
 
   const renderValue = (value, format) => {
     if (isLoading) return <LoadingSpinner />;

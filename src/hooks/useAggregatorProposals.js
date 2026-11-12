@@ -11,7 +11,8 @@
 import { useState, useEffect } from 'react';
 
 // Subgraph endpoint for futarchy-complete (metadata hierarchy)
-import { AGGREGATOR_SUBGRAPH_URL as SUBGRAPH_URL } from '../config/subgraphEndpoints';
+import { AGGREGATOR_SUBGRAPH_URL as SUBGRAPH_URL, getSubgraphEndpoint } from '../config/subgraphEndpoints';
+import { getDefaultCurrencySymbol } from '../config/chains';
 import {
     getProposalCloseTimestamp,
     isProposalArchived,
@@ -137,7 +138,7 @@ function transformProposalToEvent(proposal, org, connectedWallet) {
     const resolved = isProposalResolved(proposalMeta);
     const closed = isProposalClosed(proposalMeta);
     const currencySymbol = proposalMeta?.currencyTokens?.base?.tokenSymbol ||
-        (detectedChain === 1 ? 'USDS' : 'sDAI');
+        getDefaultCurrencySymbol(detectedChain);
 
     return {
         // =============================================
@@ -299,26 +300,38 @@ async function bulkFetchPoolsByChain(proposals) {
         }
     `;
 
-    let result;
-    try {
-        const response = await fetch(CANDLES_GRAPHQL_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, variables: { ids } }),
-        });
-        result = await response.json();
-    } catch (e) {
-        console.warn('[🔗 REGISTRY-POOLS] candles fetch failed:', e.message);
-        return {};
+    // One request per chain, each to that chain's candles endpoint: the default
+    // endpoint only answers for Gnosis, so a mixed id list silently dropped
+    // other chains. A failing chain does not hide the others.
+    const idsByChain = new Map();
+    for (const id of ids) {
+        const chainId = Number(id.split('-')[0]);
+        if (!idsByChain.has(chainId)) idsByChain.set(chainId, []);
+        idsByChain.get(chainId).push(id);
     }
 
-    if (result?.errors) {
-        console.warn('[🔗 REGISTRY-POOLS] candles query error:', result.errors[0]?.message);
-        return {};
-    }
+    const poolLists = await Promise.all([...idsByChain.entries()].map(async ([chainId, chainIds]) => {
+        const endpoint = getSubgraphEndpoint(chainId) || CANDLES_GRAPHQL_URL;
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, variables: { ids: chainIds } }),
+            });
+            const result = await response.json();
+            if (result?.errors) {
+                console.warn(`[🔗 REGISTRY-POOLS] candles query error (chain ${chainId}):`, result.errors[0]?.message);
+                return [];
+            }
+            return result?.data?.pools || [];
+        } catch (e) {
+            console.warn(`[🔗 REGISTRY-POOLS] candles fetch failed (chain ${chainId}):`, e.message);
+            return [];
+        }
+    }));
 
     const poolMap = {};
-    for (const pool of result?.data?.pools || []) {
+    for (const pool of poolLists.flat()) {
         if (pool.type !== 'CONDITIONAL' && pool.type !== 'conditional') continue;
         // Key by plain proposal address. The /candles/graphql proxy already
         // strips the "<chainId>-" prefix from response IDs, so handle both

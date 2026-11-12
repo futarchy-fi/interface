@@ -43,6 +43,10 @@ class LiquidityOrchestrator {
       category,
       language
     } = config;
+    this.onlyPools = Array.isArray(config.onlyPools) ? config.onlyPools.map(Number) : null;
+    // Half-width of the liquidity range in tick-spacing steps (Uniswap). Read here because `config` is
+    // shadowed by the per-pool object inside the loop below, which made this setting a silent no-op.
+    this.tickWidthSteps = Number(config.tickWidthSteps) > 0 ? Number(config.tickWidthSteps) : null;
 
     console.log('\n' + '='.repeat(60));
     console.log('FUTARCHY POOL SETUP');
@@ -170,6 +174,12 @@ class LiquidityOrchestrator {
       const config = poolConfigs[i];
       const tokens = poolTokens[i];
       const poolNumber = i + 1;
+
+      // Optional: only set up some of the six pools (e.g. "onlyPools": [1, 2] for the two conditional pools).
+      if (Array.isArray(this.onlyPools) && !this.onlyPools.includes(poolNumber)) {
+        console.log(`\n⏭️  Skipping pool ${poolNumber} (${config.name}): not in onlyPools`);
+        continue;
+      }
 
       console.log(`\n${'─'.repeat(40)}`);
       console.log(`PROCESSING POOL ${poolNumber}: ${config.name}`);
@@ -396,7 +406,7 @@ class LiquidityOrchestrator {
           logicalPrice: isExistingPool ? config.currentPoolPrice : config.targetPrice,
           existingPoolAddress: config.existingPoolAddress,
           feeTier: globalFeeTier,
-          tickWidthSteps: (config.tickWidthSteps || 10)
+          tickWidthSteps: (this.tickWidthSteps || 10)
         });
 
         // Log transaction (ensure BigInt is converted to string)
