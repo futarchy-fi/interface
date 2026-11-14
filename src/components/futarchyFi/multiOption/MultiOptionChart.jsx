@@ -92,6 +92,15 @@ export default function MultiOptionChart({ cfg, market, view, selected, dark }) 
       s.setData(points);
       s.applyOptions({
         lineWidth: o.index === selected ? 3 : 1.5,
+        // Never zoom in so far that noise looks like a move: show at least 1% of the price, or 2 points of chance.
+        autoscaleInfoProvider: (original) => {
+          const info = original();
+          if (!info) return info;
+          const { minValue, maxValue } = info.priceRange;
+          const mid = (minValue + maxValue) / 2;
+          const half = Math.max(((maxValue - minValue) / 2) * 1.1, view === "probability" ? 1 : mid * 0.005);
+          return { ...info, priceRange: { minValue: view === "probability" ? Math.max(0, mid - half) : mid - half, maxValue: mid + half } };
+        },
         priceFormat: view === "probability"
           ? { type: "custom", minMove: 0.01, formatter: (v) => `${v.toFixed(1)}%` }
           : { type: "custom", minMove: 0.01, formatter: (v) => `$${v.toFixed(2)}` },
