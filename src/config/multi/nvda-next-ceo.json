@@ -5,6 +5,7 @@
   "conditionId": "0xceeb342252f7c427c34ed7ad062c30673d793ca3f44096d3e69919ec6cc97e46",
   "marketName": "Who will be the first individual officially announced as the successor to Jensen Huang as CEO of NVIDIA Corporation by 2027-01-01 05:00 UTC (December 31, 2026, 11:59 PM ET)? An announcement of a successor is sufficient, whether or not the announced person actually becomes CEO. Interim CEOs do not qualify. If NVIDIA announces that Jensen Huang returns as CEO (not as interim), answer Jensen Huang reinstated. If no successor is announced by that time, answer No successor by Jan 1. If the first announced successor is not in the list, answer Other. The resolution source is public statements from NVIDIA Corporation; a consensus of credible reporting may also be used. A named person can be answered as soon as that announcement is made. No successor by Jan 1 can be answered only after the deadline; before then, any answer other than the announced successor must be Answered too soon.",
   "deadline": "2027-01-01T05:00:00Z",
+  "createdAt": 1794620223,
   "router": "0xc4F061Af9892fc165D0Fd7b67c008674505be5bD",
   "factory": "0x61220A7209A871b3e3980d701125bCBEde59deA6",
   "realityProxy": "0x06dA5587c032c411033876F39306bcbA06a80D27",

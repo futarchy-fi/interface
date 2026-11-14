@@ -6,6 +6,8 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import { formatUnits } from "viem";
 import { CHAINS } from "../../../config/chains";
+import { useTheme } from "../../../contexts/ThemeContext";
+import MultiOptionChart, { OPTION_COLORS } from "./MultiOptionChart";
 import {
   parseAmount,
   planMerge,
@@ -83,6 +85,8 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
   const [busy, setBusy] = useState(null); // { steps: [label], done: number }
   const [notice, setNotice] = useState(null); // { ok: boolean, text: string }
   const [showRules, setShowRules] = useState(false);
+  const [chartView, setChartView] = useState("price");
+  const { isDarkMode } = useTheme();
 
   const refresh = useCallback(async () => {
     if (!publicClient) return;
@@ -218,6 +222,24 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
         </section>
 
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_22rem]">
+          <div className="min-w-0 space-y-6">
+          <section className={`${card} p-4`}>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className={`text-xs uppercase tracking-wider ${muted}`}>{chartView === "price" ? `${cfg.company.symbol} price under each option` : "Chance of each option"}</div>
+              <div className="w-56 max-w-full">
+                <Segmented
+                  value={chartView}
+                  onChange={setChartView}
+                  options={[
+                    { value: "price", label: `${cfg.company.symbol} if so` },
+                    { value: "probability", label: "Chance" },
+                  ]}
+                />
+              </div>
+            </div>
+            <MultiOptionChart cfg={cfg} market={market} view={chartView} selected={selected} dark={isDarkMode} />
+          </section>
+
           {/* Options */}
           <section className={`${card} overflow-hidden`}>
             <div className={`grid grid-cols-[1fr_5.5rem_5.5rem] gap-2 border-b border-black/10 px-4 py-2.5 text-xs uppercase tracking-wider dark:border-white/10 sm:grid-cols-[1fr_9rem_7rem_6rem] ${muted}`}>
@@ -240,7 +262,10 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
                   }`}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-medium">{o.name}</span>
+                    <span className="flex items-center gap-2 font-medium">
+                      <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: OPTION_COLORS[cfg.options.findIndex((x) => x.index === o.index) % OPTION_COLORS.length] }} />
+                      <span className="truncate">{o.name}</span>
+                    </span>
                     <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                       <span className="block h-full rounded-full bg-[#151515] dark:bg-white/80" style={{ width: `${Math.min(100, o.probability * 100)}%` }} />
                     </span>
@@ -257,6 +282,7 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
               );
             })}
           </section>
+          </div>
 
           {/* Trade */}
           <section className={`${card} h-fit p-4`}>
