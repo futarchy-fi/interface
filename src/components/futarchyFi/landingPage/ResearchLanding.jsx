@@ -89,7 +89,7 @@ const TextLink = ({ href, internal, className = linkClass, children }) =>
 
 // A small Bayesian network: two causes, one effect, each with its current probability.
 const BayesNetworkDiagram = () => (
-  <svg viewBox="0 0 640 300" role="img" aria-label="Three questions linked in a Bayesian network" className="w-full h-auto">
+  <svg viewBox="0 0 640 300" role="img" aria-label="Three questions linked in a Bayesian network" className="w-full min-w-[520px] h-auto">
     <defs>
       <marker id="bn-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M0 0 L10 5 L0 10 z" fill={NAVY} />
@@ -116,7 +116,7 @@ const BayesNetworkDiagram = () => (
 
 // A decision market: one stock today, and its price in each world the decision could lead to.
 const DecisionMarketDiagram = () => (
-  <svg viewBox="0 0 640 300" role="img" aria-label="One stock priced under each possible choice" className="w-full h-auto">
+  <svg viewBox="0 0 640 300" role="img" aria-label="One stock priced under each possible choice" className="w-full min-w-[520px] h-auto">
     <defs>
       <marker id="dm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M0 0 L10 5 L0 10 z" fill={NAVY} />
@@ -285,27 +285,27 @@ const ResearchLanding = ({ useStorybookUrl = false }) => {
               </div>
               <div className="md:w-2/3">
                 <div className="space-y-8 text-black">
-                  <div className="bg-[#F0F0FF] p-8">
+                  <div className="bg-[#F0F0FF] p-5 md:p-8">
                     <h3 className="text-2xl font-semibold mb-4">Bayes Market links questions in one network</h3>
                     <p className="text-lg text-gray-700 mb-6">
                       Traders can say "if A happens, B is 70% likely", not only "B is 40% likely". A belief about one
                       question updates the questions it bears on, the way it would in a careful forecaster's head.
                     </p>
-                    <div className="bg-white/70 rounded-xl p-4 md:p-6"><BayesNetworkDiagram /></div>
+                    <div className="bg-white/70 rounded-xl p-4 md:p-6 overflow-x-auto"><BayesNetworkDiagram /></div>
                     <p className="mt-5 text-base font-semibold"><TextLink href={BAYES_MARKET_URL}>Open Bayes Market</TextLink></p>
                   </div>
 
-                  <div className="bg-[#E6FFF9] p-8">
+                  <div className="bg-[#E6FFF9] p-5 md:p-8">
                     <h3 className="text-2xl font-semibold mb-4">A decision market prices one stock under each choice</h3>
                     <p className="text-lg text-gray-700 mb-6">
                       Each trade only counts in the world it was made for and is undone otherwise, so every price is an
                       honest answer to "what if this is chosen?".
                     </p>
-                    <div className="bg-white/70 rounded-xl p-4 md:p-6"><DecisionMarketDiagram /></div>
+                    <div className="bg-white/70 rounded-xl p-4 md:p-6 overflow-x-auto"><DecisionMarketDiagram /></div>
                     <p className="mt-5 text-base font-semibold"><TextLink href="/ceo" internal>Live: who is the next CEO of NVIDIA?</TextLink></p>
                   </div>
 
-                  <div className="bg-[#E6F7FF] p-8">
+                  <div className="bg-[#E6F7FF] p-5 md:p-8">
                     <h3 className="text-2xl font-semibold mb-4">People trade instead of voting</h3>
                     <p className="text-lg text-gray-700 mb-4">
                       Anyone who thinks a price is wrong can correct it and is paid if they were right. Knowledge moves
@@ -314,7 +314,7 @@ const ResearchLanding = ({ useStorybookUrl = false }) => {
                     <Image src="/assets/card3-logo.webp" alt="" width={900} height={600} className="w-full max-h-80 object-cover" />
                   </div>
 
-                  <div className="bg-[#FFF0F0] p-8">
+                  <div className="bg-[#FFF0F0] p-5 md:p-8">
                     <h3 className="text-2xl font-semibold mb-4">Arbitrage keeps the prices honest</h3>
                     <p className="text-lg text-gray-700 mb-4">
                       Today's price has to equal the chance-weighted average of the prices under each choice. When it
