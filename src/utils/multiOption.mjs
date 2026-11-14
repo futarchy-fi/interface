@@ -106,7 +106,8 @@ export async function readMarket(publicClient, cfg) {
     const numerators = await Promise.all(cfg.options.map((o) => publicClient.readContract({
       address: cfg.conditionalTokens, abi: CONDITIONAL_TOKENS_ABI, functionName: 'payoutNumerators', args: [cfg.conditionId, BigInt(o.index)],
     })));
-    winner = numerators.findIndex((n) => n > 0n);
+    const position = numerators.findIndex((n) => n > 0n);
+    winner = position < 0 ? null : cfg.options[position].index; // the option's index, not its place in the list
   }
   return { spot, options, sumProbability, implied, resolved: denominator > 0n, winner };
 }

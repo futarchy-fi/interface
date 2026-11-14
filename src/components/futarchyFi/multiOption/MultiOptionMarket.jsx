@@ -1,6 +1,6 @@
 // Page for a multi-option futarchy market: the probability of each option, the company token's price
 // under each option, and trading for both. All reads come straight from the chain.
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
@@ -86,6 +86,9 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
   const [notice, setNotice] = useState(null); // { ok: boolean, text: string }
   const [showRules, setShowRules] = useState(false);
   const [chartView, setChartView] = useState("price");
+  const [tick, setTick] = useState(0); // bumps on every refresh so an open quote is re-priced
+  const running = useRef(false); // set before the first await, so a double click cannot start two runs
+  const quoteKey = useRef("");
   const { isDarkMode } = useTheme();
 
   const refresh = useCallback(async () => {
@@ -97,6 +100,7 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
       ]);
       setMarket(m);
       setBalances(b);
+      setTick((t) => t + 1);
       setLoadError(null);
     } catch (e) {
       setLoadError(e?.shortMessage || e?.message || "Could not read the market");
@@ -127,14 +131,19 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
   }, [balances, route, option, cfg]);
 
   useEffect(() => {
-    setQuote(null);
-    setQuoteError(null);
+    // Clear the quote when the trade itself changes; on a periodic refresh keep showing it until the new one arrives.
+    const key = `${route.tokenIn.address}:${route.tokenOut.address}:${amountIn}`;
+    if (key !== quoteKey.current) {
+      quoteKey.current = key;
+      setQuote(null);
+      setQuoteError(null);
+    }
     if (!publicClient || amountIn === 0n) return undefined;
     let stale = false;
     const timer = setTimeout(async () => {
       try {
         const q = await quoteSwap(publicClient, cfg, route, amountIn, SLIPPAGE_BPS);
-        if (!stale) setQuote(q);
+        if (!stale) { setQuote(q); setQuoteError(null); }
       } catch (e) {
         if (!stale) setQuoteError("No quote for this size. Try a smaller amount.");
       }
@@ -143,32 +152,44 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
       stale = true;
       clearTimeout(timer);
     };
-  }, [publicClient, cfg, route, amountIn]);
+  }, [publicClient, cfg, route, amountIn, tick]);
 
   const run = useCallback(
     async (plan, doneText) => {
-      if (!walletClient || !account || busy) return;
+      if (!walletClient || !account || running.current) return;
+      running.current = true;
       setNotice(null);
+      let done = 0;
+      let total = 0;
       try {
         if (walletChainId !== cfg.chainId) await switchChainAsync({ chainId: cfg.chainId });
         const calls = await plan();
-        setBusy({ steps: calls.map((c) => c.label), done: 0 });
+        total = calls.length;
+        const steps = calls.map((c) => c.label);
+        setBusy({ steps, done: 0 });
         for (let i = 0; i < calls.length; i += 1) {
-          const hash = await walletClient.sendTransaction({ account, to: calls[i].to, data: calls[i].data, chain: walletClient.chain });
+          // publicClient.chain is this market's chain: correct even when the wallet was just switched to it.
+          const hash = await walletClient.sendTransaction({ account, to: calls[i].to, data: calls[i].data, chain: publicClient.chain });
           const receipt = await publicClient.waitForTransactionReceipt({ hash });
           if (receipt.status !== "success") throw new Error(`"${calls[i].label}" reverted (${hash})`);
-          setBusy({ steps: calls.map((c) => c.label), done: i + 1 });
+          done = i + 1;
+          setBusy({ steps, done });
         }
         setNotice({ ok: true, text: doneText });
         setInput("");
       } catch (e) {
-        setNotice({ ok: false, text: e?.shortMessage || e?.message || "The transaction failed" });
+        const reason = e?.shortMessage || e?.message || "The transaction failed";
+        const partial = done > 0 && done < total
+          ? ` Stopped after step ${done} of ${total}. Nothing is lost: what you hold is under "Your positions", and a token of every option can be converted back there.`
+          : "";
+        setNotice({ ok: false, text: `${reason}${partial}` });
       } finally {
+        running.current = false;
         setBusy(null);
         refresh();
       }
     },
-    [walletClient, account, busy, walletChainId, cfg, switchChainAsync, publicClient, refresh]
+    [walletClient, account, walletChainId, cfg, switchChainAsync, publicClient, refresh]
   );
 
   const sorted = market ? [...market.options].sort((a, b) => b.probability - a.probability) : [];
@@ -217,7 +238,7 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
           <Stat
             label="Probabilities add to"
             value={market ? pct(market.sumProbability, 1) : "…"}
-            note={market?.resolved ? `Resolved: ${cfg.options[market.winner]?.name}` : "Should be 100%"}
+            note={market?.resolved ? `Resolved: ${cfg.options.find((o) => o.index === market.winner)?.name}` : "Should be 100%"}
           />
         </section>
 
@@ -324,7 +345,7 @@ export default function MultiOptionMarket({ cfg, title, summary }) {
 
             <label className="mt-3 block">
               <span className={`flex justify-between text-xs ${muted}`}>
-                <span>You pay ({route.tokenIn.collateral ? route.tokenIn.collateral.symbol : route.tokenIn.symbol})</span>
+                <span>You pay ({route.tokenIn.collateral ? `${route.tokenIn.collateral.symbol} or ${route.tokenIn.symbol}` : route.tokenIn.symbol})</span>
                 {spendable && (
                   <button type="button" className="underline-offset-2 hover:underline" onClick={() => setInput(formatUnits(spendable.total, route.tokenIn.decimals))}>
                     Available {amount(spendable.total, route.tokenIn.decimals)}

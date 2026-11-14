@@ -31,6 +31,7 @@ export default function MultiOptionChart({ cfg, market, view, selected, dark }) 
   const series = useRef({});
   const [history, setHistory] = useState(null);
   const [error, setError] = useState(null);
+  const fitted = useRef("");
 
   // Five-minute candles while the market is young, hourly after a week.
   const period = Date.now() / 1000 - cfg.createdAt < 7 * 86400 ? 300 : 3600;
@@ -72,7 +73,7 @@ export default function MultiOptionChart({ cfg, market, view, selected, dark }) 
         lastValueVisible: false,
       });
     });
-    return () => { c.remove(); chart.current = null; series.current = {}; };
+    return () => { c.remove(); chart.current = null; series.current = {}; fitted.current = ""; };
   }, [cfg, dark]);
 
   useEffect(() => {
@@ -106,8 +107,13 @@ export default function MultiOptionChart({ cfg, market, view, selected, dark }) 
           : { type: "custom", minMove: 0.01, formatter: (v) => `$${v.toFixed(2)}` },
       });
     });
-    chart.current.timeScale().fitContent();
-  }, [history, market, view, selected, cfg]);
+    // Fit once per view and per chart instance; later refreshes must not undo the reader's zoom or pan.
+    const key = `${view}:${dark}`;
+    if (fitted.current !== key) {
+      fitted.current = key;
+      chart.current.timeScale().fitContent();
+    }
+  }, [history, market, view, selected, cfg, dark]);
 
   return (
     <div>
