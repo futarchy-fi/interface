@@ -107,6 +107,43 @@
   status = 302
   force = true
 
+# Short links to the multi-option market: who is the next CEO of NVIDIA.
+[[redirects]]
+  from = "/ceo"
+  to = "/markets/nvda-next-ceo"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/CEO"
+  to = "/markets/nvda-next-ceo"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/nvda/2"
+  to = "/markets/nvda-next-ceo"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/NVDA/2"
+  to = "/markets/nvda-next-ceo"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/nvidia/2"
+  to = "/markets/nvda-next-ceo"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/NVIDIA/2"
+  to = "/markets/nvda-next-ceo"
+  status = 302
+  force = true
+
 # Security headers
 [[headers]]
   for = "/*"
