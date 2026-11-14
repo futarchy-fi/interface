@@ -130,7 +130,7 @@ const ResearchLanding = () => (
       />
     </Head>
 
-    <div className="bg-[#FAFAF7] text-[#151515] dark:bg-futarchyDarkGray2 dark:text-white/90 font-barlow">
+    <div className="bg-[#FAFAF7] text-[#151515] dark:bg-futarchyDarkGray2 dark:text-white/90 font-sans">
       <div className="mx-auto max-w-3xl px-5 sm:px-8">
         {/* Hero */}
         <section className="pt-36 pb-20 sm:pt-44 sm:pb-28">
