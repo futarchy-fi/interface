@@ -1,0 +1,152 @@
+{
+  "chainId": 4663,
+  "proposal": "0x36dF9e82479D1B172277dD99269C88B04E68F9A7",
+  "questionId": "0x78f088a6832ea02c13ccb798b37820ea91cdada4bf39139055b47af2726429d6",
+  "conditionId": "0xceeb342252f7c427c34ed7ad062c30673d793ca3f44096d3e69919ec6cc97e46",
+  "marketName": "Who will be the first individual officially announced as the successor to Jensen Huang as CEO of NVIDIA Corporation by 2027-01-01 05:00 UTC (December 31, 2026, 11:59 PM ET)? An announcement of a successor is sufficient, whether or not the announced person actually becomes CEO. Interim CEOs do not qualify. If NVIDIA announces that Jensen Huang returns as CEO (not as interim), answer Jensen Huang reinstated. If no successor is announced by that time, answer No successor by Jan 1. If the first announced successor is not in the list, answer Other. The resolution source is public statements from NVIDIA Corporation; a consensus of credible reporting may also be used. A named person can be answered as soon as that announcement is made. No successor by Jan 1 can be answered only after the deadline; before then, any answer other than the announced successor must be Answered too soon.",
+  "deadline": "2027-01-01T05:00:00Z",
+  "createdAt": 1794620223,
+  "router": "0xc4F061Af9892fc165D0Fd7b67c008674505be5bD",
+  "factory": "0x61220A7209A871b3e3980d701125bCBEde59deA6",
+  "realityProxy": "0x06dA5587c032c411033876F39306bcbA06a80D27",
+  "reality": "0x13279f59e694369e1d591e95b08a3107b8520ed3",
+  "conditionalTokens": "0x3aee58842a1d76c50f36eb5a34e79ef958d082c7",
+  "company": {
+    "symbol": "NVDA",
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "decimals": 18
+  },
+  "currency": {
+    "symbol": "USDG",
+    "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "decimals": 6
+  },
+  "spotPool": {
+    "address": "0xd4EB21209C4D6093f80B5b84f5C45cc093EA14a3",
+    "token0": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "fee": 500
+  },
+  "swapRouter02": "0xcaf681a66d020601342297493863e78c959e5cb2",
+  "quoterV2": "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7",
+  "options": [
+    {
+      "index": 0,
+      "symbol": "BUCK",
+      "name": "Ian Buck",
+      "companyToken": "0x9ceC923D136f7F1797237Bacf8184C95d459557B",
+      "currencyToken": "0x778E4702E285D94EF0f32fBf5ed0Ac455aEC1B30",
+      "pricePool": {
+        "address": "0x9DDfF7eDf1aa655e0442cF075BDA15B42Af17e63",
+        "fee": 500,
+        "token0": "0x778E4702E285D94EF0f32fBf5ed0Ac455aEC1B30"
+      },
+      "probPool": {
+        "address": "0xB9f74C28CCdff194A9f1B8eFB1C5A6fEd0715AB8",
+        "fee": 500,
+        "token0": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+      }
+    },
+    {
+      "index": 1,
+      "symbol": "HAAS",
+      "name": "Rene Haas",
+      "companyToken": "0xaD4dbF0f5728F19A1Ab5d2c8c8A44b8b6AD25ebB",
+      "currencyToken": "0x3D78dE6fBc28489A4CA61E411e1BaA82124Ee7c0",
+      "pricePool": {
+        "address": "0x1c0472D6360985c0fdb56c0E3CC8f45fb4f29105",
+        "fee": 500,
+        "token0": "0x3D78dE6fBc28489A4CA61E411e1BaA82124Ee7c0"
+      },
+      "probPool": {
+        "address": "0x805C2dBBF5cf629E15D16b8c1b483026De66e1F7",
+        "fee": 500,
+        "token0": "0x3D78dE6fBc28489A4CA61E411e1BaA82124Ee7c0"
+      }
+    },
+    {
+      "index": 2,
+      "symbol": "SROUJI",
+      "name": "Johny Srouji",
+      "companyToken": "0x271Dd8bd7cf4A7E1a0585016819eF1c8578CEbA4",
+      "currencyToken": "0x5F582da15Ae8Cbea94327D45Ce5a8f8f0e24c5A9",
+      "pricePool": {
+        "address": "0x3C059789B4E7B95d2a47eDD7cf836aa9480431A6",
+        "fee": 500,
+        "token0": "0x271Dd8bd7cf4A7E1a0585016819eF1c8578CEbA4"
+      },
+      "probPool": {
+        "address": "0xA1393ca31e428A489eba8D3f66Fd026A8Db4a9a2",
+        "fee": 500,
+        "token0": "0x5F582da15Ae8Cbea94327D45Ce5a8f8f0e24c5A9"
+      }
+    },
+    {
+      "index": 3,
+      "symbol": "KRESS",
+      "name": "Colette Kress",
+      "companyToken": "0x55C260414A4a46A582684fCfaD04dC9386e75bb3",
+      "currencyToken": "0x1f056f8882Cd64fD7B9d53B112FD1DaC36e4D9e6",
+      "pricePool": {
+        "address": "0x3F13740430088Ba869abf791aF7A5EFEbcBFC340",
+        "fee": 500,
+        "token0": "0x1f056f8882Cd64fD7B9d53B112FD1DaC36e4D9e6"
+      },
+      "probPool": {
+        "address": "0x7d95947C1a9395e540A6F679d7D54E515e80843E",
+        "fee": 500,
+        "token0": "0x1f056f8882Cd64fD7B9d53B112FD1DaC36e4D9e6"
+      }
+    },
+    {
+      "index": 4,
+      "symbol": "JENSEN",
+      "name": "Jensen Huang reinstated",
+      "companyToken": "0x2d61eBAE935A91649d6b7E6cdda91ecf310d9c50",
+      "currencyToken": "0x7dCcACEC4496a0C6359B283a0a99c65D2057a1aE",
+      "pricePool": {
+        "address": "0x293CE092663A20687F572Ec364BA8624f08cdCD0",
+        "fee": 500,
+        "token0": "0x2d61eBAE935A91649d6b7E6cdda91ecf310d9c50"
+      },
+      "probPool": {
+        "address": "0x525Ed30e4bB515BA76E59F2062F4A9C3D597e312",
+        "fee": 500,
+        "token0": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+      }
+    },
+    {
+      "index": 5,
+      "symbol": "NONE",
+      "name": "No successor by Jan 1",
+      "companyToken": "0x53Bb22366Dcece122891483835d0DF2a3F817a17",
+      "currencyToken": "0xa9EA01733ed9a2339ed8954ded99f3B18F6250e7",
+      "pricePool": {
+        "address": "0xa7bC4051264ED80A6C729ffAFcA295553A2cE6AC",
+        "fee": 500,
+        "token0": "0x53Bb22366Dcece122891483835d0DF2a3F817a17"
+      },
+      "probPool": {
+        "address": "0x32DafbFa19D6381d6D904998953dD0A5048a1656",
+        "fee": 500,
+        "token0": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+      }
+    },
+    {
+      "index": 6,
+      "symbol": "OTHER",
+      "name": "Other",
+      "companyToken": "0xFc5D7D54F8E9f3dCe7380daCdad52D1dFbc254C3",
+      "currencyToken": "0x015b88F4a443D37B41Bc65aEEEe5C1c8BAd84746",
+      "pricePool": {
+        "address": "0x18e30bd1912ce5ffed8F524B9B897e5Fa43384eE",
+        "fee": 500,
+        "token0": "0x015b88F4a443D37B41Bc65aEEEe5C1c8BAd84746"
+      },
+      "probPool": {
+        "address": "0x9082eDcA208Ce10dA922C0A0252F3063C3C48aFA",
+        "fee": 500,
+        "token0": "0x015b88F4a443D37B41Bc65aEEEe5C1c8BAd84746"
+      }
+    }
+  ]
+}
