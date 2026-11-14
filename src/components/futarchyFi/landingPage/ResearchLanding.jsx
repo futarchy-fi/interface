@@ -10,14 +10,6 @@ const GITHUB_ORG = "https://github.com/futarchy-fi";
 
 const RESEARCH_AREAS = [
   {
-    title: "Decision markets",
-    body: [
-      "A conditional market prices the same asset twice: once in the world where a decision goes one way, once in the world where it goes the other. The gap between the two prices is the market's estimate of what the decision is worth.",
-      "We have run these markets on governance votes at Gnosis DAO and Kleros, on an Ethereum protocol decision, and on the leadership of a public company.",
-    ],
-    links: [{ label: "Live and past markets", href: "/companies", internal: true }],
-  },
-  {
     title: "Bayesian-network markets",
     body: [
       "In Bayes Market every question is a variable in a Bayesian network. Traders can move a probability directly, or move a conditional one: if A happens, B is 70% likely. An inference engine keeps every price consistent with a single joint distribution.",
@@ -29,15 +21,12 @@ const RESEARCH_AREAS = [
     ],
   },
   {
-    title: "Mechanism design",
+    title: "Decision markets",
     body: [
-      "How much liquidity does a decision market need, who should supply it, and what does it cost to push a price the wrong way? We test designs in simulation before they hold money, and we keep the contracts small enough to audit.",
+      "A conditional market prices the same asset twice: once in the world where a decision goes one way, once in the world where it goes the other. The gap between the two prices is the market's estimate of what the decision is worth.",
+      "Our current markets price NVIDIA stock under each person who could be its next chief executive. This is the use Robin Hanson has long proposed for decision markets: advising a board on whether to keep its CEO.",
     ],
-    links: [
-      { label: "Simulations", href: `${GITHUB_ORG}/simulations` },
-      { label: "Liquidity manager", href: `${GITHUB_ORG}/futarchy-liquidity-manager` },
-      { label: "Multi-option markets", href: `${GITHUB_ORG}/futarchy/tree/master/multi-option` },
-    ],
+    links: [{ label: "Markets", href: "/companies", internal: true }],
   },
   {
     title: "Markets for AI agents",
@@ -46,39 +35,42 @@ const RESEARCH_AREAS = [
     ],
     links: [{ label: "Agents", href: `${GITHUB_ORG}/agents` }],
   },
+  {
+    title: "Mechanism design",
+    body: [
+      "How much money does a decision market need behind it, who should supply it, and what does it cost to push a price the wrong way? We test designs in simulation before they hold money.",
+    ],
+    links: [
+      { label: "Simulations", href: `${GITHUB_ORG}/simulations` },
+      { label: "Markets with more than two options", href: `${GITHUB_ORG}/futarchy/tree/master/multi-option` },
+    ],
+  },
 ];
 
 const EXPERIMENTS = [
   {
-    question: "What is NVDA worth if Jensen Huang stops being CEO?",
+    question: "What is NVIDIA stock worth under each possible next CEO?",
     where: "NVIDIA",
-    chain: "Robinhood Chain",
+    status: "Open",
   },
   {
-    question: "What is ETH worth if EIP-8363 is scheduled for the Hegotá upgrade?",
-    where: "Ethereum",
-    chain: "Ethereum",
+    question: "What is NVIDIA stock worth if Jensen Huang stops being CEO?",
+    where: "NVIDIA",
+    status: "Resolving",
   },
   {
-    question: "What is GNO worth if a Gnosis Improvement Proposal passes?",
-    where: "Gnosis DAO",
-    chain: "Gnosis Chain",
-  },
-  {
-    question: "What is PNK worth if a Kleros Improvement Proposal passes?",
-    where: "Kleros",
-    chain: "Gnosis Chain",
+    question: "What is an open-source protocol worth if a proposal to change it passes?",
+    where: "Ethereum, Gnosis, Kleros",
+    status: "Closed",
   },
 ];
 
 const CODE = [
-  { name: "futarchy", note: "Contracts for conditional and multi-option markets" },
   { name: "bayes-market", note: "Bayesian prediction market engine, event-sourced and combinatorial" },
-  { name: "simulations", note: "Mechanism-design simulations for futarchy governance" },
-  { name: "futarchy-liquidity-manager", note: "Liquidity manager contracts, written to be audited" },
-  { name: "futarchy-arb", note: "Arbitrage contracts that keep conditional prices consistent with spot" },
-  { name: "fire-the-ceo", note: "Robin Hanson's fire-the-CEO decision markets, on a test network" },
+  { name: "simulations", note: "Mechanism-design simulations for decision markets" },
   { name: "agents", note: "Agent teams governed by markets" },
+  { name: "fire-the-ceo", note: "Robin Hanson's fire-the-CEO decision markets" },
+  { name: "futarchy", note: "Conditional markets with two or more options" },
   { name: "interface", note: "This site" },
 ];
 
@@ -88,14 +80,14 @@ const TALKS = [
     venue: "DappCon 2025, Kelvin Santos and Robin Hanson",
   },
   {
-    title: "Price-Based Futarchy: A Tool for Smarter DAO Decisions",
-    venue: "Governance Day 2025",
-    href: "https://www.youtube.com/watch?v=cXUDTWZkfIU",
-  },
-  {
     title: "Does AI governance need a Federalist Papers debate?",
     venue: "LessWrong, 2023",
     href: "https://www.lesswrong.com/posts/YkrDKR7TyqDxwKj23/does-ai-governance-needs-a-federalist-papers-debate",
+  },
+  {
+    title: "Price-Based Futarchy",
+    venue: "Governance Day 2025",
+    href: "https://www.youtube.com/watch?v=cXUDTWZkfIU",
   },
 ];
 
@@ -153,7 +145,7 @@ const ResearchLanding = () => (
               Open Bayes Market <span aria-hidden="true">→</span>
             </a>
             <Link href="/companies" className={`inline-flex items-center py-2.5 ${linkClass}`}>
-              See the live markets
+              See the markets
             </Link>
           </div>
         </section>
@@ -188,18 +180,17 @@ const ResearchLanding = () => (
         <section className="border-t border-black/10 dark:border-white/10 py-16 sm:py-20">
           <SectionLabel number="02">Field experiments</SectionLabel>
           <p className="mt-8 leading-relaxed text-black/75 dark:text-white/75">
-            Each of these ran on a public chain with real money, and each asked the same kind of question about a
-            different decision.
+            Each of these ran with real money, and each asked the same kind of question about a different decision.
           </p>
           <ul className="mt-8 divide-y divide-black/10 dark:divide-white/10 border-y border-black/10 dark:border-white/10">
             {EXPERIMENTS.map((experiment) => (
               <li
                 key={experiment.question}
-                className="py-4 sm:grid sm:grid-cols-[1fr_9rem_9rem] sm:items-baseline sm:gap-6"
+                className="py-4 sm:grid sm:grid-cols-[1fr_11rem_6rem] sm:items-baseline sm:gap-6"
               >
                 <span className="leading-snug">{experiment.question}</span>
                 <span className="mt-1 block text-sm text-black/55 dark:text-white/55 sm:mt-0">{experiment.where}</span>
-                <span className="block text-sm text-black/55 dark:text-white/55">{experiment.chain}</span>
+                <span className="block text-sm text-black/55 dark:text-white/55">{experiment.status}</span>
               </li>
             ))}
           </ul>
